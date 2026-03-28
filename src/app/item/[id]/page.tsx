@@ -7,6 +7,22 @@ import Link from 'next/link';
 import { MessageCircle, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase, ShopItem } from '@/lib/supabase';
 import { buildWhatsAppUrl } from '@/lib/constants';
+import { trackWhatsAppClick } from '@/lib/fbpixel';
+
+function ConditionBadge({ condition }: { condition: string | null }) {
+  if (!condition) return null;
+  const color =
+    condition === 'Excellent'
+      ? 'bg-green-500 text-white'
+      : condition === 'Good'
+        ? 'bg-yellow text-black'
+        : 'bg-orange-400 text-white';
+  return (
+    <span className={`text-xs font-bold px-2 py-1 rounded ${color}`}>
+      {condition}
+    </span>
+  );
+}
 
 export default function ItemDetailPage() {
   const params = useParams();
@@ -24,7 +40,6 @@ export default function ItemDetailPage() {
 
       if (data) {
         setItem(data);
-        // Track view
         try {
           await supabase.rpc('increment_views', { item_id: params.id });
         } catch {
@@ -47,6 +62,7 @@ export default function ItemDetailPage() {
     } catch {
       // silent fail
     }
+    trackWhatsAppClick();
     window.open(buildWhatsAppUrl(item), '_blank');
   };
 
@@ -84,7 +100,7 @@ export default function ItemDetailPage() {
         : [];
 
   return (
-    <div className="pt-20 pb-16">
+    <div className="pt-20 pb-28 md:pb-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Back */}
         <Link
@@ -171,10 +187,11 @@ export default function ItemDetailPage() {
 
           {/* Details */}
           <div>
-            <div className="mb-2">
+            <div className="flex flex-wrap items-center gap-2 mb-3">
               <span className="text-xs font-medium text-yellow bg-yellow/10 px-2 py-1 rounded">
                 {item.category}
               </span>
+              <ConditionBadge condition={item.condition} />
             </div>
             <h1 className="font-heading text-3xl md:text-4xl mb-1">
               {item.item_name}
@@ -182,9 +199,6 @@ export default function ItemDetailPage() {
             {item.brand && (
               <p className="text-muted text-sm mb-4">{item.brand}</p>
             )}
-            <p className="font-heading text-4xl text-yellow mb-6">
-              AED {item.sale_price}
-            </p>
 
             {item.description && (
               <div className="mb-6">
@@ -202,6 +216,12 @@ export default function ItemDetailPage() {
                   <p className="font-medium">{item.shop_source}</p>
                 </div>
               )}
+              {item.condition && (
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <span className="text-muted">Condition</span>
+                  <p className="font-medium">{item.condition}</p>
+                </div>
+              )}
               {item.barcode && (
                 <div className="bg-gray-50 p-3 rounded-lg">
                   <span className="text-muted">Barcode</span>
@@ -216,16 +236,29 @@ export default function ItemDetailPage() {
               )}
             </div>
 
+            {/* Desktop WhatsApp CTA */}
             <button
               onClick={handleWhatsAppClick}
               disabled={item.is_sold}
-              className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-xl text-lg transition-colors"
+              className="hidden md:flex w-full items-center justify-center gap-2 bg-yellow hover:bg-yellow/90 disabled:bg-gray-300 disabled:cursor-not-allowed text-black font-bold py-4 rounded-xl text-lg transition-colors active:scale-[0.98]"
             >
               <MessageCircle size={22} />
-              {item.is_sold ? 'Item Sold' : 'Inquire on WhatsApp'}
+              {item.is_sold ? 'Item Sold' : 'PRICE'}
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Mobile sticky WhatsApp CTA */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 md:hidden z-40">
+        <button
+          onClick={handleWhatsAppClick}
+          disabled={item.is_sold}
+          className="w-full flex items-center justify-center gap-2 bg-yellow hover:bg-yellow/90 disabled:bg-gray-300 disabled:cursor-not-allowed text-black font-bold py-4 rounded-xl text-lg transition-colors active:scale-[0.98]"
+        >
+          <MessageCircle size={22} />
+          {item.is_sold ? 'Item Sold' : 'PRICE'}
+        </button>
       </div>
     </div>
   );

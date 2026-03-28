@@ -11,7 +11,7 @@ export default function WhatsAppFloat() {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-green-500 hover:bg-green-600 rounded-full flex items-center justify-center text-white shadow-lg whatsapp-pulse transition-colors"
+      className="fixed bottom-24 md:bottom-6 right-6 z-50 w-14 h-14 bg-green-500 hover:bg-green-600 rounded-full flex items-center justify-center text-white shadow-lg whatsapp-pulse transition-colors"
       aria-label="Contact on WhatsApp"
     >
       <MessageCircle size={28} />

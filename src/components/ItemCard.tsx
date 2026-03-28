@@ -2,9 +2,25 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { MessageCircle } from 'lucide-react';
+import { MessageCircle, Star } from 'lucide-react';
 import { ShopItem } from '@/lib/supabase';
 import { buildWhatsAppUrl } from '@/lib/constants';
+import { trackWhatsAppClick } from '@/lib/fbpixel';
+
+function ConditionBadge({ condition }: { condition: string | null }) {
+  if (!condition) return null;
+  const color =
+    condition === 'Excellent'
+      ? 'bg-green-500 text-white'
+      : condition === 'Good'
+        ? 'bg-yellow text-black'
+        : 'bg-orange-400 text-white';
+  return (
+    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color}`}>
+      {condition}
+    </span>
+  );
+}
 
 export default function ItemCard({ item }: { item: ShopItem }) {
   const imageUrl =
@@ -22,6 +38,7 @@ export default function ItemCard({ item }: { item: ShopItem }) {
     } catch {
       // silent fail
     }
+    trackWhatsAppClick();
     window.open(buildWhatsAppUrl(item), '_blank');
   };
 
@@ -36,6 +53,18 @@ export default function ItemCard({ item }: { item: ShopItem }) {
             className="object-cover group-hover:scale-105 transition-transform duration-300"
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           />
+          {/* Shop badge */}
+          {item.shop_source && (
+            <span className="absolute top-2 left-2 bg-black/70 text-white text-[10px] font-bold px-2 py-0.5 rounded">
+              {item.shop_source}
+            </span>
+          )}
+          {/* Featured star */}
+          {item.is_featured && (
+            <span className="absolute top-2 right-2">
+              <Star size={18} className="text-yellow fill-yellow drop-shadow" />
+            </span>
+          )}
           {item.is_sold && (
             <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
               <span className="font-heading text-2xl text-white">SOLD</span>
@@ -43,27 +72,25 @@ export default function ItemCard({ item }: { item: ShopItem }) {
           )}
         </div>
       </Link>
-      <div className="p-4">
+      <div className="p-3">
         <Link href={`/item/${item.id}`}>
           <h3 className="font-semibold text-sm line-clamp-1 hover:text-yellow transition-colors">
             {item.item_name}
           </h3>
         </Link>
-        {item.brand && (
-          <p className="text-xs text-muted mt-0.5">{item.brand}</p>
-        )}
-        <div className="flex items-center justify-between mt-3">
-          <span className="font-heading text-xl">
-            AED {item.sale_price}
-          </span>
-          <button
-            onClick={handleWhatsAppClick}
-            className="flex items-center gap-1.5 bg-green-500 hover:bg-green-600 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors"
-          >
-            <MessageCircle size={14} />
-            Inquire
-          </button>
+        <div className="flex items-center gap-1.5 mt-1">
+          {item.brand && (
+            <span className="text-xs text-muted">{item.brand}</span>
+          )}
+          <ConditionBadge condition={item.condition} />
         </div>
+        <button
+          onClick={handleWhatsAppClick}
+          className="w-full flex items-center justify-center gap-2 bg-yellow hover:bg-yellow/90 text-black font-bold text-sm py-2.5 rounded-lg mt-3 active:scale-95 transition-all"
+        >
+          <MessageCircle size={16} />
+          PRICE
+        </button>
       </div>
     </div>
   );

@@ -1,4 +1,7 @@
 import { MapPin, Store, Calendar, Users } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+
+export const revalidate = 60;
 
 const stats = [
   { icon: Calendar, label: 'Since', value: '2009' },
@@ -7,7 +10,18 @@ const stats = [
   { icon: Users, label: 'Customers Served', value: '10,000+' },
 ];
 
-export default function AboutPage() {
+async function getAboutText() {
+  const { data } = await supabase
+    .from('website_config')
+    .select('config_value')
+    .eq('config_key', 'about_text')
+    .maybeSingle();
+  return data?.config_value || null;
+}
+
+export default async function AboutPage() {
+  const aboutText = await getAboutText();
+
   return (
     <div className="pt-20 pb-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -20,10 +34,8 @@ export default function AboutPage() {
             ABOUT <span className="text-yellow">BU FAISAL</span>
           </h1>
           <p className="text-gray-400 text-lg max-w-2xl leading-relaxed">
-            Since 2009, Bu Faisal has been Ajman&apos;s trusted destination for
-            quality pre-owned goods. What started as a single shop has grown
-            into the UAE&apos;s biggest used goods souq, operating 5 shops
-            across Ajman.
+            {aboutText ||
+              "Since 2009, Bu Faisal has been Ajman's trusted destination for quality pre-owned goods. What started as a single shop has grown into the UAE's biggest used goods souq, operating 5 shops across Ajman."}
           </p>
         </div>
 

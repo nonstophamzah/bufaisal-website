@@ -25,7 +25,8 @@ function ShopContent() {
       .from('shop_items')
       .select('*')
       .eq('is_published', true)
-      .eq('is_sold', false);
+      .eq('is_sold', false)
+      .eq('is_hidden', false);
 
     if (activeCategory && CATEGORY_SLUG_MAP[activeCategory]) {
       query = query.eq('category', CATEGORY_SLUG_MAP[activeCategory]);
@@ -37,12 +38,14 @@ function ShopContent() {
       );
     }
 
-    if (sortBy === 'price-low') {
-      query = query.order('sale_price', { ascending: true });
-    } else if (sortBy === 'price-high') {
-      query = query.order('sale_price', { ascending: false });
+    if (sortBy === 'featured') {
+      query = query
+        .order('is_featured', { ascending: false })
+        .order('created_at', { ascending: false });
     } else {
-      query = query.order('created_at', { ascending: false });
+      query = query
+        .order('is_featured', { ascending: false })
+        .order('created_at', { ascending: false });
     }
 
     const { data } = await query.limit(50);
@@ -94,7 +97,7 @@ function ShopContent() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search items by name, brand..."
-              className="w-full px-4 py-3 pl-11 border border-gray-200 rounded-xl focus:outline-none focus:border-yellow"
+              className="w-full px-4 py-3 pl-11 border border-gray-200 rounded-xl focus:outline-none focus:border-yellow text-base"
             />
             <Search
               size={18}
@@ -112,26 +115,27 @@ function ShopContent() {
           </div>
         </form>
 
-        {/* Filters row */}
-        <div className="flex flex-wrap items-center gap-3 mb-6">
+        {/* Category bubbles + sort */}
+        <div className="flex items-start gap-3 mb-6">
+          {/* Mobile toggle */}
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm hover:border-yellow transition-colors md:hidden"
+            className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium hover:border-yellow transition-colors md:hidden flex-shrink-0"
           >
             <SlidersHorizontal size={16} />
-            Filters
+            Filter
           </button>
 
-          {/* Category pills - desktop */}
-          <div className="hidden md:flex flex-wrap gap-2">
+          {/* Desktop category bubbles */}
+          <div className="hidden md:flex flex-wrap gap-2 flex-1">
             {CATEGORIES.map((cat) => (
               <button
                 key={cat.slug}
                 onClick={() => handleCategoryClick(cat.slug)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
                   activeCategory === cat.slug
                     ? 'bg-yellow text-black'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
                 {cat.name}
@@ -143,25 +147,24 @@ function ShopContent() {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="ml-auto px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-yellow"
+            className="ml-auto px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:border-yellow flex-shrink-0"
           >
             <option value="newest">Newest First</option>
-            <option value="price-low">Price: Low to High</option>
-            <option value="price-high">Price: High to Low</option>
+            <option value="featured">Featured First</option>
           </select>
         </div>
 
-        {/* Mobile filters */}
+        {/* Mobile category bubbles */}
         {showFilters && (
           <div className="md:hidden flex flex-wrap gap-2 mb-6">
             {CATEGORIES.map((cat) => (
               <button
                 key={cat.slug}
                 onClick={() => handleCategoryClick(cat.slug)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
                   activeCategory === cat.slug
                     ? 'bg-yellow text-black'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
                 {cat.name}

@@ -54,27 +54,19 @@ export const SHOPS = [
 ];
 
 export function buildWhatsAppUrl(item: {
+  id?: string;
   item_name: string;
-  sale_price: number;
-  category: string;
-  barcode?: string | null;
   shop_source?: string | null;
 }) {
   const phone = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '';
-  const message = [
-    `Hi! I'm interested in this item from Bu Faisal:`,
-    ``,
-    `*${item.item_name}*`,
-    `Price: AED ${item.sale_price}`,
-    `Category: ${item.category}`,
-    item.barcode ? `Barcode: ${item.barcode}` : '',
-    item.shop_source ? `Shop: ${item.shop_source}` : '',
-    ``,
-    `Is this still available?`,
-  ]
-    .filter(Boolean)
-    .join('\n');
-
+  const shopText = item.shop_source ? ` at ${item.shop_source}` : '';
+  const lines = [
+    `Hi, I'm interested in *${item.item_name}*${shopText}. Is this still available?`,
+  ];
+  if (item.id) {
+    lines.push(`View: https://bufaisal.ae/item/${item.id}`);
+  }
+  const message = lines.join('\n');
   return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
 }
 

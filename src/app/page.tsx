@@ -12,17 +12,38 @@ async function getLatestItems() {
     .select('*')
     .eq('is_published', true)
     .eq('is_sold', false)
+    .eq('is_hidden', false)
+    .order('is_featured', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(8);
   return data || [];
 }
 
+async function getHeroConfig() {
+  const { data } = await supabase
+    .from('website_config')
+    .select('config_key, config_value')
+    .in('config_key', ['hero_title', 'hero_subtitle']);
+
+  const config: Record<string, string> = {};
+  (data || []).forEach((row) => {
+    config[row.config_key] = row.config_value;
+  });
+  return config;
+}
+
 export default async function HomePage() {
-  const items = await getLatestItems();
+  const [items, heroConfig] = await Promise.all([
+    getLatestItems(),
+    getHeroConfig(),
+  ]);
 
   return (
     <>
-      <Hero />
+      <Hero
+        title={heroConfig.hero_title}
+        subtitle={heroConfig.hero_subtitle}
+      />
 
       {/* Categories */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">

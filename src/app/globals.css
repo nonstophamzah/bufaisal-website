@@ -60,6 +60,15 @@ body {
   animation-delay: 0.4s;
 }
 
+/* Shake animation for wrong password */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-12px); }
+  40% { transform: translateX(12px); }
+  60% { transform: translateX(-8px); }
+  80% { transform: translateX(8px); }
+}
+
 /* Smooth scrollbar */
 html {
   scroll-behavior: smooth;
