@@ -32,10 +32,10 @@ CREATE INDEX IF NOT EXISTS idx_shop_items_shop_source ON shop_items(shop_source)
 -- Enable RLS
 ALTER TABLE shop_items ENABLE ROW LEVEL SECURITY;
 
--- Public can read published items
-CREATE POLICY "Public can view published items"
+-- Allow reading all items (admin needs to see unpublished; public pages filter in queries)
+CREATE POLICY "Anyone can view items"
   ON shop_items FOR SELECT
-  USING (is_published = TRUE);
+  USING (TRUE);
 
 -- Allow inserts for all (team uploads)
 CREATE POLICY "Anyone can insert items"

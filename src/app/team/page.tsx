@@ -144,16 +144,29 @@ export default function TeamPage() {
 
     try {
       const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+      if (!apiKey) {
+        setError('Gemini API key is not configured.');
+        setAiLoading(false);
+        return;
+      }
 
       // Fetch image as base64
       const imgRes = await fetch(firstImage);
+      if (!imgRes.ok) {
+        setError(`Failed to load image for AI scan (${imgRes.status})`);
+        setAiLoading(false);
+        return;
+      }
       const blob = await imgRes.blob();
-      const base64 = await new Promise<string>((resolve) => {
+      const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => {
           const result = reader.result as string;
-          resolve(result.split(',')[1]);
+          const b64 = result.split(',')[1];
+          if (b64) resolve(b64);
+          else reject(new Error('Failed to convert image to base64'));
         };
+        reader.onerror = () => reject(new Error('FileReader error'));
         reader.readAsDataURL(blob);
       });
 
@@ -194,8 +207,24 @@ Return ONLY the JSON object, no other text.`,
       );
 
       const data = await res.json();
+
+      // Check for API-level errors
+      if (!res.ok || data.error) {
+        const msg = data.error?.message || `Gemini API error (${res.status})`;
+        setError(`AI error: ${msg}`);
+        setAiLoading(false);
+        return;
+      }
+
       const text =
         data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+      if (!text) {
+        setError('AI returned empty response. Try a clearer photo.');
+        setAiLoading(false);
+        return;
+      }
+
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
@@ -209,9 +238,12 @@ Return ONLY the JSON object, no other text.`,
           seo_title: parsed.seo_title || prev.seo_title,
           seo_description: parsed.seo_description || prev.seo_description,
         }));
+      } else {
+        setError('AI response could not be parsed. Try again.');
       }
-    } catch {
-      setError('AI analysis failed. Please fill in details manually.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setError(`AI scan failed: ${msg}`);
     }
 
     setAiLoading(false);
