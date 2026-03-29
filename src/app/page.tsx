@@ -65,6 +65,7 @@ export default async function HomePage() {
               slug={cat.slug}
               description={cat.description}
               icon={cat.icon}
+              image={cat.image}
             />
           ))}
         </div>

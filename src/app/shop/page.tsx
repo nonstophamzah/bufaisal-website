@@ -63,9 +63,7 @@ function ShopContent() {
     searchParams.get('category') || ''
   );
   const [sortBy, setSortBy] = useState('newest');
-  const [showCategories, setShowCategories] = useState(
-    !searchParams.get('category')
-  );
+  const [showCategories, setShowCategories] = useState(true);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   const catName = activeCategory ? CATEGORY_SLUG_MAP[activeCategory] : '';
@@ -133,7 +131,6 @@ function ShopContent() {
   const handleCategoryClick = (slug: string) => {
     const newCat = activeCategory === slug ? '' : slug;
     setActiveCategory(newCat);
-    if (newCat) setShowCategories(false);
     const params = new URLSearchParams();
     if (newCat) params.set('category', newCat);
     if (search) params.set('q', search);

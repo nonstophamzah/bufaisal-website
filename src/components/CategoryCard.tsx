@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { LucideIcon } from 'lucide-react';
 
 interface CategoryCardProps {
@@ -6,6 +7,7 @@ interface CategoryCardProps {
   slug: string;
   description: string;
   icon: LucideIcon;
+  image?: string;
   itemCount?: number;
 }
 
@@ -14,8 +16,40 @@ export default function CategoryCard({
   slug,
   description,
   icon: Icon,
+  image,
   itemCount,
 }: CategoryCardProps) {
+  if (image) {
+    return (
+      <Link
+        href={`/shop?category=${slug}`}
+        className="group relative block overflow-hidden rounded-2xl aspect-[3/2] hover:shadow-lg transition-all"
+      >
+        <Image
+          src={image}
+          alt={name}
+          fill
+          className="object-cover group-hover:scale-105 transition-transform duration-300"
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+        <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4">
+          <h3 className="font-heading text-xl sm:text-2xl text-white leading-tight">
+            {name.toUpperCase()}
+          </h3>
+          <p className="text-white/70 text-xs sm:text-sm mt-0.5 line-clamp-1">
+            {description}
+          </p>
+          {typeof itemCount === 'number' && (
+            <span className="text-yellow text-xs font-bold mt-1 inline-block">
+              {itemCount} items
+            </span>
+          )}
+        </div>
+      </Link>
+    );
+  }
+
   return (
     <Link
       href={`/shop?category=${slug}`}

@@ -38,6 +38,7 @@ export default async function CategoriesPage() {
               slug={cat.slug}
               description={cat.description}
               icon={cat.icon}
+              image={cat.image}
               itemCount={counts[cat.slug]}
             />
           ))}
