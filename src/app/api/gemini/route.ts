@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { imageBase64, mimeType } = await request.json();
+    const { imageBase64, mimeType, prompt: customPrompt } = await request.json();
 
     if (!imageBase64 || !mimeType) {
       return NextResponse.json(
@@ -18,6 +18,17 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const defaultPrompt = `Analyze this image of a used item for sale in a second-hand store. Return a JSON object with these fields:
+- item_name: a clear, concise name for this item
+- brand: the brand if visible, or "Unknown"
+- description: a short 1-2 sentence description of the item's condition and features
+- category: one of these exact values: "Living Room & Lounge", "Bedroom & Sleep", "Kitchen & Dining", "Appliances", "Outdoor & Garden", "Kids & Baby", "Office, Study & Fitness", "Everyday Essentials"
+- condition: one of these exact values: "Excellent", "Good", "Fair"
+- seo_title: a short SEO-friendly title for this product listing (under 60 characters)
+- seo_description: a 1-2 sentence SEO meta description for this listing
+
+Return ONLY the JSON object, no other text.`;
 
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
@@ -29,16 +40,7 @@ export async function POST(request: NextRequest) {
             {
               parts: [
                 {
-                  text: `Analyze this image of a used item for sale in a second-hand store. Return a JSON object with these fields:
-- item_name: a clear, concise name for this item
-- brand: the brand if visible, or "Unknown"
-- description: a short 1-2 sentence description of the item's condition and features
-- category: one of these exact values: "Living Room & Lounge", "Bedroom & Sleep", "Kitchen & Dining", "Appliances", "Outdoor & Garden", "Kids & Baby", "Office, Study & Fitness", "Everyday Essentials"
-- condition: one of these exact values: "Excellent", "Good", "Fair"
-- seo_title: a short SEO-friendly title for this product listing (under 60 characters)
-- seo_description: a 1-2 sentence SEO meta description for this listing
-
-Return ONLY the JSON object, no other text.`,
+                  text: customPrompt || defaultPrompt,
                 },
                 {
                   inline_data: {
