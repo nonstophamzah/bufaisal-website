@@ -757,6 +757,9 @@ export default function AdminPage() {
                           AED {item.sale_price}
                         </p>
                         <div className="flex items-center gap-3 text-xs text-muted mt-0.5">
+                          {(item.duty_manager || item.uploaded_by) && (
+                            <span>by {item.duty_manager || item.uploaded_by}</span>
+                          )}
                           <span className="flex items-center gap-0.5">
                             <Eye size={12} /> {item.view_count}
                           </span>
@@ -849,6 +852,7 @@ export default function AdminPage() {
                         AED {item.sale_price}
                       </p>
                       <p className="text-xs text-muted mt-0.5">
+                        {item.duty_manager || item.uploaded_by ? `by ${item.duty_manager || item.uploaded_by} · ` : ''}
                         Sold &bull; {fmtDate(item.updated_at)}
                       </p>
                     </div>

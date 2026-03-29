@@ -38,7 +38,7 @@ export default function Footer() {
                 { href: '/shop', label: t('Shop All', 'تسوّق الكل') },
                 { href: '/categories', label: t('Categories', 'الأقسام') },
                 { href: '/about', label: t('About Us', 'من نحن') },
-                { href: '/team', label: t('Team Portal', 'بوابة الفريق') },
+                { href: '/login', label: t('Login', 'تسجيل الدخول') },
               ].map((link) => (
                 <Link
                   key={link.href}

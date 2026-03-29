@@ -1,33 +1,34 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { Upload, Sparkles, Loader2, LogOut, Camera, ArrowLeft, Check } from 'lucide-react';
-import { supabase, DutyManager } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { CATEGORIES } from '@/lib/constants';
 
 const SHOP_LABELS = ['A', 'B', 'C', 'D', 'E'] as const;
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Brand New'] as const;
 const PHOTO_LABELS = ['Front', 'Side', 'Inside / Back'];
 
-type Step = 'shop' | 'password' | 'manager' | 'upload';
+type Step = 'shop' | 'password' | 'name' | 'upload';
 
 export default function TeamPage() {
   // --- navigation state ---
   const [step, setStep] = useState<Step>('shop');
   const [shopLabel, setShopLabel] = useState('');
   const [managerName, setManagerName] = useState('');
+  const [nameInput, setNameInput] = useState('');
 
   // --- password state ---
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
 
-  // --- manager state ---
-  const [managers, setManagers] = useState<DutyManager[]>([]);
-  const [managersLoading, setManagersLoading] = useState(false);
-  const [otherName, setOtherName] = useState('');
-  const [showOtherInput, setShowOtherInput] = useState(false);
+  // Load saved name from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('bufaisal_worker_name');
+    if (saved) setNameInput(saved);
+  }, []);
 
   // --- upload state ---
   const [uploading, setUploading] = useState(false);
@@ -67,7 +68,7 @@ export default function TeamPage() {
       .maybeSingle();
 
     if (data) {
-      setStep('manager');
+      setStep('name');
       setPassword('');
     } else {
       setPasswordError(true);
@@ -75,24 +76,13 @@ export default function TeamPage() {
     setPasswordLoading(false);
   };
 
-  // --- STEP 3: fetch managers ---
-  const fetchManagers = useCallback(async () => {
-    setManagersLoading(true);
-    const { data } = await supabase
-      .from('duty_managers')
-      .select('*')
-      .eq('shop_label', shopLabel)
-      .eq('is_active', true)
-      .order('name');
-    setManagers(data || []);
-    setManagersLoading(false);
-  }, [shopLabel]);
-
-  useEffect(() => {
-    if (step === 'manager' && shopLabel) {
-      fetchManagers();
-    }
-  }, [step, shopLabel, fetchManagers]);
+  const handleNameSubmit = () => {
+    const name = nameInput.trim();
+    if (!name) return;
+    localStorage.setItem('bufaisal_worker_name', name);
+    setManagerName(name);
+    setStep('upload');
+  };
 
   // --- Cloudinary upload (kept from original) ---
   const handleImageUpload = async (
@@ -285,8 +275,6 @@ export default function TeamPage() {
     setManagerName('');
     setPassword('');
     setPasswordError(false);
-    setShowOtherInput(false);
-    setOtherName('');
     resetForm();
   };
 
@@ -380,90 +368,44 @@ export default function TeamPage() {
   }
 
   // =========================================================
-  // STEP 3 — DUTY MANAGER
+  // STEP 3 — YOUR NAME
   // =========================================================
-  if (step === 'manager') {
+  if (step === 'name') {
     return (
       <div className="min-h-screen bg-black flex flex-col pt-20 px-4 pb-8">
         <button
-          onClick={() => {
-            setStep('password');
-            setShowOtherInput(false);
-            setOtherName('');
-          }}
+          onClick={() => setStep('password')}
           className="text-white flex items-center gap-2 mt-4 mb-6 text-lg"
         >
           <ArrowLeft size={24} />
           <span className="font-heading text-2xl">BACK</span>
         </button>
 
-        <h1 className="font-heading text-3xl text-white text-center mb-2">
-          SHOP {shopLabel}
-        </h1>
-        <p className="font-heading text-4xl text-yellow text-center mb-8">
-          WHO IS ON DUTY?
-        </p>
+        <div className="flex-1 flex flex-col items-center justify-center max-w-lg mx-auto w-full">
+          <h1 className="font-heading text-5xl text-yellow mb-4 text-center">
+            SHOP {shopLabel}
+          </h1>
+          <p className="font-heading text-3xl text-white text-center mb-10">
+            YOUR NAME
+          </p>
 
-        <div className="flex flex-col gap-4 max-w-lg mx-auto w-full flex-1">
-          {managersLoading ? (
-            <div className="flex justify-center py-20">
-              <Loader2 size={40} className="animate-spin text-yellow" />
-            </div>
-          ) : (
-            <>
-              {managers.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => {
-                    setManagerName(m.name);
-                    setStep('upload');
-                  }}
-                  className="w-full bg-yellow text-black rounded-2xl py-7 text-center active:scale-95 transition-transform"
-                >
-                  <span className="font-heading text-4xl">{m.name.toUpperCase()}</span>
-                </button>
-              ))}
+          <input
+            type="text"
+            value={nameInput}
+            onChange={(e) => setNameInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleNameSubmit()}
+            placeholder="Enter your name"
+            className="w-full text-center text-2xl px-6 py-5 rounded-2xl border-2 border-yellow focus:outline-none bg-white text-black"
+            autoFocus
+          />
 
-              {/* Other option */}
-              {!showOtherInput ? (
-                <button
-                  onClick={() => setShowOtherInput(true)}
-                  className="w-full border-2 border-yellow text-yellow rounded-2xl py-7 text-center active:scale-95 transition-transform"
-                >
-                  <span className="font-heading text-4xl">OTHER</span>
-                </button>
-              ) : (
-                <div className="space-y-4">
-                  <input
-                    type="text"
-                    value={otherName}
-                    onChange={(e) => setOtherName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && otherName.trim()) {
-                        setManagerName(otherName.trim());
-                        setStep('upload');
-                      }
-                    }}
-                    placeholder="Type your name"
-                    className="w-full text-center text-2xl px-6 py-5 rounded-2xl border-2 border-yellow focus:outline-none bg-white text-black"
-                    autoFocus
-                  />
-                  <button
-                    onClick={() => {
-                      if (otherName.trim()) {
-                        setManagerName(otherName.trim());
-                        setStep('upload');
-                      }
-                    }}
-                    disabled={!otherName.trim()}
-                    className="w-full bg-yellow text-black font-heading text-3xl py-5 rounded-2xl active:scale-95 transition-transform disabled:opacity-50"
-                  >
-                    CONTINUE
-                  </button>
-                </div>
-              )}
-            </>
-          )}
+          <button
+            onClick={handleNameSubmit}
+            disabled={!nameInput.trim()}
+            className="w-full bg-yellow text-black font-heading text-3xl py-5 rounded-2xl mt-6 active:scale-95 transition-transform disabled:opacity-50"
+          >
+            CONTINUE
+          </button>
         </div>
       </div>
     );
