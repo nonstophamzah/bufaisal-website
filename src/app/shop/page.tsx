@@ -1,12 +1,57 @@
 'use client';
 
-import { useEffect, useState, useCallback, Suspense } from 'react';
+import { useEffect, useState, useCallback, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Search, X, ChevronDown, ChevronUp } from 'lucide-react';
+import Link from 'next/link';
+import { Search, X, ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
 import ItemCard from '@/components/ItemCard';
 import { supabase, ShopItem } from '@/lib/supabase';
 import { CATEGORIES, CATEGORY_SLUG_MAP } from '@/lib/constants';
+
+// ─── Static SEO intro per category ──────────────────────
+
+const CATEGORY_INTROS: Record<string, string> = {
+  'living-room-lounge':
+    'Transform your home with quality pre-owned sofas, coffee tables, TV stands, and lounge furniture. Every piece is inspected for quality at our Ajman showrooms. Save up to 70% compared to buying new.',
+  'bedroom-sleep':
+    'Sleep better for less. Browse beds, mattresses, wardrobes, and bedroom furniture — all checked for quality and comfort. Delivery available across Dubai, Sharjah, and Ajman.',
+  'kitchen-dining':
+    'Equip your kitchen and dining area with affordable second-hand dining sets, tables, chairs, and cookware. Quality items from top brands at a fraction of the retail price.',
+  'appliances':
+    'Reliable used appliances — fridges, washing machines, ACs, microwaves, TVs, and more. All tested and working. Visit our 5 shops in Ajman or WhatsApp us for availability.',
+  'outdoor-garden':
+    'Create your perfect outdoor space with pre-owned garden furniture, BBQ sets, patio chairs, and camping gear. Built to last, priced to save.',
+  'kids-baby':
+    'Safe, affordable kids and baby essentials — cribs, strollers, toys, bikes, car seats, and study tables. Every item inspected for safety. Perfect for growing families on a budget.',
+  'office-study-fitness':
+    'Work from home or build your gym with used office desks, chairs, laptops, treadmills, and dumbbells. Professional quality at second-hand prices.',
+  'everyday-essentials':
+    'Bags, shoes, clothes, books, and everyday accessories at unbeatable prices. New items added daily across all 5 Bu Faisal shops in Ajman.',
+};
+
+// ─── FAQ data ────────────────────────────────────────────
+
+const FAQS = [
+  {
+    q: 'Do you deliver to Dubai?',
+    a: 'Yes! We deliver across Dubai, Sharjah, Ajman, and all UAE emirates. WhatsApp us with the item you want and your location for a delivery quote.',
+  },
+  {
+    q: 'How do I know the quality?',
+    a: 'Every item is inspected before listing. We note the condition (Excellent, Good, or Fair) on each listing. You can also visit any of our 5 shops in Ajman to see items in person.',
+  },
+  {
+    q: 'Can I visit your shop?',
+    a: 'Absolutely! We have 5 shops (A through E) in Ajman, open daily. Walk in anytime to browse thousands of items across all categories.',
+  },
+  {
+    q: 'How do I order via WhatsApp?',
+    a: 'Tap the yellow PRICE button on any item. It opens WhatsApp with a pre-filled message. Our team will reply with the price, availability, and delivery options.',
+  },
+];
+
+// ─── Component ───────────────────────────────────────────
 
 function ShopContent() {
   const searchParams = useSearchParams();
@@ -18,7 +63,39 @@ function ShopContent() {
     searchParams.get('category') || ''
   );
   const [sortBy, setSortBy] = useState('newest');
-  const [showCategories, setShowCategories] = useState(!searchParams.get('category'));
+  const [showCategories, setShowCategories] = useState(
+    !searchParams.get('category')
+  );
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+  const catName = activeCategory ? CATEGORY_SLUG_MAP[activeCategory] : '';
+
+  // ─── Dynamic <title> and meta description ─────────────
+
+  useEffect(() => {
+    if (catName) {
+      document.title = `Used ${catName} in Dubai, Ajman, Sharjah | Bu Faisal`;
+      const desc = document.querySelector('meta[name="description"]');
+      if (desc) {
+        desc.setAttribute(
+          'content',
+          `Buy quality second-hand ${catName.toLowerCase()} at affordable prices. Visit our 5 shops in Ajman or WhatsApp us. Established 2009.`
+        );
+      }
+    } else {
+      document.title =
+        "Shop All Items | Bu Faisal General Trading | UAE's Biggest Used Goods Souq";
+      const desc = document.querySelector('meta[name="description"]');
+      if (desc) {
+        desc.setAttribute(
+          'content',
+          'Browse thousands of quality second-hand items in Ajman, UAE. Furniture, appliances, electronics & more across 5 shops. Since 2009.'
+        );
+      }
+    }
+  }, [catName]);
+
+  // ─── Fetch items ───────────────────────────────────────
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -39,19 +116,14 @@ function ShopContent() {
       );
     }
 
-    if (sortBy === 'featured') {
-      query = query
-        .order('is_featured', { ascending: false })
-        .order('created_at', { ascending: false });
-    } else {
-      query = query
-        .order('is_featured', { ascending: false })
-        .order('created_at', { ascending: false });
-    }
+    query = query
+      .order('is_featured', { ascending: false })
+      .order('created_at', { ascending: false });
 
     const { data } = await query.limit(50);
     setItems(data || []);
     setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCategory, search, sortBy]);
 
   useEffect(() => {
@@ -76,19 +148,146 @@ function ShopContent() {
     router.replace(`/shop?${params.toString()}`);
   };
 
+  // ─── JSON-LD schema ────────────────────────────────────
+
+  const schemaJsonLd = useMemo(() => {
+    const localBusiness = {
+      '@context': 'https://schema.org',
+      '@type': 'LocalBusiness',
+      name: 'Bu Faisal General Trading',
+      description:
+        "UAE's biggest used goods souq. Quality second-hand furniture, appliances & home goods since 2009.",
+      url: 'https://bufaisal.ae',
+      telephone: '+971585932499',
+      address: {
+        '@type': 'PostalAddress',
+        addressLocality: 'Ajman',
+        addressCountry: 'AE',
+      },
+      geo: {
+        '@type': 'GeoCoordinates',
+        latitude: 25.4052,
+        longitude: 55.5136,
+      },
+      openingHours: 'Mo-Su 09:00-22:00',
+      priceRange: 'AED',
+      image: 'https://bufaisal.ae/og-image.png',
+      sameAs: [],
+    };
+
+    const faqSchema = {
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: FAQS.map((f) => ({
+        '@type': 'Question',
+        name: f.q,
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: f.a,
+        },
+      })),
+    };
+
+    const schemas: Record<string, unknown>[] = [localBusiness, faqSchema];
+
+    if (catName && items.length > 0) {
+      const productList = {
+        '@context': 'https://schema.org',
+        '@type': 'ItemList',
+        name: `Used ${catName} for Sale`,
+        numberOfItems: items.length,
+        itemListElement: items.slice(0, 10).map((item, i) => ({
+          '@type': 'ListItem',
+          position: i + 1,
+          item: {
+            '@type': 'Product',
+            name: item.item_name,
+            description: item.description || `Used ${item.item_name}`,
+            url: `https://bufaisal.ae/item/${item.id}`,
+            image: item.thumbnail_url || item.image_urls?.[0] || '',
+            brand: { '@type': 'Brand', name: item.brand || 'Bu Faisal' },
+            offers: {
+              '@type': 'Offer',
+              availability: 'https://schema.org/InStock',
+              priceCurrency: 'AED',
+              price: item.sale_price || 0,
+              seller: { '@type': 'Organization', name: 'Bu Faisal General Trading' },
+            },
+            itemCondition: 'https://schema.org/UsedCondition',
+          },
+        })),
+      };
+      schemas.push(productList);
+    }
+
+    return schemas;
+  }, [catName, items]);
+
+  // ─── Render ────────────────────────────────────────────
+
   return (
     <div className="pt-20 pb-16">
+      {/* JSON-LD */}
+      {schemaJsonLd.map((schema, i) => (
+        <script
+          key={i}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+        />
+      ))}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
+        {/* Breadcrumbs */}
+        <nav
+          aria-label="Breadcrumb"
+          className="flex items-center gap-1.5 text-sm text-muted mb-4"
+        >
+          <Link href="/" className="hover:text-black transition-colors">
+            Home
+          </Link>
+          <ChevronRight size={14} />
+          <Link
+            href="/shop"
+            className={`hover:text-black transition-colors ${
+              !activeCategory ? 'text-black font-medium' : ''
+            }`}
+          >
+            Shop
+          </Link>
+          {catName && (
+            <>
+              <ChevronRight size={14} />
+              <span className="text-black font-medium">{catName}</span>
+            </>
+          )}
+        </nav>
+
+        {/* H1 — dynamic */}
         <div className="mb-6">
           <h1 className="font-heading text-4xl md:text-5xl mb-2">
-            SHOP <span className="text-yellow">ALL ITEMS</span>
+            {catName ? (
+              <>
+                USED{' '}
+                <span className="text-yellow">{catName.toUpperCase()}</span>{' '}
+                FOR SALE
+              </>
+            ) : (
+              <>
+                SHOP <span className="text-yellow">ALL ITEMS</span>
+              </>
+            )}
           </h1>
-          <p className="text-muted">
-            {activeCategory
-              ? CATEGORY_SLUG_MAP[activeCategory]
-              : 'Browse our full collection'}
-          </p>
+          {/* Category intro paragraph */}
+          {activeCategory && CATEGORY_INTROS[activeCategory] ? (
+            <p className="text-gray-600 max-w-2xl leading-relaxed">
+              {CATEGORY_INTROS[activeCategory]}
+            </p>
+          ) : (
+            <p className="text-muted">
+              Browse our full collection of quality pre-owned goods across 5
+              shops in Ajman, UAE.
+            </p>
+          )}
         </div>
 
         {/* Search bar */}
@@ -134,7 +333,11 @@ function ShopContent() {
             className="flex items-center gap-1.5 text-sm font-medium text-muted hover:text-black transition-colors"
           >
             {showCategories ? 'Hide' : 'Browse'} Categories
-            {showCategories ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            {showCategories ? (
+              <ChevronUp size={16} />
+            ) : (
+              <ChevronDown size={16} />
+            )}
           </button>
           <select
             value={sortBy}
@@ -179,7 +382,9 @@ function ShopContent() {
                   </div>
                   {isActive && (
                     <div className="absolute top-3 right-3 w-6 h-6 bg-yellow rounded-full flex items-center justify-center">
-                      <span className="text-black text-xs font-bold">✓</span>
+                      <span className="text-black text-xs font-bold">
+                        ✓
+                      </span>
                     </div>
                   )}
                 </button>
@@ -212,6 +417,39 @@ function ShopContent() {
             ))}
           </div>
         )}
+
+        {/* ─── FAQ Section ───────────────────────────── */}
+        <section className="mt-16 max-w-3xl">
+          <h2 className="font-heading text-3xl md:text-4xl mb-6">
+            FREQUENTLY ASKED <span className="text-yellow">QUESTIONS</span>
+          </h2>
+          <div className="space-y-3">
+            {FAQS.map((faq, i) => (
+              <div
+                key={i}
+                className="border border-gray-200 rounded-xl overflow-hidden"
+              >
+                <button
+                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                  className="w-full flex items-center justify-between px-5 py-4 text-left font-semibold text-sm md:text-base hover:bg-gray-50 transition-colors"
+                >
+                  {faq.q}
+                  <ChevronDown
+                    size={18}
+                    className={`flex-shrink-0 ml-3 text-muted transition-transform ${
+                      openFaq === i ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+                {openFaq === i && (
+                  <div className="px-5 pb-4 text-sm text-gray-600 leading-relaxed">
+                    {faq.a}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -227,7 +465,10 @@ export default function ShopPage() {
             <div className="h-12 bg-gray-100 rounded w-96" />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="bg-gray-100 rounded-xl aspect-square" />
+                <div
+                  key={i}
+                  className="bg-gray-100 rounded-xl aspect-square"
+                />
               ))}
             </div>
           </div>
