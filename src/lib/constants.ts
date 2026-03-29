@@ -6,7 +6,7 @@ export const CATEGORIES = [
     slug: 'living-room-lounge',
     description: 'Sofas, coffee tables, TV stands, shelves, mirrors, carpets, curtains, decor',
     icon: Sofa,
-    image: 'https://images.unsplash.com/photo-1567016432779-094069958ea5?w=600&h=400&fit=crop&q=80',
+    image: 'https://images.unsplash.com/photo-1618220179428-22790b461013?w=600&h=400&fit=crop&q=80',
   },
   {
     name: 'Bedroom & Sleep',
@@ -34,14 +34,14 @@ export const CATEGORIES = [
     slug: 'outdoor-garden',
     description: 'Garden sets, chairs, tables, BBQs, camping, pet houses, storage sheds',
     icon: TreePine,
-    image: 'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=600&h=400&fit=crop&q=80',
+    image: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&h=400&fit=crop&q=80',
   },
   {
     name: 'Kids & Baby',
     slug: 'kids-baby',
     description: 'Baby beds, trolleys, bunk beds, toys, car seats, bikes, study tables, cycles',
     icon: Baby,
-    image: 'https://images.unsplash.com/photo-1519340241574-2cec6aef0c01?w=600&h=400&fit=crop&q=80',
+    image: 'https://images.unsplash.com/photo-1540479859555-17af45c78602?w=600&h=400&fit=crop&q=80',
   },
   {
     name: 'Office, Study & Fitness',
@@ -55,7 +55,7 @@ export const CATEGORIES = [
     slug: 'everyday-essentials',
     description: 'Bags, clothes, shoes, books, baskets, small accessories, misc',
     icon: ShoppingBag,
-    image: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600&h=400&fit=crop&q=80',
+    image: 'https://images.unsplash.com/photo-1558997519-83ea9252edf8?w=600&h=400&fit=crop&q=80',
   },
 ];
 
