@@ -5,6 +5,7 @@ import './globals.css';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import WhatsAppFloat from '@/components/WhatsAppFloat';
+import { LangProvider } from '@/lib/lang';
 
 const bebasNeue = Bebas_Neue({
   weight: '400',
@@ -92,10 +93,12 @@ export default function RootLayout({
       <body
         className={`${bebasNeue.variable} ${dmSans.variable} font-body antialiased bg-white text-black`}
       >
-        <Navbar />
-        <main className="min-h-screen">{children}</main>
-        <Footer />
-        <WhatsAppFloat />
+        <LangProvider>
+          <Navbar />
+          <main className="min-h-screen">{children}</main>
+          <Footer />
+          <WhatsAppFloat />
+        </LangProvider>
       </body>
     </html>
   );

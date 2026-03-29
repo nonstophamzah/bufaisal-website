@@ -1,6 +1,7 @@
 import Hero from '@/components/Hero';
 import CategoryCard from '@/components/CategoryCard';
 import ItemCard from '@/components/ItemCard';
+import SocialProof from '@/components/SocialProof';
 import { CATEGORIES } from '@/lib/constants';
 import { supabase } from '@/lib/supabase';
 
@@ -45,6 +46,9 @@ export default async function HomePage() {
         subtitle={heroConfig.hero_subtitle}
       />
 
+      {/* Social Proof */}
+      <SocialProof />
+
       {/* Categories */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <h2 className="font-heading text-4xl md:text-5xl mb-2">
@@ -63,6 +67,43 @@ export default async function HomePage() {
               icon={cat.icon}
             />
           ))}
+        </div>
+      </section>
+
+      {/* What We Sell */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="bg-black text-white rounded-2xl p-8 md:p-12">
+          <h2 className="font-heading text-3xl md:text-4xl mb-4">
+            WHAT WE <span className="text-yellow">SELL</span>
+          </h2>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <span className="bg-yellow/20 text-yellow font-heading text-xl px-3 py-1 rounded">
+                  80%
+                </span>
+                <h3 className="font-heading text-xl">QUALITY USED ITEMS</h3>
+              </div>
+              <p className="text-gray-400 text-sm leading-relaxed">
+                Carefully inspected pre-owned furniture, appliances, and home
+                goods. Every item is checked for quality before it hits our
+                shelves. Save up to 70% compared to buying new.
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <span className="bg-yellow/20 text-yellow font-heading text-xl px-3 py-1 rounded">
+                  20%
+                </span>
+                <h3 className="font-heading text-xl">BRAND NEW ITEMS</h3>
+              </div>
+              <p className="text-gray-400 text-sm leading-relaxed">
+                We also manufacture brand new sofas, beds, cupboards &amp;
+                bedroom sets. Custom-made to order at factory-direct prices.
+                Ask us on WhatsApp for our new collection.
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 

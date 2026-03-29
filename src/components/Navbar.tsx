@@ -4,12 +4,14 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { Search, Menu, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useLang } from '@/lib/lang';
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const router = useRouter();
+  const { lang, toggle, t } = useLang();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,10 +23,10 @@ export default function Navbar() {
   };
 
   const navLinks = [
-    { href: '/', label: 'Home' },
-    { href: '/shop', label: 'Shop' },
-    { href: '/categories', label: 'Categories' },
-    { href: '/about', label: 'About' },
+    { href: '/', label: t('Home', 'الرئيسية') },
+    { href: '/shop', label: t('Shop', 'تسوّق') },
+    { href: '/categories', label: t('Categories', 'الأقسام') },
+    { href: '/about', label: t('About', 'من نحن') },
   ];
 
   return (
@@ -51,8 +53,15 @@ export default function Navbar() {
             ))}
           </div>
 
-          {/* Search + Mobile menu */}
-          <div className="flex items-center gap-3">
+          {/* Search + Lang + Mobile menu */}
+          <div className="flex items-center gap-2">
+            {/* Language toggle */}
+            <button
+              onClick={toggle}
+              className="px-2.5 py-1 text-xs font-bold border border-gray-600 rounded-md hover:border-yellow hover:text-yellow transition-colors"
+            >
+              {lang === 'en' ? 'عربي' : 'EN'}
+            </button>
             <button
               onClick={() => setSearchOpen(!searchOpen)}
               className="p-2 hover:text-yellow transition-colors"
@@ -78,7 +87,7 @@ export default function Navbar() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search items..."
+                placeholder={t('Search items...', 'ابحث عن المنتجات...')}
                 className="w-full px-4 py-2 bg-dark border border-gray-700 rounded-lg text-white placeholder-muted focus:outline-none focus:border-yellow"
                 autoFocus
               />

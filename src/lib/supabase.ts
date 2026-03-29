@@ -34,6 +34,7 @@ export interface ShopItem {
   seo_description: string | null;
   duty_manager: string | null;
   shop_label: string | null;
+  condition_notes: string | null;
 }
 
 export interface WebsiteConfig {

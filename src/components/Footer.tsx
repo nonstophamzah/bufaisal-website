@@ -1,7 +1,12 @@
+'use client';
+
 import Link from 'next/link';
-import { MapPin, Phone, Clock } from 'lucide-react';
+import { MapPin, Phone, Clock, Truck } from 'lucide-react';
+import { useLang } from '@/lib/lang';
 
 export default function Footer() {
+  const { t } = useLang();
+
   return (
     <footer className="bg-black text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -9,21 +14,29 @@ export default function Footer() {
           {/* Brand */}
           <div>
             <h3 className="font-heading text-3xl text-yellow mb-3">BU FAISAL</h3>
-            <p className="text-gray-400 text-sm leading-relaxed">
-              UAE&apos;s biggest used goods souq. Serving customers since 2009
-              with quality pre-owned items across 5 shops in Ajman.
+            <p className="text-gray-400 text-sm leading-relaxed mb-3">
+              {t(
+                "UAE's largest second-hand market. Serving UAE families since 2009 — Delivery across Dubai, Ajman & Sharjah.",
+                'أكبر سوق للمستعمل في الإمارات. نخدم العائلات منذ 2009 — توصيل في دبي وعجمان والشارقة.'
+              )}
+            </p>
+            <p className="text-yellow text-sm font-medium">
+              {t(
+                'Quality You Can Trust. Prices You\'ll Love.',
+                'جودة تثق بها. أسعار تحبها.'
+              )}
             </p>
           </div>
 
           {/* Quick Links */}
           <div>
-            <h4 className="font-heading text-xl mb-4">QUICK LINKS</h4>
+            <h4 className="font-heading text-xl mb-4">{t('QUICK LINKS', 'روابط سريعة')}</h4>
             <div className="space-y-2">
               {[
-                { href: '/shop', label: 'Shop All' },
-                { href: '/categories', label: 'Categories' },
-                { href: '/about', label: 'About Us' },
-                { href: '/team', label: 'Team Portal' },
+                { href: '/shop', label: t('Shop All', 'تسوّق الكل') },
+                { href: '/categories', label: t('Categories', 'الأقسام') },
+                { href: '/about', label: t('About Us', 'من نحن') },
+                { href: '/team', label: t('Team Portal', 'بوابة الفريق') },
               ].map((link) => (
                 <Link
                   key={link.href}
@@ -38,26 +51,30 @@ export default function Footer() {
 
           {/* Contact */}
           <div>
-            <h4 className="font-heading text-xl mb-4">VISIT US</h4>
+            <h4 className="font-heading text-xl mb-4">{t('VISIT US', 'زورونا')}</h4>
             <div className="space-y-3 text-sm text-gray-400">
               <div className="flex items-start gap-2">
                 <MapPin size={16} className="mt-0.5 text-yellow flex-shrink-0" />
-                <span>Ajman, United Arab Emirates</span>
+                <span>{t('5 Locations in Ajman, UAE', '5 فروع في عجمان، الإمارات')}</span>
               </div>
               <div className="flex items-start gap-2">
                 <Phone size={16} className="mt-0.5 text-yellow flex-shrink-0" />
-                <span>WhatsApp Available</span>
+                <span>{t('WhatsApp Available', 'واتساب متاح')}</span>
               </div>
               <div className="flex items-start gap-2">
                 <Clock size={16} className="mt-0.5 text-yellow flex-shrink-0" />
-                <span>Open Daily</span>
+                <span>{t('Open Daily', 'مفتوح يومياً')}</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <Truck size={16} className="mt-0.5 text-yellow flex-shrink-0" />
+                <span>{t('Delivery in 24-48 hours after payment', 'توصيل خلال 24-48 ساعة بعد الدفع')}</span>
               </div>
             </div>
           </div>
         </div>
 
         <div className="border-t border-gray-800 mt-8 pt-8 text-center text-sm text-gray-500">
-          &copy; {new Date().getFullYear()} Bu Faisal. All rights reserved.
+          &copy; {new Date().getFullYear()} Bu Faisal General Trading. {t('All rights reserved.', 'جميع الحقوق محفوظة.')}
         </div>
       </div>
     </footer>

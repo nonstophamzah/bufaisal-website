@@ -7,7 +7,7 @@ import { supabase, DutyManager } from '@/lib/supabase';
 import { CATEGORIES } from '@/lib/constants';
 
 const SHOP_LABELS = ['A', 'B', 'C', 'D', 'E'] as const;
-const CONDITIONS = ['Excellent', 'Good', 'Fair'] as const;
+const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Brand New'] as const;
 const PHOTO_LABELS = ['Front', 'Side', 'Inside / Back'];
 
 type Step = 'shop' | 'password' | 'manager' | 'upload';
@@ -49,6 +49,7 @@ export default function TeamPage() {
     condition: 'Good' as string,
     barcode: '',
     product_type: '',
+    condition_notes: '',
     seo_title: '',
     seo_description: '',
   });
@@ -246,6 +247,7 @@ export default function TeamPage() {
       uploaded_by: managerName,
       is_published: false,
       is_sold: false,
+      condition_notes: form.condition_notes || null,
       seo_title: form.seo_title || null,
       seo_description: form.seo_description || null,
     });
@@ -268,6 +270,7 @@ export default function TeamPage() {
       condition: 'Good',
       barcode: '',
       product_type: '',
+      condition_notes: '',
       seo_title: '',
       seo_description: '',
     });
@@ -675,6 +678,21 @@ export default function TeamPage() {
                   setForm({ ...form, description: e.target.value })
                 }
                 rows={3}
+                className="w-full px-4 py-3.5 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-base font-bold mb-1">
+                Condition Notes <span className="text-gray-400 font-normal">(e.g. &quot;small scratch on side&quot;)</span>
+              </label>
+              <textarea
+                value={form.condition_notes}
+                onChange={(e) =>
+                  setForm({ ...form, condition_notes: e.target.value })
+                }
+                rows={2}
+                placeholder="Any scratches, marks, missing parts..."
                 className="w-full px-4 py-3.5 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow resize-none"
               />
             </div>

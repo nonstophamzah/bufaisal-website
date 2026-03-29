@@ -11,15 +11,20 @@ import { trackWhatsAppClick } from '@/lib/fbpixel';
 
 function ConditionBadge({ condition }: { condition: string | null }) {
   if (!condition) return null;
-  const color =
-    condition === 'Excellent'
-      ? 'bg-green-500 text-white'
-      : condition === 'Good'
-        ? 'bg-yellow text-black'
-        : 'bg-orange-400 text-white';
+  const map: Record<string, { cls: string; label: string }> = {
+    Excellent: { cls: 'bg-green-500 text-white', label: 'Excellent Condition' },
+    Good: { cls: 'bg-blue-500 text-white', label: 'Good Condition' },
+    Fair: { cls: 'bg-gray-400 text-white', label: 'Fair — Minor Wear' },
+    'Brand New': {
+      cls: 'bg-gradient-to-r from-yellow to-amber-500 text-black',
+      label: 'Brand New — Made by Bu Faisal',
+    },
+  };
+  const badge = map[condition];
+  if (!badge) return null;
   return (
-    <span className={`text-xs font-bold px-2 py-1 rounded ${color}`}>
-      {condition}
+    <span className={`text-xs font-bold px-2 py-1 rounded ${badge.cls}`}>
+      {badge.label}
     </span>
   );
 }
@@ -202,6 +207,13 @@ export default function ItemDetailPage() {
                 <p className="text-sm text-gray-600 leading-relaxed">
                   {item.description}
                 </p>
+              </div>
+            )}
+
+            {item.condition_notes && (
+              <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <h3 className="font-semibold text-sm mb-1 text-amber-800">Condition Notes</h3>
+                <p className="text-sm text-amber-700">{item.condition_notes}</p>
               </div>
             )}
 
