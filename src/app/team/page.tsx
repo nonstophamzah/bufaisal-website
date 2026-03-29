@@ -143,13 +143,6 @@ export default function TeamPage() {
     setError('');
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-      if (!apiKey) {
-        setError('Gemini API key is not configured.');
-        setAiLoading(false);
-        return;
-      }
-
       // Fetch image as base64
       const imgRes = await fetch(firstImage);
       if (!imgRes.ok) {
@@ -172,52 +165,22 @@ export default function TeamPage() {
 
       const mimeType = blob.type || 'image/jpeg';
 
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  {
-                    text: `Analyze this image of a used item for sale in a second-hand store. Return a JSON object with these fields:
-- item_name: a clear, concise name for this item
-- brand: the brand if visible, or "Unknown"
-- description: a short 1-2 sentence description of the item's condition and features
-- category: one of these exact values: "Living Room", "Bedroom", "Dining and Kitchen", "Appliances", "Decor and Furnishing", "Clothing", "Specialty Items"
-- condition: one of these exact values: "Excellent", "Good", "Fair"
-- seo_title: a short SEO-friendly title for this product listing (under 60 characters)
-- seo_description: a 1-2 sentence SEO meta description for this listing
-
-Return ONLY the JSON object, no other text.`,
-                  },
-                  {
-                    inline_data: {
-                      mime_type: mimeType,
-                      data: base64,
-                    },
-                  },
-                ],
-              },
-            ],
-          }),
-        }
-      );
+      // Call server-side API route (key stays on server)
+      const res = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64, mimeType }),
+      });
 
       const data = await res.json();
 
-      // Check for API-level errors
       if (!res.ok || data.error) {
-        const msg = data.error?.message || `Gemini API error (${res.status})`;
-        setError(`AI error: ${msg}`);
+        setError(`AI error: ${data.error || res.status}`);
         setAiLoading(false);
         return;
       }
 
-      const text =
-        data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const text = data.text || '';
 
       if (!text) {
         setError('AI returned empty response. Try a clearer photo.');

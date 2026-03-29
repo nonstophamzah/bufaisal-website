@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Search, SlidersHorizontal, X } from 'lucide-react';
+import Image from 'next/image';
+import { Search, X, ChevronDown, ChevronUp } from 'lucide-react';
 import ItemCard from '@/components/ItemCard';
 import { supabase, ShopItem } from '@/lib/supabase';
 import { CATEGORIES, CATEGORY_SLUG_MAP } from '@/lib/constants';
@@ -17,7 +18,7 @@ function ShopContent() {
     searchParams.get('category') || ''
   );
   const [sortBy, setSortBy] = useState('newest');
-  const [showFilters, setShowFilters] = useState(false);
+  const [showCategories, setShowCategories] = useState(!searchParams.get('category'));
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -60,6 +61,7 @@ function ShopContent() {
   const handleCategoryClick = (slug: string) => {
     const newCat = activeCategory === slug ? '' : slug;
     setActiveCategory(newCat);
+    if (newCat) setShowCategories(false);
     const params = new URLSearchParams();
     if (newCat) params.set('category', newCat);
     if (search) params.set('q', search);
@@ -78,7 +80,7 @@ function ShopContent() {
     <div className="pt-20 pb-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="font-heading text-4xl md:text-5xl mb-2">
             SHOP <span className="text-yellow">ALL ITEMS</span>
           </h1>
@@ -108,6 +110,7 @@ function ShopContent() {
                 type="button"
                 onClick={() => setSearch('')}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-black"
+                aria-label="Clear search"
               >
                 <X size={16} />
               </button>
@@ -115,61 +118,73 @@ function ShopContent() {
           </div>
         </form>
 
-        {/* Category bubbles + sort */}
-        <div className="flex items-start gap-3 mb-6">
-          {/* Mobile toggle */}
+        {/* Active category chip + toggle */}
+        <div className="flex items-center gap-3 mb-4">
+          {activeCategory && (
+            <button
+              onClick={() => handleCategoryClick(activeCategory)}
+              className="flex items-center gap-1.5 bg-yellow text-black px-4 py-2 rounded-xl text-sm font-semibold"
+            >
+              {CATEGORY_SLUG_MAP[activeCategory]}
+              <X size={14} />
+            </button>
+          )}
           <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium hover:border-yellow transition-colors md:hidden flex-shrink-0"
+            onClick={() => setShowCategories(!showCategories)}
+            className="flex items-center gap-1.5 text-sm font-medium text-muted hover:text-black transition-colors"
           >
-            <SlidersHorizontal size={16} />
-            Filter
+            {showCategories ? 'Hide' : 'Browse'} Categories
+            {showCategories ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
-
-          {/* Desktop category bubbles */}
-          <div className="hidden md:flex flex-wrap gap-2 flex-1">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat.slug}
-                onClick={() => handleCategoryClick(cat.slug)}
-                className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
-                  activeCategory === cat.slug
-                    ? 'bg-yellow text-black'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {cat.name}
-              </button>
-            ))}
-          </div>
-
-          {/* Sort */}
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="ml-auto px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:border-yellow flex-shrink-0"
+            className="ml-auto px-4 py-2 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:border-yellow flex-shrink-0"
           >
             <option value="newest">Newest First</option>
             <option value="featured">Featured First</option>
           </select>
         </div>
 
-        {/* Mobile category bubbles */}
-        {showFilters && (
-          <div className="md:hidden flex flex-wrap gap-2 mb-6">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat.slug}
-                onClick={() => handleCategoryClick(cat.slug)}
-                className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
-                  activeCategory === cat.slug
-                    ? 'bg-yellow text-black'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {cat.name}
-              </button>
-            ))}
+        {/* Category image cards */}
+        {showCategories && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-8">
+            {CATEGORIES.map((cat) => {
+              const isActive = activeCategory === cat.slug;
+              return (
+                <button
+                  key={cat.slug}
+                  onClick={() => handleCategoryClick(cat.slug)}
+                  className={`group relative overflow-hidden rounded-2xl aspect-[3/2] text-left transition-all ${
+                    isActive
+                      ? 'ring-3 ring-yellow ring-offset-2'
+                      : 'hover:shadow-lg'
+                  }`}
+                >
+                  <Image
+                    src={cat.image}
+                    alt={cat.name}
+                    fill
+                    className="object-cover group-hover:scale-105 transition-transform duration-300"
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4">
+                    <h3 className="font-heading text-xl sm:text-2xl text-white leading-tight">
+                      {cat.name.toUpperCase()}
+                    </h3>
+                    <p className="text-white/70 text-xs sm:text-sm mt-0.5 line-clamp-1">
+                      {cat.description}
+                    </p>
+                  </div>
+                  {isActive && (
+                    <div className="absolute top-3 right-3 w-6 h-6 bg-yellow rounded-full flex items-center justify-center">
+                      <span className="text-black text-xs font-bold">✓</span>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
 

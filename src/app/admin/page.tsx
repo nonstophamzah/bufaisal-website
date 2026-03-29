@@ -113,6 +113,12 @@ export default function AdminPage() {
   const [tab, setTab] = useState<Tab>('pending');
   const [items, setItems] = useState<ShopItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
+
+  const showToast = (type: 'ok' | 'err', msg: string) => {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   // edit inline
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -242,64 +248,56 @@ export default function AdminPage() {
   // ─── Item actions ──────────────────────────────────────
 
   const approve = async (id: string) => {
-    await supabase
+    const { error } = await supabase
       .from('shop_items')
-      .update({
-        is_published: true,
-        approved_by: user,
-        approved_at: new Date().toISOString(),
-      })
+      .update({ is_published: true, approved_by: user, approved_at: new Date().toISOString() })
       .eq('id', id);
-    fetchItems();
+    if (error) showToast('err', error.message);
+    else { showToast('ok', 'Item approved'); fetchItems(); }
   };
 
   const reject = async (id: string) => {
     if (!confirm('Delete this item permanently?')) return;
-    await supabase.from('shop_items').delete().eq('id', id);
-    fetchItems();
+    const { error } = await supabase.from('shop_items').delete().eq('id', id);
+    if (error) showToast('err', error.message);
+    else { showToast('ok', 'Item deleted'); fetchItems(); }
   };
 
   const markSold = async (id: string) => {
-    await supabase.from('shop_items').update({ is_sold: true }).eq('id', id);
-    fetchItems();
+    const { error } = await supabase.from('shop_items').update({ is_sold: true }).eq('id', id);
+    if (error) showToast('err', error.message);
+    else { showToast('ok', 'Marked as sold'); fetchItems(); }
   };
 
   const unsell = async (id: string) => {
-    await supabase
-      .from('shop_items')
-      .update({ is_sold: false, is_published: true })
-      .eq('id', id);
-    fetchItems();
+    const { error } = await supabase.from('shop_items').update({ is_sold: false, is_published: true }).eq('id', id);
+    if (error) showToast('err', error.message);
+    else { showToast('ok', 'Item restored to live'); fetchItems(); }
   };
 
   const hide = async (id: string) => {
-    await supabase
-      .from('shop_items')
-      .update({ is_hidden: true, is_published: false })
-      .eq('id', id);
-    fetchItems();
+    const { error } = await supabase.from('shop_items').update({ is_hidden: true, is_published: false }).eq('id', id);
+    if (error) showToast('err', error.message);
+    else { showToast('ok', 'Item hidden'); fetchItems(); }
   };
 
   const unhide = async (id: string) => {
-    await supabase
-      .from('shop_items')
-      .update({ is_hidden: false })
-      .eq('id', id);
-    fetchItems();
+    const { error } = await supabase.from('shop_items').update({ is_hidden: false }).eq('id', id);
+    if (error) showToast('err', error.message);
+    else { showToast('ok', 'Item unhidden'); fetchItems(); }
   };
 
   const deletePermanently = async (id: string) => {
     if (!confirm('Delete permanently? This cannot be undone.')) return;
-    await supabase.from('shop_items').delete().eq('id', id);
-    fetchItems();
+    const { error } = await supabase.from('shop_items').delete().eq('id', id);
+    if (error) showToast('err', error.message);
+    else { showToast('ok', 'Item deleted permanently'); fetchItems(); }
   };
 
   const toggleFeatured = async (id: string, current: boolean) => {
-    await supabase
-      .from('shop_items')
-      .update({ is_featured: !current })
-      .eq('id', id);
-    fetchItems();
+    const { error } = await supabase.from('shop_items').update({ is_featured: !current }).eq('id', id);
+    if (error) showToast('err', error.message);
+    else { showToast('ok', current ? 'Unfeatured' : 'Featured'); fetchItems(); }
   };
 
   // ─── Inline edit ───────────────────────────────────────
@@ -323,10 +321,14 @@ export default function AdminPage() {
 
   const saveEdit = async () => {
     if (!editingId) return;
-    await supabase
+    if (!editForm.item_name || !(editForm.item_name as string).trim()) {
+      showToast('err', 'Item name is required');
+      return;
+    }
+    const { error } = await supabase
       .from('shop_items')
       .update({
-        item_name: editForm.item_name,
+        item_name: (editForm.item_name as string).trim(),
         brand: editForm.brand || null,
         category: editForm.category,
         condition: editForm.condition,
@@ -339,8 +341,13 @@ export default function AdminPage() {
         is_featured: editForm.is_featured ?? false,
       })
       .eq('id', editingId);
-    setEditingId(null);
-    fetchItems();
+    if (error) {
+      showToast('err', error.message);
+    } else {
+      showToast('ok', 'Item updated');
+      setEditingId(null);
+      fetchItems();
+    }
   };
 
   // ─── Bulk actions ──────────────────────────────────────
@@ -364,23 +371,24 @@ export default function AdminPage() {
 
   const bulkApprove = async () => {
     if (selected.size === 0) return;
-    const ids = Array.from(selected);
-    await supabase
+    const { error } = await supabase
       .from('shop_items')
       .update({
         is_published: true,
         approved_by: user,
         approved_at: new Date().toISOString(),
       })
-      .in('id', ids);
-    fetchItems();
+      .in('id', Array.from(selected));
+    if (error) showToast('err', error.message);
+    else { showToast('ok', `${selected.size} items approved`); fetchItems(); }
   };
 
   const bulkDelete = async () => {
     if (selected.size === 0) return;
     if (!confirm(`Delete ${selected.size} items permanently?`)) return;
-    await supabase.from('shop_items').delete().in('id', Array.from(selected));
-    fetchItems();
+    const { error } = await supabase.from('shop_items').delete().in('id', Array.from(selected));
+    if (error) showToast('err', error.message);
+    else { showToast('ok', `${selected.size} items deleted`); fetchItems(); }
   };
 
   // ─── Settings save ────────────────────────────────────
@@ -552,6 +560,18 @@ export default function AdminPage() {
 
   return (
     <div className="pt-20 pb-16">
+      {/* Toast */}
+      {toast && (
+        <div
+          className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl text-sm font-semibold shadow-lg ${
+            toast.type === 'ok'
+              ? 'bg-green-600 text-white'
+              : 'bg-red-600 text-white'
+          }`}
+        >
+          {toast.msg}
+        </div>
+      )}
       <div className="max-w-6xl mx-auto px-4">
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
