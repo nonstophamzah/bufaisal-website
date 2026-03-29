@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
 - item_name: a clear, concise name for this item
 - brand: the brand if visible, or "Unknown"
 - description: a short 1-2 sentence description of the item's condition and features
-- category: one of these exact values: "Living Room", "Bedroom", "Dining and Kitchen", "Appliances", "Decor and Furnishing", "Clothing", "Specialty Items"
+- category: one of these exact values: "Living Room & Lounge", "Bedroom & Sleep", "Kitchen & Dining", "Appliances", "Outdoor & Garden", "Kids & Baby", "Office, Study & Fitness", "Everyday Essentials"
 - condition: one of these exact values: "Excellent", "Good", "Fair"
 - seo_title: a short SEO-friendly title for this product listing (under 60 characters)
 - seo_description: a 1-2 sentence SEO meta description for this listing
