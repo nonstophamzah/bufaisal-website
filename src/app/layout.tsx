@@ -25,25 +25,32 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Bu Faisal General Trading | UAE's Biggest Used Goods Souq",
+  title: "Bu Faisal | UAE's Largest Second-Hand Market",
   description:
-    "Shop quality second-hand furniture, appliances & home goods in Ajman, UAE. Since 2009.",
+    "Since 2009 — First Come, First Serve. 5 Locations in Ajman. Delivery across Dubai, Ajman & Sharjah.",
   keywords: [
     'Bu Faisal',
-    'used goods UAE',
-    'second hand Ajman',
-    'used furniture UAE',
-    'pre-owned appliances',
-    'souq Ajman',
-    'bufaisal',
+    'second hand UAE',
+    'used furniture Ajman',
+    'second hand market UAE',
+    'used appliances Dubai',
+    'pre-owned furniture Sharjah',
     'Bu Faisal General Trading',
+    'bufaisal',
   ],
   openGraph: {
-    title: "Bu Faisal General Trading | UAE's Biggest Used Goods Souq",
+    title: "Bu Faisal | UAE's Largest Second-Hand Market",
     description:
-      "Shop quality second-hand furniture, appliances & home goods in Ajman, UAE. Since 2009.",
+      "Since 2009 — First Come, First Serve. 5 Locations in Ajman. Delivery across Dubai, Ajman & Sharjah.",
     siteName: 'Bu Faisal',
     type: 'website',
+    url: 'https://bufaisal.ae',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: "Bu Faisal | UAE's Largest Second-Hand Market",
+    description:
+      "Since 2009 — First Come, First Serve. 5 Locations in Ajman. Delivery across Dubai, Ajman & Sharjah.",
   },
 };
 
