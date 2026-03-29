@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Search, Menu, X } from 'lucide-react';
+import { Search, Menu, X, Phone } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useLang } from '@/lib/lang';
 
@@ -53,8 +53,17 @@ export default function Navbar() {
             ))}
           </div>
 
-          {/* Search + Lang + Mobile menu */}
+          {/* Call + Search + Lang + Mobile menu */}
           <div className="flex items-center gap-2">
+            {/* Call Now */}
+            <a
+              href="tel:+971585932499"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow text-black text-xs font-bold rounded-lg hover:bg-yellow/90 transition-colors"
+              aria-label="Call now"
+            >
+              <Phone size={14} />
+              <span className="hidden sm:inline">{t('Call', 'اتصل')}</span>
+            </a>
             {/* Language toggle */}
             <button
               onClick={toggle}
@@ -116,6 +125,12 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
+            <a
+              href="tel:+971585932499"
+              className="block text-sm font-medium text-yellow py-2"
+            >
+              {t('Call: +971 58 593 2499', 'اتصل: 2499 593 58 971+')}
+            </a>
           </div>
         </div>
       )}
