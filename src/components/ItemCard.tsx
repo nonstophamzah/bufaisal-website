@@ -26,20 +26,18 @@ export default function ItemCard({ item }: { item: ShopItem }) {
   const imageUrl =
     item.thumbnail_url || item.image_urls?.[0] || '/placeholder.png';
 
-  const handleWhatsAppClick = async (e: React.MouseEvent) => {
+  const handleWhatsAppClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    try {
-      await fetch('/api/track-click', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemId: item.id }),
-      });
-    } catch {
-      // silent fail
-    }
+    // Fire-and-forget tracking (non-blocking)
+    fetch('/api/track-click', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemId: item.id }),
+    }).catch(() => {});
     trackWhatsAppClick();
-    window.open(buildWhatsAppUrl(item), '_blank');
+    // Direct navigation — works best on mobile (opens WhatsApp app directly)
+    window.location.href = buildWhatsAppUrl(item);
   };
 
   return (

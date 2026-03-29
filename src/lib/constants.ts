@@ -67,21 +67,28 @@ export const SHOPS = [
   { id: 'E', name: 'Shop E' },
 ];
 
+const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '971585932499';
+
 export function buildWhatsAppUrl(item: {
   id?: string;
   item_name: string;
+  category?: string;
   shop_source?: string | null;
 }) {
-  const phone = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '';
   const shopText = item.shop_source ? ` at ${item.shop_source}` : '';
+  const catText = item.category ? ` (${item.category})` : '';
   const lines = [
-    `Hi, I'm interested in *${item.item_name}*${shopText}. Is this still available?`,
+    `Hi, I'm interested in *${item.item_name}*${catText}${shopText}. Is this still available?`,
   ];
   if (item.id) {
     lines.push(`View: https://bufaisal.ae/item/${item.id}`);
   }
   const message = lines.join('\n');
-  return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+}
+
+export function getWhatsAppGeneralUrl() {
+  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Hi! I have a question about Bu Faisal.')}`;
 }
 
 export const CATEGORY_SLUG_MAP = Object.fromEntries(

@@ -51,19 +51,15 @@ export default function ItemDetailPage() {
     if (params.id) fetchItem();
   }, [params.id]);
 
-  const handleWhatsAppClick = async () => {
+  const handleWhatsAppClick = () => {
     if (!item) return;
-    try {
-      await fetch('/api/track-click', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemId: item.id }),
-      });
-    } catch {
-      // silent fail
-    }
+    fetch('/api/track-click', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemId: item.id }),
+    }).catch(() => {});
     trackWhatsAppClick();
-    window.open(buildWhatsAppUrl(item), '_blank');
+    window.location.href = buildWhatsAppUrl(item);
   };
 
   if (loading) {
