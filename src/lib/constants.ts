@@ -6,7 +6,7 @@ export const CATEGORIES = [
     slug: 'living-room-lounge',
     description: 'Sofas, coffee tables, TV stands, shelves, mirrors, carpets, curtains, decor',
     icon: Sofa,
-    image: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=600&h=400&fit=crop&q=80',
+    image: 'https://images.unsplash.com/photo-1567016432779-094069958ea5?w=600&h=400&fit=crop&q=80',
   },
   {
     name: 'Bedroom & Sleep',
@@ -55,7 +55,7 @@ export const CATEGORIES = [
     slug: 'everyday-essentials',
     description: 'Bags, clothes, shoes, books, baskets, small accessories, misc',
     icon: ShoppingBag,
-    image: 'https://images.unsplash.com/photo-1558171813-01eda89a1e84?w=600&h=400&fit=crop&q=80',
+    image: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600&h=400&fit=crop&q=80',
   },
 ];
 
