@@ -1,51 +1,24 @@
 'use client';
-
-import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Truck, Trash2 } from 'lucide-react';
 
 export default function ShopOutPage() {
   const router = useRouter();
-  const [worker, setWorker] = useState<{ name: string } | null>(null);
-
-  useEffect(() => {
-    const stored = sessionStorage.getItem('appliance_worker');
-    if (!stored) { router.replace('/appliances'); return; }
-    setWorker(JSON.parse(stored));
-  }, [router]);
-
-  if (!worker) return null;
-
   return (
-    <div className="min-h-screen bg-white px-4 pt-6 pb-8">
-      <div className="flex items-center gap-3 mb-8">
-        <button onClick={() => router.push('/appliances/shop')} className="p-1">
-          <ArrowLeft size={24} />
+    <div className="px-4 pt-4 pb-8 min-h-[calc(100vh-56px)]">
+      <button onClick={() => router.push('/appliances/shop')} className="flex items-center gap-1 text-gray-500 mb-6">
+        <ArrowLeft size={20} /> Back
+      </button>
+      <h1 className="font-heading text-3xl mb-6">LOG OUT — <span className="text-orange-500">SEND</span></h1>
+      <div className="space-y-4">
+        <button className="w-full py-8 rounded-2xl bg-orange-500 text-white flex flex-col items-center gap-2 active:scale-95">
+          <Truck size={36} /><span className="font-heading text-2xl">SEND TO JURF</span>
         </button>
-        <h1 className="font-heading text-2xl">
-          OUT — <span className="text-orange-500">SEND</span>
-        </h1>
-      </div>
-
-      <div className="space-y-4 max-w-lg mx-auto">
-        <button
-          onClick={() => alert('Jurf dispatch flow — coming soon')}
-          className="w-full bg-orange-500 text-white rounded-2xl py-8 flex flex-col items-center gap-2 active:scale-95 transition-transform"
-        >
-          <Truck size={40} />
-          <span className="font-heading text-3xl">SEND TO JURF</span>
-          <span className="text-sm opacity-80">For repair / testing</span>
-        </button>
-
-        <button
-          onClick={() => alert('Scrap flow — coming soon')}
-          className="w-full bg-gray-500 text-white rounded-2xl py-8 flex flex-col items-center gap-2 active:scale-95 transition-transform"
-        >
-          <Trash2 size={40} />
-          <span className="font-heading text-3xl">SCRAP</span>
-          <span className="text-sm opacity-80">Request manager approval</span>
+        <button className="w-full py-8 rounded-2xl bg-gray-500 text-white flex flex-col items-center gap-2 active:scale-95">
+          <Trash2 size={36} /><span className="font-heading text-2xl">SCRAP</span>
         </button>
       </div>
+      <p className="text-center text-gray-400 text-sm mt-6">Coming soon</p>
     </div>
   );
 }

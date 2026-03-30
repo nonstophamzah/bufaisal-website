@@ -2,105 +2,70 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import ShopSelector from '../../components/ShopSelector';
-import CameraCapture from '../../components/CameraCapture';
-import StatusSelector from '../../components/StatusSelector';
-import ProblemGrid from '../../components/ProblemGrid';
-import ProductTypeGrid from '../../components/ProductTypeGrid';
-import SummaryScreen from '../../components/SummaryScreen';
+import CameraCapture from '../../components/Camera';
 import SuccessFlash from '../../components/SuccessFlash';
 import ErrorFlash from '../../components/ErrorFlash';
 
-type Step = 'shop' | 'photos' | 'type' | 'status' | 'problem' | 'jurf' | 'summary';
+type Screen = 'details' | 'photo' | 'confirm';
+
+const SHOPS = ['A', 'B', 'C', 'D', 'E'];
+const PRODUCTS = ['Fridge', 'Washer', 'Oven', 'Microwave', 'AC / Cooler', 'Other'];
+const BRANDS = ['Samsung', 'LG', 'Bosch', 'Whirlpool', 'Midea', 'Other'];
+const STATUSES = [
+  { value: 'Working', color: 'bg-green-500 text-white' },
+  { value: 'Not Working', color: 'bg-orange-500 text-white' },
+  { value: 'Scrap', color: 'bg-red-500 text-white' },
+];
+const PROBLEMS = ['No power', 'Not cooling', 'Leaking', 'Part missing', 'Other'];
 
 export default function ShopInPage() {
   const router = useRouter();
-  const [worker, setWorker] = useState<{ name: string } | null>(null);
-  const [step, setStep] = useState<Step>('shop');
+  const [worker, setWorker] = useState('');
+  const [screen, setScreen] = useState<Screen>('details');
   const [saving, setSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Form state
-  const [shopSource, setShopSource] = useState('');
-  const [brandPhoto, setBrandPhoto] = useState('');
-  const [itemPhoto, setItemPhoto] = useState('');
-  const [barcodePhoto, setBarcodePhoto] = useState('');
-  const [productType, setProductType] = useState('');
+  // Form
+  const [shop, setShop] = useState('');
+  const [product, setProduct] = useState('');
   const [brand, setBrand] = useState('');
-  const [itemName, setItemName] = useState('');
   const [status, setStatus] = useState('');
-  const [problem, setProblem] = useState('');
-  const [needsJurf, setNeedsJurf] = useState<boolean | null>(null);
+  const [problems, setProblems] = useState<string[]>([]);
+  const [barcode, setBarcode] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
 
   useEffect(() => {
-    const stored = sessionStorage.getItem('appliance_worker');
-    if (!stored) {
-      router.replace('/appliances');
-      return;
-    }
-    setWorker(JSON.parse(stored));
+    const w = sessionStorage.getItem('app_worker');
+    if (!w) { router.replace('/appliances'); return; }
+    setWorker(JSON.parse(w).name);
   }, [router]);
 
-  // Auto-read brand from photo via Gemini
-  const scanBrandPhoto = useCallback(async (url: string) => {
-    if (!url) return;
-    try {
-      const imgRes = await fetch(url);
-      const blob = await imgRes.blob();
-      const base64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-        reader.readAsDataURL(blob);
-      });
-      const res = await fetch('/api/gemini', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageBase64: base64,
-          mimeType: blob.type || 'image/jpeg',
-          prompt: 'Read the brand name and model from this appliance label/photo. Return JSON: { "brand": "string", "item_name": "string" }. Return ONLY the JSON.',
-        }),
-      });
-      const data = await res.json();
-      if (data.text) {
-        const match = data.text.match(/\{[\s\S]*\}/);
-        if (match) {
-          const parsed = JSON.parse(match[0]);
-          if (parsed.brand) setBrand(parsed.brand);
-          if (parsed.item_name) setItemName(parsed.item_name);
-        }
-      }
-    } catch {
-      // silent — user can type manually
-    }
-  }, []);
+  const toggleProblem = (p: string) => {
+    setProblems((prev) =>
+      prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
+    );
+  };
 
-  const handleConfirm = async () => {
+  const isValid = shop && product && brand && status && barcode.trim();
+
+  const handleConfirm = useCallback(async () => {
     setSaving(true);
     setErrorMsg('');
 
-    const barcode = `BF-${Date.now().toString(36).toUpperCase()}`;
-    const today = new Date().toISOString().split('T')[0];
-    const month = new Date().toLocaleString('en', { month: 'long', year: 'numeric' });
-
     const { error } = await supabase.from('appliance_items').insert({
-      barcode,
-      item_name: itemName || productType,
-      product_type: productType,
-      brand: brand || null,
+      barcode: barcode.trim(),
+      product_type: product,
+      brand,
       status,
-      problem: status === 'Not Working' ? problem : null,
-      shop_source: `Shop ${shopSource}`,
-      needs_jurf: needsJurf ?? false,
-      date_received: today,
-      month,
-      brand_photo: brandPhoto || null,
-      item_photo: itemPhoto || null,
-      barcode_photo: barcodePhoto || null,
-      created_by: worker?.name || 'Unknown',
+      problems: status === 'Not Working' ? problems : [],
+      shop,
+      photo_url: photoUrl || null,
+      needs_jurf: status === 'Not Working',
+      date_received: new Date().toISOString().split('T')[0],
+      created_by: worker,
     });
 
     if (error) {
@@ -109,29 +74,19 @@ export default function ShopInPage() {
       return;
     }
 
-    // Audit log
-    await supabase.from('appliance_audit_log').insert({
-      user_name: worker?.name,
-      action: 'IN',
-      details: { barcode, productType, status, shopSource },
-    });
-
     setSaving(false);
     setShowSuccess(true);
-  };
+  }, [barcode, product, brand, status, problems, shop, photoUrl, worker]);
 
-  const resetFlow = () => {
-    setStep('shop');
-    setShopSource('');
-    setBrandPhoto('');
-    setItemPhoto('');
-    setBarcodePhoto('');
-    setProductType('');
+  const reset = () => {
+    setScreen('details');
+    setShop('');
+    setProduct('');
     setBrand('');
-    setItemName('');
     setStatus('');
-    setProblem('');
-    setNeedsJurf(null);
+    setProblems([]);
+    setBarcode('');
+    setPhotoUrl('');
     setShowSuccess(false);
     setErrorMsg('');
   };
@@ -139,208 +94,185 @@ export default function ShopInPage() {
   if (!worker) return null;
 
   if (showSuccess) {
-    return <SuccessFlash onDone={resetFlow} />;
+    return (
+      <SuccessFlash
+        message="Item logged!"
+        onDone={() => { reset(); router.push('/appliances/shop'); }}
+      />
+    );
   }
 
   if (errorMsg) {
     return <ErrorFlash message={errorMsg} onRetry={() => setErrorMsg('')} />;
   }
 
-  const goBack = () => {
-    const steps: Step[] = ['shop', 'photos', 'type', 'status', 'problem', 'jurf', 'summary'];
-    const idx = steps.indexOf(step);
-    if (idx <= 0) {
-      router.push('/appliances/shop');
-    } else {
-      // Skip problem if status isn't Not Working
-      let prev = steps[idx - 1];
-      if (prev === 'problem' && status !== 'Not Working') prev = 'status';
-      if (prev === 'jurf' && status !== 'Not Working') prev = 'status';
-      setStep(prev);
-    }
-  };
-
-  const goNext = () => {
-    const steps: Step[] = ['shop', 'photos', 'type', 'status'];
-    const idx = steps.indexOf(step);
-    if (step === 'status') {
-      if (status === 'Not Working') setStep('problem');
-      else setStep('summary');
-    } else if (step === 'problem') {
-      setStep('jurf');
-    } else if (step === 'jurf') {
-      setStep('summary');
-    } else if (idx < steps.length - 1) {
-      setStep(steps[idx + 1]);
-    }
-  };
-
-  // Summary screen
-  if (step === 'summary') {
+  // ── SCREEN 2: Photo ──
+  if (screen === 'photo') {
     return (
-      <SummaryScreen
-        title="CONFIRM NEW ITEM"
-        rows={[
-          { label: 'Shop', value: `Shop ${shopSource}` },
-          { label: 'Product Type', value: productType },
-          { label: 'Brand', value: brand },
-          { label: 'Item Name', value: itemName },
-          { label: 'Status', value: status },
-          { label: 'Problem', value: problem },
-          { label: 'Needs Jurf', value: needsJurf ? 'Yes' : needsJurf === false ? 'No' : undefined },
-        ]}
-        photos={[
-          { label: 'Brand', url: brandPhoto },
-          { label: 'Item', url: itemPhoto },
-          { label: 'Barcode', url: barcodePhoto },
-        ]}
-        onConfirm={handleConfirm}
-        onBack={() => setStep(needsJurf !== null ? 'jurf' : status === 'Not Working' ? 'problem' : 'status')}
-        loading={saving}
+      <CameraCapture
+        onDone={(url) => { setPhotoUrl(url); setScreen('confirm'); }}
+        onBack={() => setScreen('details')}
       />
     );
   }
 
-  return (
-    <div className="min-h-screen bg-white px-4 pt-6 pb-8">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={goBack} className="p-1">
-          <ArrowLeft size={24} />
+  // ── SCREEN 3: Confirm ──
+  if (screen === 'confirm') {
+    return (
+      <div className="px-4 pt-4 pb-8 min-h-[calc(100vh-56px)]">
+        <button onClick={() => setScreen('photo')} className="flex items-center gap-1 text-gray-500 mb-4">
+          <ArrowLeft size={20} /> Back
         </button>
-        <div>
-          <h1 className="font-heading text-2xl">
-            IN — <span className="text-green-500">RECEIVE</span>
-          </h1>
-          <p className="text-xs text-gray-400">{worker.name} &bull; Step {['shop', 'photos', 'type', 'status', 'problem', 'jurf'].indexOf(step) + 1}</p>
+
+        <h1 className="font-heading text-3xl mb-4">CONFIRM</h1>
+
+        {photoUrl && (
+          <div className="w-full aspect-video rounded-xl overflow-hidden bg-gray-200 mb-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={photoUrl} alt="Item" className="w-full h-full object-cover" />
+          </div>
+        )}
+
+        <div className="space-y-2 mb-6">
+          {[
+            ['Shop', shop],
+            ['Product', product],
+            ['Brand', brand],
+            ['Status', status],
+            ['Problems', status === 'Not Working' ? problems.join(', ') || '—' : '—'],
+            ['Barcode', barcode],
+          ].map(([label, val]) => (
+            <div key={label} className="flex justify-between py-2 border-b border-gray-100">
+              <span className="text-sm text-gray-500">{label}</span>
+              <span className="text-sm font-semibold">{val}</span>
+            </div>
+          ))}
         </div>
+
+        <button
+          onClick={handleConfirm}
+          disabled={saving}
+          className="w-full py-5 rounded-2xl bg-green-500 text-white font-heading text-2xl flex items-center justify-center gap-2 active:scale-95 transition-transform disabled:opacity-50"
+        >
+          {saving ? <Loader2 size={24} className="animate-spin" /> : <Check size={24} strokeWidth={3} />}
+          CONFIRM
+        </button>
+      </div>
+    );
+  }
+
+  // ── SCREEN 1: Details ──
+  return (
+    <div className="px-4 pt-4 pb-8 min-h-[calc(100vh-56px)]">
+      <button onClick={() => router.push('/appliances/shop')} className="flex items-center gap-1 text-gray-500 mb-4">
+        <ArrowLeft size={20} /> Back
+      </button>
+
+      <h1 className="font-heading text-3xl mb-6">LOG IN — <span className="text-green-500">NEW ITEM</span></h1>
+
+      {/* Shop */}
+      <p className="font-bold text-sm mb-2">SHOP</p>
+      <div className="grid grid-cols-5 gap-2 mb-5">
+        {SHOPS.map((s) => (
+          <button
+            key={s}
+            onClick={() => setShop(s)}
+            className={`py-4 rounded-xl font-heading text-xl active:scale-95 transition-all ${
+              shop === s ? 'bg-black text-yellow ring-2 ring-yellow' : 'bg-gray-200'
+            }`}
+          >
+            {s}
+          </button>
+        ))}
       </div>
 
-      {/* STEP: Shop select */}
-      {step === 'shop' && (
-        <div>
-          <p className="font-heading text-xl mb-4">WHICH SHOP?</p>
-          <ShopSelector
-            value={shopSource}
-            onChange={(s) => {
-              setShopSource(s);
-              setTimeout(() => setStep('photos'), 200);
-            }}
-          />
-        </div>
-      )}
-
-      {/* STEP: 3 Photos */}
-      {step === 'photos' && (
-        <div>
-          <p className="font-heading text-xl mb-4">TAKE 3 PHOTOS</p>
-          <div className="grid grid-cols-3 gap-3 mb-6">
-            <CameraCapture
-              label="Brand Label"
-              value={brandPhoto}
-              onChange={(url) => {
-                setBrandPhoto(url);
-                scanBrandPhoto(url);
-              }}
-            />
-            <CameraCapture label="Full Item" value={itemPhoto} onChange={setItemPhoto} />
-            <CameraCapture label="Barcode" value={barcodePhoto} onChange={setBarcodePhoto} />
-          </div>
-
-          {(brand || itemName) && (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4 text-sm">
-              <p className="font-bold text-green-800">AI Detected:</p>
-              {brand && <p>Brand: {brand}</p>}
-              {itemName && <p>Name: {itemName}</p>}
-            </div>
-          )}
-
+      {/* Product */}
+      <p className="font-bold text-sm mb-2">PRODUCT</p>
+      <div className="grid grid-cols-3 gap-2 mb-5">
+        {PRODUCTS.map((p) => (
           <button
-            onClick={goNext}
-            disabled={!brandPhoto && !itemPhoto}
-            className="w-full py-4 rounded-xl bg-black text-white font-bold text-lg active:scale-95 transition-transform disabled:opacity-30"
+            key={p}
+            onClick={() => setProduct(p)}
+            className={`py-3.5 px-2 rounded-xl text-sm font-bold active:scale-95 transition-all ${
+              product === p ? 'bg-black text-yellow ring-2 ring-yellow' : 'bg-gray-200'
+            }`}
           >
-            NEXT
+            {p}
           </button>
-        </div>
-      )}
+        ))}
+      </div>
 
-      {/* STEP: Product Type */}
-      {step === 'type' && (
-        <div>
-          <p className="font-heading text-xl mb-4">PRODUCT TYPE</p>
-          <ProductTypeGrid
-            value={productType}
-            onChange={(t) => {
-              setProductType(t);
-              setTimeout(goNext, 200);
-            }}
-          />
-        </div>
-      )}
+      {/* Brand */}
+      <p className="font-bold text-sm mb-2">BRAND</p>
+      <div className="grid grid-cols-3 gap-2 mb-5">
+        {BRANDS.map((b) => (
+          <button
+            key={b}
+            onClick={() => setBrand(b)}
+            className={`py-3.5 px-2 rounded-xl text-sm font-bold active:scale-95 transition-all ${
+              brand === b ? 'bg-black text-yellow ring-2 ring-yellow' : 'bg-gray-200'
+            }`}
+          >
+            {b}
+          </button>
+        ))}
+      </div>
 
-      {/* STEP: Status */}
-      {step === 'status' && (
-        <div>
-          <p className="font-heading text-xl mb-4">STATUS</p>
-          <StatusSelector
-            value={status}
-            onChange={(s) => {
-              setStatus(s);
-              setTimeout(goNext, 200);
-            }}
-          />
-        </div>
-      )}
+      {/* Status */}
+      <p className="font-bold text-sm mb-2">STATUS</p>
+      <div className="grid grid-cols-3 gap-2 mb-5">
+        {STATUSES.map((s) => (
+          <button
+            key={s.value}
+            onClick={() => setStatus(s.value)}
+            className={`py-4 rounded-xl font-bold text-sm active:scale-95 transition-all ${
+              status === s.value ? `${s.color} ring-2 ring-offset-1 ring-black` : 'bg-gray-200'
+            }`}
+          >
+            {s.value}
+          </button>
+        ))}
+      </div>
 
-      {/* STEP: Problem (only for Not Working) */}
-      {step === 'problem' && (
-        <div>
-          <p className="font-heading text-xl mb-4">WHAT&apos;S THE PROBLEM?</p>
-          <ProblemGrid
-            value={problem}
-            onChange={(p) => {
-              setProblem(p);
-              setTimeout(() => setStep('jurf'), 200);
-            }}
-          />
-        </div>
-      )}
-
-      {/* STEP: Needs Jurf? */}
-      {step === 'jurf' && (
-        <div>
-          <p className="font-heading text-xl mb-4">SEND TO JURF?</p>
-          <div className="space-y-3">
-            <button
-              onClick={() => {
-                setNeedsJurf(true);
-                setTimeout(() => setStep('summary'), 200);
-              }}
-              className={`w-full py-5 rounded-xl font-heading text-2xl active:scale-95 transition-all ${
-                needsJurf === true
-                  ? 'bg-orange-500 text-white ring-4 ring-offset-2 ring-orange-700'
-                  : 'bg-gray-200 text-black'
-              }`}
-            >
-              YES — SEND TO JURF
-            </button>
-            <button
-              onClick={() => {
-                setNeedsJurf(false);
-                setTimeout(() => setStep('summary'), 200);
-              }}
-              className={`w-full py-5 rounded-xl font-heading text-2xl active:scale-95 transition-all ${
-                needsJurf === false
-                  ? 'bg-gray-500 text-white ring-4 ring-offset-2 ring-gray-700'
-                  : 'bg-gray-200 text-black'
-              }`}
-            >
-              NO — KEEP IN SHOP
-            </button>
+      {/* Problems (only if Not Working) */}
+      {status === 'Not Working' && (
+        <>
+          <p className="font-bold text-sm mb-2">PROBLEMS <span className="text-gray-400 font-normal">(tap all that apply)</span></p>
+          <div className="flex flex-wrap gap-2 mb-5">
+            {PROBLEMS.map((p) => (
+              <button
+                key={p}
+                onClick={() => toggleProblem(p)}
+                className={`py-3 px-4 rounded-xl text-sm font-bold active:scale-95 transition-all ${
+                  problems.includes(p) ? 'bg-orange-500 text-white ring-2 ring-orange-700' : 'bg-gray-200'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
           </div>
-        </div>
+        </>
       )}
+
+      {/* Barcode */}
+      <p className="font-bold text-sm mb-2">BARCODE</p>
+      <input
+        type="text"
+        inputMode="text"
+        value={barcode}
+        onChange={(e) => setBarcode(e.target.value)}
+        placeholder="Scan or type barcode"
+        className="w-full px-4 py-4 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow mb-6"
+      />
+
+      {/* Next */}
+      <button
+        onClick={() => setScreen('photo')}
+        disabled={!isValid}
+        className="w-full py-5 rounded-2xl bg-black text-white font-heading text-2xl flex items-center justify-center gap-2 active:scale-95 transition-transform disabled:opacity-30"
+      >
+        NEXT <ArrowRight size={22} />
+      </button>
     </div>
   );
 }
