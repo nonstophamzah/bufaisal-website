@@ -57,6 +57,17 @@ export default function CameraCapture({ label, value, onChange }: CameraCaptureP
   const handleCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Validate file size (max 10MB before compression)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Photo too large. Max 10MB.');
+      return;
+    }
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Only image files allowed.');
+      return;
+    }
+
     setUploading(true);
     try {
       const compressed = await compressImage(file);

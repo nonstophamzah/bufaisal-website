@@ -33,10 +33,7 @@ import {
 } from '@/lib/supabase';
 import { CATEGORIES } from '@/lib/constants';
 
-const ADMIN_PINS: Record<string, string> = {
-  '0000': 'Admin',
-  '3333': 'Humaan',
-};
+const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 
 const SHOP_LABELS = ['A', 'B', 'C', 'D', 'E'];
 const CONDITIONS = ['Excellent', 'Good', 'Fair'];
@@ -142,16 +139,50 @@ export default function AdminPage() {
   // analytics
   const [allItems, setAllItems] = useState<ShopItem[]>([]);
 
-  // ─── Login ─────────────────────────────────────────────
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [lastActivity, setLastActivity] = useState(Date.now());
 
-  const handleLogin = () => {
-    const name = ADMIN_PINS[pin];
-    if (name) {
-      setUser(name);
-      setLoginError('');
-    } else {
-      setLoginError('Invalid admin PIN');
+  // Session expiry — auto-logout after 30 min inactive
+  useEffect(() => {
+    if (!user) return;
+    const check = setInterval(() => {
+      if (Date.now() - lastActivity > SESSION_TIMEOUT) {
+        setUser('');
+        setPin('');
+      }
+    }, 30_000);
+    const resetTimer = () => setLastActivity(Date.now());
+    window.addEventListener('click', resetTimer);
+    window.addEventListener('keydown', resetTimer);
+    return () => {
+      clearInterval(check);
+      window.removeEventListener('click', resetTimer);
+      window.removeEventListener('keydown', resetTimer);
+    };
+  }, [user, lastActivity]);
+
+  // ─── Login (server-side PIN validation) ────────────────
+
+  const handleLogin = async () => {
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin }),
+      });
+      const data = await res.json();
+      if (res.ok && data.name) {
+        setUser(data.name);
+        setLastActivity(Date.now());
+      } else {
+        setLoginError(data.error || 'Invalid PIN');
+      }
+    } catch {
+      setLoginError('Connection error. Try again.');
     }
+    setLoginLoading(false);
   };
 
   // ─── Fetch items for current tab ──────────────────────
@@ -477,9 +508,10 @@ export default function AdminPage() {
             />
             <button
               onClick={handleLogin}
-              className="w-full bg-yellow text-black font-semibold py-3 rounded-xl hover:bg-yellow/90 transition-colors"
+              disabled={loginLoading}
+              className="w-full bg-yellow text-black font-semibold py-3 rounded-xl hover:bg-yellow/90 transition-colors disabled:opacity-50"
             >
-              Login
+              {loginLoading ? 'Checking...' : 'Login'}
             </button>
             {loginError && (
               <p className="text-red-500 text-sm text-center">{loginError}</p>

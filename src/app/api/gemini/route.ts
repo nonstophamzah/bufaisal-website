@@ -1,7 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { rateLimit } from '@/lib/rate-limit';
+
+const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const MAX_BASE64_SIZE = 10 * 1024 * 1024; // ~10MB base64
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: 10 requests per minute per IP
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown';
+    const { allowed } = rateLimit(`gemini-${ip}`, 10, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ error: 'Too many requests. Wait a minute.' }, { status: 429 });
+    }
+
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
@@ -15,6 +26,22 @@ export async function POST(request: NextRequest) {
     if (!imageBase64 || !mimeType) {
       return NextResponse.json(
         { error: 'Missing imageBase64 or mimeType' },
+        { status: 400 }
+      );
+    }
+
+    // Validate MIME type
+    if (!ALLOWED_MIME.includes(mimeType)) {
+      return NextResponse.json(
+        { error: 'Invalid image type. Use JPEG, PNG, or WebP.' },
+        { status: 400 }
+      );
+    }
+
+    // Validate size
+    if (imageBase64.length > MAX_BASE64_SIZE) {
+      return NextResponse.json(
+        { error: 'Image too large. Max 10MB.' },
         { status: 400 }
       );
     }
@@ -39,15 +66,8 @@ Return ONLY the JSON object, no other text.`;
           contents: [
             {
               parts: [
-                {
-                  text: customPrompt || defaultPrompt,
-                },
-                {
-                  inline_data: {
-                    mime_type: mimeType,
-                    data: imageBase64,
-                  },
-                },
+                { text: customPrompt || defaultPrompt },
+                { inline_data: { mime_type: mimeType, data: imageBase64 } },
               ],
             },
           ],
