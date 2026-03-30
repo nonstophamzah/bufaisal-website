@@ -2,85 +2,66 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
-interface Worker { id: string; name: string; role: string; tab: string; }
+interface Worker { id: string; name: string; role: string; }
 
-const TABS = ['SHOP', 'JURF', 'SECURITY'] as const;
-
-const ROLE_ROUTES: Record<string, string> = {
-  shop: '/appliances/shop',
-  jurf: '/appliances/jurf',
-  cleaning: '/appliances/cleaning',
-  delivery: '/appliances/delivery',
-  security: '/appliances/security',
-  manager: '/appliances/manager',
-};
-
-export default function SelectWorkerPage() {
+export default function ManagerLoginPage() {
   const router = useRouter();
-  const [tab, setTab] = useState<string>('SHOP');
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirm, setConfirm] = useState<Worker | null>(null);
 
   useEffect(() => {
-    if (!sessionStorage.getItem('app_code')) { router.replace('/appliances'); return; }
+    if (!sessionStorage.getItem('app_manager_code')) {
+      router.replace('/appliances/manager-gate');
+      return;
+    }
     (async () => {
-      const { data } = await supabase.from('appliance_workers').select('*').order('name');
+      const { data } = await supabase
+        .from('appliance_workers')
+        .select('id, name, role')
+        .eq('role', 'manager')
+        .order('name');
       setWorkers(data || []);
       setLoading(false);
     })();
   }, [router]);
 
   const handleConfirm = (w: Worker) => {
-    sessionStorage.setItem('app_worker', JSON.stringify({ name: w.name, role: w.role }));
-    router.push(ROLE_ROUTES[w.role] || '/appliances/shop');
+    sessionStorage.setItem('app_worker', JSON.stringify({ name: w.name, role: 'manager' }));
+    router.push('/appliances/manager');
   };
-
-  const filtered = workers.filter((w) => w.tab === tab);
 
   return (
     <div className="px-4 pt-4 pb-8 min-h-[calc(100vh-56px)] flex flex-col">
-      {/* Tabs */}
-      <div className="flex bg-gray-200 rounded-xl p-1 mb-6">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`flex-1 py-3 rounded-lg font-heading text-lg transition-colors ${
-              tab === t ? 'bg-yellow text-black' : 'text-gray-500'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      <button
+        onClick={() => router.push('/appliances/manager-gate')}
+        className="flex items-center gap-1 text-gray-500 mb-6"
+      >
+        <ArrowLeft size={20} /> Back
+      </button>
 
-      {/* Workers */}
+      <h1 className="font-heading text-3xl text-center mb-8">SELECT MANAGER</h1>
+
       {loading ? (
         <div className="flex-1 flex items-center justify-center">
           <Loader2 size={32} className="animate-spin text-gray-400" />
         </div>
       ) : (
-        <div className="space-y-3 flex-1">
-          {filtered.map((w) => (
+        <div className="space-y-3 max-w-sm mx-auto w-full">
+          {workers.map((w) => (
             <button
               key={w.id}
               onClick={() => setConfirm(w)}
-              className="w-full py-5 bg-white border-2 border-gray-200 rounded-2xl font-heading text-2xl active:scale-95 transition-transform hover:border-yellow"
+              className="w-full py-6 bg-white border-2 border-gray-200 rounded-2xl font-heading text-3xl active:scale-95 transition-transform hover:border-yellow"
             >
               {w.name.toUpperCase()}
             </button>
           ))}
-          {filtered.length === 0 && (
-            <p className="text-center text-gray-400 py-10">No workers in this tab.</p>
-          )}
         </div>
       )}
-
-      {/* Manager access is via /appliances → MANAGER button → manager-gate */}
 
       {/* Confirm modal */}
       {confirm && (

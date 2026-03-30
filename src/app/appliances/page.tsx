@@ -2,13 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Users, Settings } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 export default function AppliancesCodePage() {
   const [code, setCode] = useState('');
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async () => {
@@ -24,12 +25,39 @@ export default function AppliancesCodePage() {
 
     if (data && data.value === code.trim()) {
       sessionStorage.setItem('app_code', 'ok');
-      router.push('/appliances/select');
+      setAuthenticated(true);
     } else {
       setError(true);
     }
     setLoading(false);
   };
+
+  // After entry code: show two paths
+  if (authenticated) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center px-4 min-h-[calc(100vh-56px)] gap-6">
+        <h1 className="font-heading text-3xl mb-4">SELECT PORTAL</h1>
+
+        <button
+          onClick={() => router.push('/appliances/select')}
+          className="w-full max-w-sm py-10 rounded-3xl bg-yellow text-black flex flex-col items-center gap-3 active:scale-95 transition-transform"
+        >
+          <Users size={48} strokeWidth={2} />
+          <span className="font-heading text-4xl">WORKERS</span>
+          <span className="text-sm opacity-60">Shop, Jurf & Security teams</span>
+        </button>
+
+        <button
+          onClick={() => router.push('/appliances/manager-gate')}
+          className="w-full max-w-sm py-10 rounded-3xl bg-black text-white border-2 border-gray-700 flex flex-col items-center gap-3 active:scale-95 transition-transform"
+        >
+          <Settings size={48} strokeWidth={2} />
+          <span className="font-heading text-4xl">MANAGER</span>
+          <span className="text-sm text-gray-400">Dashboard & reports</span>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-4 min-h-[calc(100vh-56px)]">
