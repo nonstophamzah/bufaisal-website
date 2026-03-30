@@ -23,8 +23,9 @@ export default function ManagerGatePage() {
       .maybeSingle();
 
     if (data && data.value === code.trim()) {
-      sessionStorage.setItem('app_manager_code', 'ok');
-      router.push('/appliances/manager-login');
+      // Go directly to dashboard as Humaan
+      sessionStorage.setItem('app_worker', JSON.stringify({ name: 'Humaan', role: 'manager' }));
+      router.push('/appliances/manager');
     } else {
       setError(true);
     }

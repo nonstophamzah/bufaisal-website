@@ -52,7 +52,7 @@ export default function AppliancesCodePage() {
           className="w-full max-w-sm py-10 rounded-3xl bg-black text-white border-2 border-gray-700 flex flex-col items-center gap-3 active:scale-95 transition-transform"
         >
           <Settings size={48} strokeWidth={2} />
-          <span className="font-heading text-4xl">MANAGER</span>
+          <span className="font-heading text-3xl">HUMAAN (MANAGER)</span>
           <span className="text-sm text-gray-400">Dashboard & reports</span>
         </button>
       </div>
