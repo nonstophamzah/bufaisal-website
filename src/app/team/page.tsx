@@ -8,7 +8,7 @@ import { CATEGORIES } from '@/lib/constants';
 
 const SHOP_LABELS = ['A', 'B', 'C', 'D', 'E'] as const;
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Brand New'] as const;
-const PHOTO_LABELS = ['Front', 'Side', 'Inside / Back'];
+const PHOTO_LABELS = ['Item Photo', 'Barcode Label', 'Extra (optional)'];
 
 type Step = 'shop' | 'password' | 'name' | 'upload';
 
@@ -122,11 +122,31 @@ export default function TeamPage() {
     e.target.value = '';
   };
 
-  // --- Gemini AI (kept from original, updated prompt) ---
+  // --- Helper: convert image URL to base64 ---
+  const toBase64 = async (url: string): Promise<{ base64: string; mimeType: string }> => {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to load image (${res.status})`);
+    const blob = await res.blob();
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const b64 = (reader.result as string).split(',')[1];
+        if (b64) resolve(b64);
+        else reject(new Error('Base64 conversion failed'));
+      };
+      reader.onerror = () => reject(new Error('FileReader error'));
+      reader.readAsDataURL(blob);
+    });
+    return { base64, mimeType: blob.type || 'image/jpeg' };
+  };
+
+  // --- Gemini AI: scan item photo + barcode label photo ---
   const handleGeminiAI = async () => {
-    const firstImage = imageUrls.find((u) => !!u);
-    if (!firstImage) {
-      setError('Upload a photo first');
+    const itemPhotoUrl = imageUrls[0];
+    const barcodePhotoUrl = imageUrls[1];
+
+    if (!itemPhotoUrl && !barcodePhotoUrl) {
+      setError('Upload at least the Item Photo or Barcode Label first');
       return;
     }
 
@@ -134,66 +154,65 @@ export default function TeamPage() {
     setError('');
 
     try {
-      // Fetch image as base64
-      const imgRes = await fetch(firstImage);
-      if (!imgRes.ok) {
-        setError(`Failed to load image for AI scan (${imgRes.status})`);
-        setAiLoading(false);
-        return;
-      }
-      const blob = await imgRes.blob();
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const result = reader.result as string;
-          const b64 = result.split(',')[1];
-          if (b64) resolve(b64);
-          else reject(new Error('Failed to convert image to base64'));
-        };
-        reader.onerror = () => reject(new Error('FileReader error'));
-        reader.readAsDataURL(blob);
-      });
-
-      const mimeType = blob.type || 'image/jpeg';
-
-      // Call server-side API route (key stays on server)
-      const res = await fetch('/api/gemini', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: base64, mimeType }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || data.error) {
-        setError(`AI error: ${data.error || res.status}`);
-        setAiLoading(false);
-        return;
+      // Scan item photo for name/brand/category/condition
+      let itemResult: Record<string, string> = {};
+      if (itemPhotoUrl) {
+        const img = await toBase64(itemPhotoUrl);
+        const res = await fetch('/api/gemini', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: img.base64,
+            mimeType: img.mimeType,
+          }),
+        });
+        const data = await res.json();
+        if (res.ok && data.text) {
+          const match = data.text.match(/\{[\s\S]*\}/);
+          if (match) itemResult = JSON.parse(match[0]);
+        }
       }
 
-      const text = data.text || '';
-
-      if (!text) {
-        setError('AI returned empty response. Try a clearer photo.');
-        setAiLoading(false);
-        return;
+      // Scan barcode label for barcode number + brand
+      let barcodeResult: Record<string, string> = {};
+      if (barcodePhotoUrl) {
+        const img = await toBase64(barcodePhotoUrl);
+        const res = await fetch('/api/gemini', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: img.base64,
+            mimeType: img.mimeType,
+            prompt: `Read the barcode label in this image. Extract any barcode number, item name, brand name, or model number visible on the label.
+Return a JSON object with these fields:
+- barcode: the barcode number/text (string of digits or alphanumeric code)
+- item_name: product name if visible
+- brand: brand name if visible
+Return ONLY the JSON object, no other text.`,
+          }),
+        });
+        const data = await res.json();
+        if (res.ok && data.text) {
+          const match = data.text.match(/\{[\s\S]*\}/);
+          if (match) barcodeResult = JSON.parse(match[0]);
+        }
       }
 
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        setForm((prev) => ({
-          ...prev,
-          item_name: parsed.item_name || prev.item_name,
-          brand: parsed.brand || prev.brand,
-          description: parsed.description || prev.description,
-          category: parsed.category || prev.category,
-          condition: parsed.condition || prev.condition,
-          seo_title: parsed.seo_title || prev.seo_title,
-          seo_description: parsed.seo_description || prev.seo_description,
-        }));
-      } else {
-        setError('AI response could not be parsed. Try again.');
+      // Merge results: barcode scan fills barcode; item scan fills everything else
+      setForm((prev) => ({
+        ...prev,
+        item_name: itemResult.item_name || barcodeResult.item_name || prev.item_name,
+        brand: itemResult.brand || barcodeResult.brand || prev.brand,
+        description: itemResult.description || prev.description,
+        category: itemResult.category || prev.category,
+        condition: itemResult.condition || prev.condition,
+        barcode: barcodeResult.barcode || prev.barcode,
+        seo_title: itemResult.seo_title || prev.seo_title,
+        seo_description: itemResult.seo_description || prev.seo_description,
+      }));
+
+      if (!itemResult.item_name && !barcodeResult.barcode) {
+        setError('AI could not read the photos clearly. Try clearer images.');
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
