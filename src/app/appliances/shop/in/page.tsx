@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Loader2, Camera } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import CameraCapture from '../../components/Camera';
 import SuccessFlash from '../../components/SuccessFlash';
@@ -36,6 +36,9 @@ export default function ShopInPage() {
   const [problems, setProblems] = useState<string[]>([]);
   const [barcode, setBarcode] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
+  const [scanning, setScanning] = useState(false);
+  const [scanMsg, setScanMsg] = useState('');
+  const scanInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const w = sessionStorage.getItem('app_worker');
@@ -47,6 +50,63 @@ export default function ShopInPage() {
     setProblems((prev) =>
       prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
     );
+  };
+
+  const handleBarcodeScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setScanning(true);
+    setScanMsg('');
+
+    try {
+      // Compress
+      const img = new window.Image();
+      const url = URL.createObjectURL(file);
+      await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = () => rej(); img.src = url; });
+      const c = document.createElement('canvas');
+      let w = img.width, h = img.height;
+      if (w > 800) { h = (h * 800) / w; w = 800; }
+      c.width = w; c.height = h;
+      c.getContext('2d')!.drawImage(img, 0, 0, w, h);
+      const base64 = await new Promise<string>((res) => {
+        c.toBlob((b) => {
+          const reader = new FileReader();
+          reader.onloadend = () => res((reader.result as string).split(',')[1]);
+          reader.readAsDataURL(b!);
+        }, 'image/jpeg', 0.7);
+      });
+
+      const resp = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: base64,
+          mimeType: 'image/jpeg',
+          prompt: 'Read the barcode number from this label photo. Return JSON only: {"barcode": "the number or null"}',
+        }),
+      });
+      const data = await resp.json();
+      if (resp.ok && data.text) {
+        const match = data.text.match(/\{[\s\S]*\}/);
+        if (match) {
+          const parsed = JSON.parse(match[0]);
+          if (parsed.barcode && parsed.barcode !== 'null') {
+            setBarcode(parsed.barcode);
+            setScanMsg('');
+          } else {
+            setScanMsg('Could not read. Please type manually.');
+          }
+        } else {
+          setScanMsg('Could not read. Please type manually.');
+        }
+      } else {
+        setScanMsg(data.error || 'Scan failed. Please type manually.');
+      }
+    } catch {
+      setScanMsg('Scan failed. Please type manually.');
+    }
+    setScanning(false);
   };
 
   const isValid = shop && product && brand && status && barcode.trim();
@@ -257,14 +317,35 @@ export default function ShopInPage() {
 
       {/* Barcode */}
       <p className="font-bold text-sm mb-2">BARCODE</p>
-      <input
-        type="text"
-        inputMode="text"
-        value={barcode}
-        onChange={(e) => setBarcode(e.target.value)}
-        placeholder="Scan or type barcode"
-        className="w-full px-4 py-4 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow mb-6"
-      />
+      <div className="flex gap-2 mb-1">
+        <input
+          type="text"
+          inputMode="text"
+          value={barcode}
+          onChange={(e) => setBarcode(e.target.value)}
+          placeholder="Type or scan barcode"
+          className="flex-1 px-4 py-4 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow"
+        />
+        <button
+          type="button"
+          onClick={() => scanInputRef.current?.click()}
+          disabled={scanning}
+          className="px-5 py-4 rounded-xl bg-black text-white font-bold text-sm flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
+        >
+          {scanning ? <Loader2 size={18} className="animate-spin" /> : <Camera size={18} />}
+          {scanning ? 'Reading...' : 'SCAN'}
+        </button>
+        <input
+          ref={scanInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleBarcodeScan}
+          className="hidden"
+        />
+      </div>
+      {scanMsg && <p className="text-orange-500 text-sm font-bold mb-4">{scanMsg}</p>}
+      {!scanMsg && <div className="mb-5" />}
 
       {/* Next */}
       <button
