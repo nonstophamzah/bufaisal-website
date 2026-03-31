@@ -1,127 +1,241 @@
-import Hero from '@/components/Hero';
-import CategoryCard from '@/components/CategoryCard';
-import ItemCard from '@/components/ItemCard';
-import SocialProof from '@/components/SocialProof';
-import { CATEGORIES } from '@/lib/constants';
-import { supabase } from '@/lib/supabase';
+'use client';
 
-export const revalidate = 60;
+import { useEffect, useState, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
+import Link from 'next/link';
+import { Search, X, MessageCircle, Zap } from 'lucide-react';
+import { supabase, ShopItem } from '@/lib/supabase';
+import { buildWhatsAppUrl, CATEGORIES } from '@/lib/constants';
+import { trackWhatsAppClick } from '@/lib/fbpixel';
+import { useLang } from '@/lib/lang';
 
-async function getLatestItems() {
-  const { data } = await supabase
-    .from('shop_items')
-    .select('*')
-    .eq('is_published', true)
-    .eq('is_sold', false)
-    .eq('is_hidden', false)
-    .order('is_featured', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(8);
-  return data || [];
+const CAT_PILLS = ['All', ...CATEGORIES.map((c) => c.name)];
+const BATCH = 20;
+
+function isNew(d: string) {
+  return Date.now() - new Date(d).getTime() < 24 * 60 * 60 * 1000;
 }
 
-async function getHeroConfig() {
-  const { data } = await supabase
-    .from('website_config')
-    .select('config_key, config_value')
-    .in('config_key', ['hero_title', 'hero_subtitle']);
+function MarketplaceContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { lang, toggle } = useLang();
 
-  const config: Record<string, string> = {};
-  (data || []).forEach((row) => {
-    config[row.config_key] = row.config_value;
+  const [items, setItems] = useState<ShopItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState(searchParams.get('search') || '');
+  const [cat, setCat] = useState(searchParams.get('category') || 'All');
+  const [visible, setVisible] = useState(BATCH);
+
+  const fetchItems = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('shop_items')
+      .select('*')
+      .eq('is_published', true)
+      .eq('is_sold', false)
+      .eq('is_hidden', false)
+      .order('is_featured', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(200);
+    setItems((data || []) as ShopItem[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchItems(); }, [fetchItems]);
+
+  // Client-side filter
+  const filtered = items.filter((item) => {
+    if (cat !== 'All' && item.category !== cat) return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      return (
+        item.item_name?.toLowerCase().includes(q) ||
+        item.brand?.toLowerCase().includes(q) ||
+        item.category?.toLowerCase().includes(q)
+      );
+    }
+    return true;
   });
-  return config;
-}
 
-export default async function HomePage() {
-  const [items, heroConfig] = await Promise.all([
-    getLatestItems(),
-    getHeroConfig(),
-  ]);
+  // Update URL params
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (cat !== 'All') params.set('category', cat);
+    if (search.trim()) params.set('search', search.trim());
+    const qs = params.toString();
+    router.replace(qs ? `/?${qs}` : '/', { scroll: false });
+  }, [cat, search, router]);
+
+  const handleWhatsApp = (item: ShopItem, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    fetch('/api/track-click', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemId: item.id }),
+    }).catch(() => {});
+    trackWhatsAppClick();
+    window.location.href = buildWhatsAppUrl(item);
+  };
 
   return (
-    <>
-      <Hero
-        title={heroConfig.hero_title}
-        subtitle={heroConfig.hero_subtitle}
-      />
-
-      {/* Social Proof */}
-      <SocialProof />
-
-      {/* Categories */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <h2 className="font-heading text-4xl md:text-5xl mb-2">
-          BROWSE BY <span className="text-yellow">CATEGORY</span>
-        </h2>
-        <p className="text-muted mb-8">
-          Find exactly what you need across our collections
+    <div className="min-h-screen bg-white">
+      {/* 1. STICKY TOP BAR */}
+      <div className="sticky top-0 z-50 bg-yellow text-black px-3 flex items-center justify-between" style={{ height: 40 }}>
+        <p className="text-xs font-semibold truncate">
+          🚚 24-48hr Delivery &bull; Dubai, Ajman, Sharjah
         </p>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {CATEGORIES.map((cat) => (
-            <CategoryCard
-              key={cat.slug}
-              name={cat.name}
-              slug={cat.slug}
-              description={cat.description}
-              icon={cat.icon}
-              image={cat.image}
-            />
+        <button onClick={toggle} className="text-xs font-bold px-2 py-0.5 border border-black/20 rounded ml-2 flex-shrink-0">
+          {lang === 'en' ? 'عربي' : 'EN'}
+        </button>
+      </div>
+
+      {/* 2. HEADER */}
+      <div className="flex items-center justify-between px-4" style={{ height: 50 }}>
+        <Link href="/" className="font-heading text-2xl tracking-wide">
+          BU FAISAL
+        </Link>
+        <a
+          href="https://wa.me/971585932499"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white"
+          aria-label="WhatsApp"
+        >
+          <MessageCircle size={20} />
+        </a>
+      </div>
+
+      {/* 3. SEARCH BAR */}
+      <div className="px-3 pb-2">
+        <div className="relative">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setVisible(BATCH); }}
+            placeholder='Search "washing machine", "sofa", "fridge"...'
+            className="w-full pl-10 pr-10 py-3 text-sm bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow"
+          />
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+              <X size={16} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 4. CATEGORY PILLS */}
+      <div className="px-3 pb-2 overflow-x-auto hide-scrollbar">
+        <div className="flex gap-1.5 min-w-max">
+          {CAT_PILLS.map((c) => (
+            <button
+              key={c}
+              onClick={() => { setCat(c); setVisible(BATCH); }}
+              className={`px-3.5 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+                cat === c ? 'bg-black text-yellow' : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              {c}
+            </button>
           ))}
         </div>
-      </section>
+      </div>
 
-      {/* What We Sell */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="bg-black text-white rounded-2xl p-8 md:p-12">
-          <h2 className="font-heading text-3xl md:text-4xl mb-4">
-            WHAT WE <span className="text-yellow">SELL</span>
-          </h2>
-          <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <div className="flex items-center gap-3 mb-3">
-                <span className="bg-yellow/20 text-yellow font-heading text-xl px-3 py-1 rounded">
-                  80%
-                </span>
-                <h3 className="font-heading text-xl">QUALITY USED ITEMS</h3>
-              </div>
-              <p className="text-gray-400 text-sm leading-relaxed">
-                Carefully inspected pre-owned furniture, appliances, and home
-                goods. Every item is checked for quality before it hits our
-                shelves. Save up to 70% compared to buying new.
-              </p>
-            </div>
-            <div>
-              <div className="flex items-center gap-3 mb-3">
-                <span className="bg-yellow/20 text-yellow font-heading text-xl px-3 py-1 rounded">
-                  20%
-                </span>
-                <h3 className="font-heading text-xl">BRAND NEW ITEMS</h3>
-              </div>
-              <p className="text-gray-400 text-sm leading-relaxed">
-                We also manufacture brand new sofas, beds, cupboards &amp;
-                bedroom sets. Custom-made to order at factory-direct prices.
-                Ask us on WhatsApp for our new collection.
-              </p>
-            </div>
-          </div>
+      {/* 5. ITEM COUNT + HOOK */}
+      <div className="px-4 pb-2">
+        <p className="text-xs text-gray-500">
+          🔥 <span className="font-bold text-black">{filtered.length}</span> items &bull; New stuff added daily
+        </p>
+      </div>
+
+      {/* 6. PRODUCT GRID */}
+      {loading ? (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 px-3">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="animate-pulse bg-gray-100 rounded-xl aspect-[3/4]" />
+          ))}
         </div>
-      </section>
-
-      {/* Latest Arrivals */}
-      {items.length > 0 && (
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 bg-light rounded-3xl mb-16">
-          <h2 className="font-heading text-4xl md:text-5xl mb-2">
-            LATEST <span className="text-yellow">ARRIVALS</span>
-          </h2>
-          <p className="text-muted mb-8">Fresh items just added to our collection</p>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {items.map((item) => (
-              <ItemCard key={item.id} item={item} />
-            ))}
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-20 px-4">
+          <p className="font-heading text-2xl mb-2">NO ITEMS FOUND</p>
+          <p className="text-gray-400 text-sm">Try a different search or category</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 px-3">
+            {filtered.slice(0, visible).map((item) => {
+              const img = item.thumbnail_url || item.image_urls?.[0];
+              const hasPrice = item.sale_price && item.sale_price > 0;
+              return (
+                <div key={item.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                  <Link href={`/item/${item.id}`} className="block relative aspect-square bg-gray-100">
+                    {img ? (
+                      <Image src={img} alt={item.item_name} fill className="object-cover" sizes="(max-width:640px) 50vw, 25vw" loading="lazy" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-300"><Zap size={32} /></div>
+                    )}
+                    {isNew(item.created_at) && (
+                      <span className="absolute top-2 right-2 bg-yellow text-black text-[10px] font-bold px-2 py-0.5 rounded-full">NEW</span>
+                    )}
+                  </Link>
+                  <div className="p-2.5">
+                    <Link href={`/item/${item.id}`}>
+                      <p className="text-sm font-semibold line-clamp-2 leading-tight min-h-[2.5rem]">{item.item_name}</p>
+                    </Link>
+                    <p className="font-heading text-lg mt-0.5">
+                      {hasPrice ? `AED ${item.sale_price}` : <span className="text-gray-400">Ask Price</span>}
+                    </p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">⚡ Only 1 &bull; First come first serve</p>
+                    <button
+                      onClick={(e) => handleWhatsApp(item, e)}
+                      className="w-full mt-2 py-2.5 rounded-lg bg-green-500 text-white text-sm font-bold flex items-center justify-center gap-1.5 active:scale-95 transition-transform"
+                    >
+                      <MessageCircle size={15} /> Ask
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        </section>
+
+          {/* Load more */}
+          {visible < filtered.length && (
+            <div className="px-3 py-4">
+              <button
+                onClick={() => setVisible((v) => v + BATCH)}
+                className="w-full py-3.5 rounded-xl bg-gray-100 text-sm font-bold text-gray-600 active:scale-95"
+              >
+                Load more ({filtered.length - visible} remaining)
+              </button>
+            </div>
+          )}
+        </>
       )}
-    </>
+
+      {/* 7. FOOTER */}
+      <footer className="mt-8 border-t border-gray-100 px-4 py-6 text-center text-xs text-gray-400">
+        <p className="mb-2">Since 2009 &bull; 5 Locations in Ajman &bull; Open 9AM–11PM</p>
+        <div className="flex justify-center gap-4 mb-2">
+          <Link href="/about" className="hover:text-black">About</Link>
+          <a href="https://wa.me/971585932499" className="hover:text-black">Contact</a>
+          <Link href="/login" className="hover:text-black">Login</Link>
+        </div>
+        <p>&copy; {new Date().getFullYear()} Bu Faisal General Trading</p>
+      </footer>
+    </div>
+  );
+}
+
+// Wrap in Suspense for useSearchParams
+import { Suspense } from 'react';
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-white" />}>
+      <MarketplaceContent />
+    </Suspense>
   );
 }

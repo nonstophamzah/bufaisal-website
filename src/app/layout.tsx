@@ -2,9 +2,6 @@ import type { Metadata, Viewport } from 'next';
 import { Bebas_Neue, DM_Sans } from 'next/font/google';
 import Script from 'next/script';
 import './globals.css';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
-import WhatsAppFloat from '@/components/WhatsAppFloat';
 import { LangProvider } from '@/lib/lang';
 
 const bebasNeue = Bebas_Neue({
@@ -29,38 +26,24 @@ export const metadata: Metadata = {
   description:
     "Since 2009 — First Come, First Serve. 5 Locations in Ajman. Delivery across Dubai, Ajman & Sharjah.",
   keywords: [
-    'Bu Faisal',
-    'second hand UAE',
-    'used furniture Ajman',
-    'second hand market UAE',
-    'used appliances Dubai',
-    'pre-owned furniture Sharjah',
-    'Bu Faisal General Trading',
-    'bufaisal',
+    'Bu Faisal', 'second hand UAE', 'used furniture Ajman', 'second hand market UAE',
+    'used appliances Dubai', 'pre-owned furniture Sharjah', 'Bu Faisal General Trading', 'bufaisal',
   ],
   openGraph: {
     title: "Bu Faisal | UAE's Largest Second-Hand Market",
-    description:
-      "Since 2009 — First Come, First Serve. 5 Locations in Ajman. Delivery across Dubai, Ajman & Sharjah.",
-    siteName: 'Bu Faisal',
-    type: 'website',
-    url: 'https://bufaisal.ae',
+    description: "Since 2009 — First Come, First Serve. 5 Locations in Ajman. Delivery across Dubai, Ajman & Sharjah.",
+    siteName: 'Bu Faisal', type: 'website', url: 'https://bufaisal.ae',
   },
   twitter: {
     card: 'summary_large_image',
     title: "Bu Faisal | UAE's Largest Second-Hand Market",
-    description:
-      "Since 2009 — First Come, First Serve. 5 Locations in Ajman. Delivery across Dubai, Ajman & Sharjah.",
+    description: "Since 2009 — First Come, First Serve. 5 Locations in Ajman. Delivery across Dubai, Ajman & Sharjah.",
   },
 };
 
 const FB_PIXEL_ID = process.env.NEXT_PUBLIC_FB_PIXEL_ID;
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
@@ -86,25 +69,15 @@ export default function RootLayout({
             />
             <noscript>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                height="1"
-                width="1"
-                style={{ display: 'none' }}
-                src={`https://www.facebook.com/tr?id=${FB_PIXEL_ID}&ev=PageView&noscript=1`}
-                alt=""
-              />
+              <img height="1" width="1" style={{ display: 'none' }}
+                src={`https://www.facebook.com/tr?id=${FB_PIXEL_ID}&ev=PageView&noscript=1`} alt="" />
             </noscript>
           </>
         )}
       </head>
-      <body
-        className={`${bebasNeue.variable} ${dmSans.variable} font-body antialiased bg-white text-black`}
-      >
+      <body className={`${bebasNeue.variable} ${dmSans.variable} font-body antialiased bg-white text-black`}>
         <LangProvider>
-          <Navbar />
-          <main className="min-h-screen">{children}</main>
-          <Footer />
-          <WhatsAppFloat />
+          {children}
         </LangProvider>
       </body>
     </html>
