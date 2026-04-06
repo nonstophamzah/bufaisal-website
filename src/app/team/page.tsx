@@ -122,23 +122,37 @@ export default function TeamPage() {
     e.target.value = '';
   };
 
-  // --- Helper: convert image URL to base64 ---
-  const toBase64 = async (url: string): Promise<{ base64: string; mimeType: string }> => {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Failed to load image (${res.status})`);
-    const blob = await res.blob();
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const b64 = (reader.result as string).split(',')[1];
-        if (b64) resolve(b64);
-        else reject(new Error('Base64 conversion failed'));
+  // --- Helper: compress image to max 800px, JPEG quality 0.7 ---
+  const compressImage = (url: string): Promise<{ base64: string; mimeType: string }> =>
+    new Promise((resolve, reject) => {
+      const img = new window.Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const MAX = 800;
+        let { width, height } = img;
+        if (width > MAX || height > MAX) {
+          if (width > height) {
+            height = Math.round(height * (MAX / width));
+            width = MAX;
+          } else {
+            width = Math.round(width * (MAX / height));
+            height = MAX;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('Canvas context failed')); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        const b64 = dataUrl.split(',')[1];
+        if (b64) resolve({ base64: b64, mimeType: 'image/jpeg' });
+        else reject(new Error('Compression failed'));
       };
-      reader.onerror = () => reject(new Error('FileReader error'));
-      reader.readAsDataURL(blob);
+      img.onerror = () => reject(new Error('Failed to load image for compression'));
+      img.src = url;
     });
-    return { base64, mimeType: blob.type || 'image/jpeg' };
-  };
 
   // --- Gemini AI: scan item photo + barcode label photo ---
   const handleGeminiAI = async () => {
@@ -157,7 +171,7 @@ export default function TeamPage() {
       // Scan item photo for name/brand/category/condition
       let itemResult: Record<string, string> = {};
       if (itemPhotoUrl) {
-        const img = await toBase64(itemPhotoUrl);
+        const img = await compressImage(itemPhotoUrl);
         const res = await fetch('/api/gemini', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -176,7 +190,7 @@ export default function TeamPage() {
       // Scan barcode label for barcode number + brand
       let barcodeResult: Record<string, string> = {};
       if (barcodePhotoUrl) {
-        const img = await toBase64(barcodePhotoUrl);
+        const img = await compressImage(barcodePhotoUrl);
         const res = await fetch('/api/gemini', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -538,7 +552,6 @@ Return ONLY the JSON object, no other text.`,
                     ref={fileInputRefs[i]}
                     type="file"
                     accept="image/*"
-                    capture="environment"
                     onChange={(e) => handleImageUpload(e, i)}
                     className="hidden"
                   />
