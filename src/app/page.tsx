@@ -100,24 +100,14 @@ function MarketplaceContent() {
         <span className="text-xs opacity-50">|</span>
         <span className="text-xs md:text-sm font-bold whitespace-nowrap">24–48hr Delivery</span>
         <span className="text-xs opacity-50">|</span>
-        <span className="text-xs md:text-sm font-bold whitespace-nowrap">Ajman&apos;s #1 Used Goods Market</span>
+        <span className="text-xs md:text-sm font-bold whitespace-nowrap">Ajman&apos;s #1</span>
       </div>
 
-      {/* 1. STICKY TOP BAR */}
-      <div className="sticky top-0 z-50 bg-yellow text-black px-3 flex items-center justify-between" style={{ height: 40 }}>
-        <p className="text-xs font-semibold truncate">
-          🚚 24-48hr Delivery &bull; Dubai, Ajman, Sharjah
-        </p>
-        <button onClick={toggle} className="text-xs font-bold px-2 py-0.5 border border-black/20 rounded ml-2 flex-shrink-0">
+      {/* 1. HEADER */}
+      <div className="sticky top-0 z-50 bg-white border-b border-gray-100 flex items-center justify-between px-4" style={{ height: 50 }}>
+        <button onClick={toggle} className="text-xs font-bold px-2 py-0.5 border border-black/20 rounded flex-shrink-0">
           {lang === 'en' ? 'عربي' : 'EN'}
         </button>
-      </div>
-
-      {/* 2. HEADER */}
-      <div className="flex items-center justify-between px-4" style={{ height: 50 }}>
-        <Link href="/" className="font-heading text-2xl tracking-wide">
-          BU FAISAL
-        </Link>
         <a
           href="https://wa.me/971585932499"
           target="_blank"
