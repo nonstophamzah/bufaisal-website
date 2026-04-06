@@ -82,6 +82,27 @@ function MarketplaceContent() {
 
   return (
     <div className="min-h-screen bg-white">
+      {/* 0A. HERO HEADLINE */}
+      <section className="w-full py-10 px-4 text-center" style={{ background: '#111' }}>
+        <h1 className="font-heading text-3xl md:text-5xl font-black tracking-tight leading-tight" style={{ color: '#F9D923' }}>
+          UAE&apos;S LARGEST USED GOODS MARKET
+        </h1>
+        <p className="mt-3 text-base md:text-lg font-semibold" style={{ color: '#F9D923', opacity: 0.85 }}>
+          Since 2009 &middot; Thousands of items &middot; New stock daily
+        </p>
+      </section>
+
+      {/* 0B. SOCIAL PROOF BAR */}
+      <div className="w-full py-2.5 px-4 flex items-center justify-center gap-2 text-center flex-wrap" style={{ background: '#F9D923', color: '#111' }}>
+        <span className="text-xs md:text-sm font-bold whitespace-nowrap">Since 2009</span>
+        <span className="text-xs opacity-50">|</span>
+        <span className="text-xs md:text-sm font-bold whitespace-nowrap">5 Showrooms</span>
+        <span className="text-xs opacity-50">|</span>
+        <span className="text-xs md:text-sm font-bold whitespace-nowrap">24–48hr Delivery</span>
+        <span className="text-xs opacity-50">|</span>
+        <span className="text-xs md:text-sm font-bold whitespace-nowrap">Ajman&apos;s #1 Used Goods Market</span>
+      </div>
+
       {/* 1. STICKY TOP BAR */}
       <div className="sticky top-0 z-50 bg-yellow text-black px-3 flex items-center justify-between" style={{ height: 40 }}>
         <p className="text-xs font-semibold truncate">

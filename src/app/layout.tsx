@@ -24,20 +24,20 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "Bu Faisal | UAE's Largest Second-Hand Market",
   description:
-    "Since 2009 — First Come, First Serve. 5 Locations in Ajman. Delivery across Dubai, Ajman & Sharjah.",
+    "UAE's largest used goods market since 2009. Browse thousands of used furniture, appliances, and household items. 5 showrooms, 24-48hr delivery.",
   keywords: [
     'Bu Faisal', 'second hand UAE', 'used furniture Ajman', 'second hand market UAE',
     'used appliances Dubai', 'pre-owned furniture Sharjah', 'Bu Faisal General Trading', 'bufaisal',
   ],
   openGraph: {
     title: "Bu Faisal | UAE's Largest Second-Hand Market",
-    description: "Since 2009 — First Come, First Serve. 5 Locations in Ajman. Delivery across Dubai, Ajman & Sharjah.",
+    description: "UAE's largest used goods market since 2009. Browse thousands of used furniture, appliances, and household items. 5 showrooms, 24-48hr delivery.",
     siteName: 'Bu Faisal', type: 'website', url: 'https://bufaisal.ae',
   },
   twitter: {
     card: 'summary_large_image',
     title: "Bu Faisal | UAE's Largest Second-Hand Market",
-    description: "Since 2009 — First Come, First Serve. 5 Locations in Ajman. Delivery across Dubai, Ajman & Sharjah.",
+    description: "UAE's largest used goods market since 2009. Browse thousands of used furniture, appliances, and household items. 5 showrooms, 24-48hr delivery.",
   },
 };
 
