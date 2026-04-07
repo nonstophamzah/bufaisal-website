@@ -88,19 +88,19 @@ function MarketplaceContent() {
           UAE&apos;S LARGEST USED GOODS MARKET
         </h1>
         <p className="mt-3 text-base md:text-lg font-semibold" style={{ color: '#F9D923', opacity: 0.85 }}>
-          Since 2009 &middot; Thousands of items &middot; New stock daily
+          Since 2009 &middot; Furniture, Appliances &amp; More &middot; New Arrivals Daily
         </p>
       </section>
 
       {/* 0B. SOCIAL PROOF BAR */}
       <div className="w-full py-2.5 px-4 flex items-center justify-center gap-2 text-center flex-wrap" style={{ background: '#F9D923', color: '#111' }}>
-        <span className="text-xs md:text-sm font-bold whitespace-nowrap">Since 2009</span>
+        <span className="text-xs md:text-sm font-bold whitespace-nowrap">15+ Years Trusted</span>
         <span className="text-xs opacity-50">|</span>
-        <span className="text-xs md:text-sm font-bold whitespace-nowrap">5 Showrooms</span>
+        <span className="text-xs md:text-sm font-bold whitespace-nowrap">Everything Your Home Needs for Less</span>
         <span className="text-xs opacity-50">|</span>
-        <span className="text-xs md:text-sm font-bold whitespace-nowrap">24–48hr Delivery</span>
+        <span className="text-xs md:text-sm font-bold whitespace-nowrap">All Items Inspected</span>
         <span className="text-xs opacity-50">|</span>
-        <span className="text-xs md:text-sm font-bold whitespace-nowrap">Ajman&apos;s #1</span>
+        <span className="text-xs md:text-sm font-bold whitespace-nowrap">24-48hr Delivery</span>
       </div>
 
       {/* 1. HEADER */}
