@@ -2,13 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
-// Verify admin session via PIN check (same as auth route)
-function getAdminPinEntries(): { hash: string; name: string }[] {
-  const raw = process.env.ADMIN_PIN_HASHES;
-  if (!raw) return [];
-  try { return JSON.parse(raw); } catch { return []; }
-}
-
 async function verifyAdmin(request: NextRequest): Promise<string | null> {
   const adminName = request.headers.get('x-admin-name');
   if (!adminName) return null;
