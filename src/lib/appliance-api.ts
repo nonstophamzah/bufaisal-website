@@ -1,13 +1,9 @@
 // Client-side helper for appliance API calls (replaces direct Supabase access)
-const API_SECRET = process.env.NEXT_PUBLIC_API_SECRET_KEY || '';
 
 async function applianceApi<T = Record<string, unknown>>(body: Record<string, unknown>): Promise<T> {
   const res = await fetch('/api/appliances', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-secret': API_SECRET,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   return res.json();

@@ -79,7 +79,7 @@ export default function ShopInPage() {
 
       const resp = await fetch('/api/gemini', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-secret': process.env.NEXT_PUBLIC_API_SECRET_KEY || '' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           imageBase64: base64,
           mimeType: 'image/jpeg',

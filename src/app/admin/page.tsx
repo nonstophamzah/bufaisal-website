@@ -243,7 +243,6 @@ export default function AdminPage() {
 
   const adminHeaders = useCallback(() => ({
     'Content-Type': 'application/json',
-    'x-api-secret': process.env.NEXT_PUBLIC_API_SECRET_KEY || '',
     'x-admin-name': user,
   }), [user]);
 

@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
+import { verifyOrigin } from '@/lib/verify-origin';
 
 const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_BASE64_SIZE = 10 * 1024 * 1024; // ~10MB base64
 
 export async function POST(request: NextRequest) {
   try {
-    // Require API secret header to prevent unauthorized use
-    const apiSecret = process.env.API_SECRET_KEY;
-    const headerSecret = request.headers.get('x-api-secret');
-    if (!apiSecret || headerSecret !== apiSecret) {
+    if (!verifyOrigin(request)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

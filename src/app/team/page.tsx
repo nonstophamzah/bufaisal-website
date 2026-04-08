@@ -177,7 +177,7 @@ export default function TeamPage() {
         const img = await compressImage(itemPhotoUrl);
         const res = await fetch('/api/gemini', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-secret': process.env.NEXT_PUBLIC_API_SECRET_KEY || '' },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             imageBase64: img.base64,
             mimeType: img.mimeType,
@@ -196,7 +196,7 @@ export default function TeamPage() {
         const img = await compressImage(barcodePhotoUrl);
         const res = await fetch('/api/gemini', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-secret': process.env.NEXT_PUBLIC_API_SECRET_KEY || '' },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             imageBase64: img.base64,
             mimeType: img.mimeType,

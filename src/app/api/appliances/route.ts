@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { rateLimit } from '@/lib/rate-limit';
-
-// All appliance operations go through this route using service_role.
-// Validates API_SECRET_KEY to prevent unauthorized access.
-function verifySecret(request: NextRequest): boolean {
-  const secret = request.headers.get('x-api-secret');
-  return !!secret && secret === process.env.API_SECRET_KEY;
-}
+import { verifyOrigin } from '@/lib/verify-origin';
 
 export async function POST(request: NextRequest) {
-  if (!verifySecret(request)) {
+  if (!verifyOrigin(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
