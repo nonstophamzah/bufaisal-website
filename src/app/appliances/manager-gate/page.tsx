@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, ArrowLeft } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { checkManagerCode } from '@/lib/appliance-api';
 
 export default function ManagerGatePage() {
   const [code, setCode] = useState('');
@@ -16,14 +16,8 @@ export default function ManagerGatePage() {
     setLoading(true);
     setError(false);
 
-    const { data } = await supabase
-      .from('appliance_config')
-      .select('value')
-      .eq('key', 'manager_code')
-      .maybeSingle();
-
-    if (data && data.value === code.trim()) {
-      // Go directly to dashboard as Humaan
+    const match = await checkManagerCode(code.trim());
+    if (match) {
       sessionStorage.setItem('app_worker', JSON.stringify({ name: 'Humaan', role: 'manager' }));
       router.push('/appliances/manager');
     } else {

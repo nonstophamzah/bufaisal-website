@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, Truck, Trash2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { getItems } from '@/lib/appliance-api';
 
 interface Item {
   id: string;
@@ -24,12 +24,12 @@ export default function ShopOutPage() {
     const w = sessionStorage.getItem('app_worker');
     if (!w) { router.replace('/appliances'); return; }
     (async () => {
-      const { data } = await supabase
-        .from('appliance_items')
-        .select('id, barcode, product_type, brand, status, shop, photo_url')
-        .eq('approval_status', 'approved')
-        .order('created_at', { ascending: false });
-      setItems((data || []) as Item[]);
+      const data = await getItems({
+        columns: 'id, barcode, product_type, brand, status, shop, photo_url',
+        filter: { approval_status: 'approved' },
+        order: { column: 'created_at', ascending: false },
+      });
+      setItems(data as Item[]);
       setLoading(false);
     })();
   }, [router]);

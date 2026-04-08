@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, Users, Settings } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { checkEntryCode } from '@/lib/appliance-api';
 
 export default function AppliancesCodePage() {
   const [code, setCode] = useState('');
@@ -17,13 +17,8 @@ export default function AppliancesCodePage() {
     setLoading(true);
     setError(false);
 
-    const { data } = await supabase
-      .from('appliance_config')
-      .select('value')
-      .eq('key', 'entry_code')
-      .maybeSingle();
-
-    if (data && data.value === code.trim()) {
+    const match = await checkEntryCode(code.trim());
+    if (match) {
       sessionStorage.setItem('app_code', 'ok');
       setAuthenticated(true);
     } else {

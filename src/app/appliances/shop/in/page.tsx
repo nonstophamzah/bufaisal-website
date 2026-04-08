@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Check, Loader2, Camera } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { insertItem } from '@/lib/appliance-api';
 import CameraCapture from '../../components/Camera';
 import SuccessFlash from '../../components/SuccessFlash';
 import ErrorFlash from '../../components/ErrorFlash';
@@ -79,7 +79,7 @@ export default function ShopInPage() {
 
       const resp = await fetch('/api/gemini', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-api-secret': process.env.NEXT_PUBLIC_API_SECRET_KEY || '' },
         body: JSON.stringify({
           imageBase64: base64,
           mimeType: 'image/jpeg',
@@ -115,7 +115,7 @@ export default function ShopInPage() {
     setSaving(true);
     setErrorMsg('');
 
-    const { error } = await supabase.from('appliance_items').insert({
+    const result = await insertItem({
       barcode: barcode.trim(),
       product_type: product,
       brand,
@@ -129,8 +129,8 @@ export default function ShopInPage() {
       approval_status: 'pending',
     });
 
-    if (error) {
-      setErrorMsg(error.message);
+    if (result.error) {
+      setErrorMsg(result.error);
       setSaving(false);
       return;
     }
