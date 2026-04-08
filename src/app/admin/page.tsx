@@ -241,21 +241,29 @@ export default function AdminPage() {
 
   // ─── Fetch team ────────────────────────────────────────
 
+  const adminHeaders = useCallback(() => ({
+    'Content-Type': 'application/json',
+    'x-api-secret': process.env.NEXT_PUBLIC_API_SECRET_KEY || '',
+    'x-admin-name': user,
+  }), [user]);
+
   const fetchTeam = useCallback(async () => {
     setLoading(true);
-    const [{ data: mgrs }, { data: pwds }] = await Promise.all([
-      supabase.from('duty_managers').select('*').order('shop_label').order('name'),
-      supabase.from('shop_passwords').select('*').order('shop_label'),
-    ]);
-    setManagers(mgrs || []);
-    setPasswords(pwds || []);
-    const pd: Record<string, string> = {};
-    (pwds || []).forEach((p) => {
-      pd[p.shop_label] = p.password;
-    });
-    setPasswordDraft(pd);
+    try {
+      const res = await fetch('/api/admin/team', { headers: adminHeaders() });
+      const data = await res.json();
+      setManagers(data.managers || []);
+      setPasswords(data.passwords || []);
+      const pd: Record<string, string> = {};
+      (data.passwords || []).forEach((p: { shop_label: string }) => {
+        pd[p.shop_label] = '';
+      });
+      setPasswordDraft(pd);
+    } catch {
+      showToast('err', 'Failed to load team data');
+    }
     setLoading(false);
-  }, []);
+  }, [adminHeaders]);
 
   // ─── Fetch analytics ──────────────────────────────────
 
@@ -444,10 +452,10 @@ export default function AdminPage() {
   const addManager = async () => {
     if (!newManager.name.trim()) return;
     setSavingTeam(true);
-    await supabase.from('duty_managers').insert({
-      name: newManager.name.trim(),
-      shop_label: newManager.shop_label,
-      is_active: true,
+    await fetch('/api/admin/team', {
+      method: 'POST',
+      headers: adminHeaders(),
+      body: JSON.stringify({ action: 'add_manager', name: newManager.name.trim(), shop_label: newManager.shop_label }),
     });
     setNewManager({ name: '', shop_label: 'A' });
     await fetchTeam();
@@ -455,16 +463,21 @@ export default function AdminPage() {
   };
 
   const toggleManagerActive = async (id: string, current: boolean) => {
-    await supabase
-      .from('duty_managers')
-      .update({ is_active: !current })
-      .eq('id', id);
+    await fetch('/api/admin/team', {
+      method: 'POST',
+      headers: adminHeaders(),
+      body: JSON.stringify({ action: 'toggle_manager', id, is_active: !current }),
+    });
     fetchTeam();
   };
 
   const deleteManager = async (id: string, name: string) => {
     if (!confirm(`Remove ${name}?`)) return;
-    await supabase.from('duty_managers').delete().eq('id', id);
+    await fetch('/api/admin/team', {
+      method: 'POST',
+      headers: adminHeaders(),
+      body: JSON.stringify({ action: 'delete_manager', id }),
+    });
     fetchTeam();
   };
 
@@ -472,11 +485,12 @@ export default function AdminPage() {
     setSavingTeam(true);
     for (const pw of passwords) {
       const newVal = passwordDraft[pw.shop_label];
-      if (newVal !== pw.password) {
-        await supabase
-          .from('shop_passwords')
-          .update({ password: newVal })
-          .eq('shop_label', pw.shop_label);
+      if (newVal) {
+        await fetch('/api/admin/team', {
+          method: 'POST',
+          headers: adminHeaders(),
+          body: JSON.stringify({ action: 'update_password', shop_label: pw.shop_label, new_password: newVal }),
+        });
       }
     }
     await fetchTeam();
@@ -1126,6 +1140,7 @@ export default function AdminPage() {
 
                 {/* Shop passwords */}
                 <Section title="SHOP PASSWORDS">
+                  <p className="text-xs text-muted mb-3">Passwords are hashed. Enter a new value to change.</p>
                   <div className="space-y-3">
                     {SHOP_LABELS.map((label) => (
                       <div key={label} className="flex items-center gap-3">
@@ -1133,7 +1148,7 @@ export default function AdminPage() {
                           Shop {label}
                         </span>
                         <input
-                          type="text"
+                          type="password"
                           value={passwordDraft[label] || ''}
                           onChange={(e) =>
                             setPasswordDraft((d) => ({
@@ -1141,6 +1156,7 @@ export default function AdminPage() {
                               [label]: e.target.value,
                             }))
                           }
+                          placeholder="Enter new password"
                           className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-yellow"
                         />
                       </div>

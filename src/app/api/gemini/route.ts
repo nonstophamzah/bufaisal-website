@@ -6,6 +6,13 @@ const MAX_BASE64_SIZE = 10 * 1024 * 1024; // ~10MB base64
 
 export async function POST(request: NextRequest) {
   try {
+    // Require API secret header to prevent unauthorized use
+    const apiSecret = process.env.API_SECRET_KEY;
+    const headerSecret = request.headers.get('x-api-secret');
+    if (!apiSecret || headerSecret !== apiSecret) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     // Rate limit: 10 requests per minute per IP
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown';
     const { allowed } = rateLimit(`gemini-${ip}`, 10, 60_000);

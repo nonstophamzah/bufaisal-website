@@ -55,22 +55,25 @@ export default function TeamPage() {
     seo_description: '',
   });
 
-  // --- STEP 2: password validation ---
+  // --- STEP 2: password validation (server-side, never exposes hashes) ---
   const handlePasswordSubmit = async () => {
     setPasswordLoading(true);
     setPasswordError(false);
 
-    const { data } = await supabase
-      .from('shop_passwords')
-      .select('*')
-      .eq('shop_label', shopLabel)
-      .eq('password', password)
-      .maybeSingle();
+    try {
+      const res = await fetch('/api/shop-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shop_label: shopLabel, password }),
+      });
 
-    if (data) {
-      setStep('name');
-      setPassword('');
-    } else {
+      if (res.ok) {
+        setStep('name');
+        setPassword('');
+      } else {
+        setPasswordError(true);
+      }
+    } catch {
       setPasswordError(true);
     }
     setPasswordLoading(false);
@@ -174,7 +177,7 @@ export default function TeamPage() {
         const img = await compressImage(itemPhotoUrl);
         const res = await fetch('/api/gemini', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-api-secret': process.env.NEXT_PUBLIC_API_SECRET_KEY || '' },
           body: JSON.stringify({
             imageBase64: img.base64,
             mimeType: img.mimeType,
@@ -193,7 +196,7 @@ export default function TeamPage() {
         const img = await compressImage(barcodePhotoUrl);
         const res = await fetch('/api/gemini', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-api-secret': process.env.NEXT_PUBLIC_API_SECRET_KEY || '' },
           body: JSON.stringify({
             imageBase64: img.base64,
             mimeType: img.mimeType,

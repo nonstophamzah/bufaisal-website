@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { getWorkers } from '@/lib/appliance-api';
 
 interface Worker { id: string; name: string; role: string; tab: string; }
 
@@ -28,8 +28,8 @@ export default function SelectWorkerPage() {
   useEffect(() => {
     if (!sessionStorage.getItem('app_code')) { router.replace('/appliances'); return; }
     (async () => {
-      const { data } = await supabase.from('appliance_workers').select('*').order('name');
-      setWorkers(data || []);
+      const data = await getWorkers();
+      setWorkers(data as Worker[]);
       setLoading(false);
     })();
   }, [router]);

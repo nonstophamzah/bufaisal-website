@@ -7,7 +7,7 @@ import {
   Trash2, Truck, ChevronDown, ChevronUp, Check, X, Pencil, Clock,
   Save, Search, Download, Undo2,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { getItems, updateItem, bulkUpdateItems } from '@/lib/appliance-api';
 
 interface Item {
   id: string;
@@ -97,9 +97,10 @@ export default function ManagerDashboard() {
 
   const fetchItems = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
-    const { data, error } = await supabase.from('appliance_items').select('*').order('created_at', { ascending: false }).limit(500);
-    if (error) showToast('err', 'Failed to load items');
-    setAllItems((data || []) as Item[]);
+    try {
+      const data = await getItems({ order: { column: 'created_at', ascending: false }, limit: 500 });
+      setAllItems(data as Item[]);
+    } catch { showToast('err', 'Failed to load items'); }
     setLoading(false);
     setRefreshing(false);
   }, []);
@@ -147,8 +148,8 @@ export default function ManagerDashboard() {
   // Actions
   const approveItem = async (id: string) => {
     try {
-      const { error } = await supabase.from('appliance_items').update({ approval_status: 'approved' }).eq('id', id);
-      if (error) throw error;
+      const result = await updateItem(id, { approval_status: 'approved' });
+      if (result.error) throw new Error(result.error);
       showToast('ok', 'Item approved');
       fetchItems(true);
     } catch { showToast('err', 'Failed to approve. Try again.'); }
@@ -157,8 +158,8 @@ export default function ManagerDashboard() {
   const bulkApprove = async () => {
     if (selected.size === 0) return;
     try {
-      const { error } = await supabase.from('appliance_items').update({ approval_status: 'approved' }).in('id', Array.from(selected));
-      if (error) throw error;
+      const result = await bulkUpdateItems(Array.from(selected), { approval_status: 'approved' });
+      if (result.error) throw new Error(result.error);
       showToast('ok', `${selected.size} items approved`);
       setSelected(new Set());
       fetchItems(true);
@@ -168,8 +169,8 @@ export default function ManagerDashboard() {
   const confirmReject = async () => {
     if (!rejectConfirm) return;
     try {
-      const { error } = await supabase.from('appliance_items').update({ approval_status: 'rejected' }).eq('id', rejectConfirm);
-      if (error) throw error;
+      const result = await updateItem(rejectConfirm, { approval_status: 'rejected' });
+      if (result.error) throw new Error(result.error);
       showToast('ok', 'Item rejected');
       setRejectConfirm(null);
       fetchItems(true);
@@ -178,8 +179,8 @@ export default function ManagerDashboard() {
 
   const undoReject = async (id: string) => {
     try {
-      const { error } = await supabase.from('appliance_items').update({ approval_status: 'pending' }).eq('id', id);
-      if (error) throw error;
+      const result = await updateItem(id, { approval_status: 'pending' });
+      if (result.error) throw new Error(result.error);
       showToast('ok', 'Item moved back to pending');
       fetchItems(true);
     } catch { showToast('err', 'Failed to undo. Try again.'); }
@@ -194,12 +195,12 @@ export default function ManagerDashboard() {
     if (!editItem) return;
     setEditSaving(true);
     try {
-      const { error } = await supabase.from('appliance_items').update({
+      const result = await updateItem(editItem.id, {
         product_type: editForm.product_type, brand: editForm.brand, status: editForm.status,
         problems: editForm.status === 'Not Working' ? editForm.problems : [],
         shop: editForm.shop, barcode: editForm.barcode, needs_jurf: editForm.status === 'Not Working',
-      }).eq('id', editItem.id);
-      if (error) throw error;
+      });
+      if (result.error) throw new Error(result.error);
       showToast('ok', 'Item updated');
       setEditItem(null);
       fetchItems(true);
