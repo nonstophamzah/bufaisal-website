@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     if (action === 'get_workers') {
       const { data } = await supabaseAdmin
         .from('appliance_workers')
-        .select('id, name, role')
+        .select('id, name, role, tab')
         .order('name');
       return NextResponse.json({ workers: data || [] });
     }
