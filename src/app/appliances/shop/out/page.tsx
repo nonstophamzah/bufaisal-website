@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, Truck, Trash2, Lock, X } from 'lucide-react';
 import { getItems, updateItem, checkManagerCode } from '@/lib/appliance-api';
+import { canonicalProductType, canonicalBrand } from '@/lib/appliance-catalog';
 import SuccessFlash from '../../components/SuccessFlash';
 import ErrorFlash from '../../components/ErrorFlash';
 
@@ -197,7 +198,7 @@ export default function ShopOutPage() {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-sm truncate">{item.product_type} {item.brand ? `— ${item.brand}` : ''}</p>
+                <p className="font-bold text-sm truncate">{canonicalProductType(item.product_type)} {item.brand ? `— ${canonicalBrand(item.brand)}` : ''}</p>
                 <p className="text-xs text-gray-500">{item.barcode} &bull; Shop {item.shop}</p>
               </div>
               {selectedId === item.id && (

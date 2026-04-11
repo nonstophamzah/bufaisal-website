@@ -8,6 +8,15 @@ import {
   Save, Search, Download, Undo2,
 } from 'lucide-react';
 import { getItems, updateItem, bulkUpdateItems } from '@/lib/appliance-api';
+import SearchableSelect from '../components/SearchableSelect';
+import {
+  PRODUCT_TYPES,
+  BRANDS,
+  PRODUCT_OTHER,
+  BRAND_OTHER,
+  canonicalProductType,
+  canonicalBrand,
+} from '@/lib/appliance-catalog';
 
 interface Item {
   id: string;
@@ -33,8 +42,6 @@ interface Item {
 const SHOPS_F = ['All', 'A', 'B', 'C', 'D', 'E'];
 const STATUSES_F = ['All', 'Working', 'Not Working', 'Pending Scrap', 'Repaired', 'Delivered'];
 const DATES_F = ['All Time', 'Today', 'This Week', 'This Month'];
-const PRODUCTS = ['Fridge', 'Washer', 'Oven', 'Microwave', 'AC / Cooler', 'Other'];
-const BRANDS = ['Samsung', 'LG', 'Bosch', 'Whirlpool', 'Midea', 'Other'];
 const ITEM_STATUSES = ['Working', 'Not Working', 'Scrap'];
 const PROBLEMS_LIST = ['No power', 'Not cooling', 'Leaking', 'Part missing', 'Other'];
 
@@ -187,7 +194,14 @@ export default function ManagerDashboard() {
   };
 
   const openEdit = (item: Item) => {
-    setEditForm({ product_type: item.product_type || '', brand: item.brand || '', status: item.status || '', problems: item.problems || [], shop: item.shop || '', barcode: item.barcode });
+    setEditForm({
+      product_type: canonicalProductType(item.product_type),
+      brand: canonicalBrand(item.brand),
+      status: item.status || '',
+      problems: item.problems || [],
+      shop: item.shop || '',
+      barcode: item.barcode,
+    });
     setEditItem(item);
   };
 
@@ -251,7 +265,7 @@ export default function ManagerDashboard() {
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-sm truncate">{item.product_type || 'Unknown'} {item.brand ? `— ${item.brand}` : ''}</p>
+            <p className="font-bold text-sm truncate">{canonicalProductType(item.product_type) || 'Unknown'} {item.brand ? `— ${canonicalBrand(item.brand)}` : ''}</p>
             <p className="text-xs text-gray-500 truncate">{item.barcode}</p>
             <div className="flex items-center gap-2 mt-1">
               <span className={`text-[10px] font-bold text-white px-1.5 py-0.5 rounded ${SC[item.status || ''] || 'bg-gray-400'}`}>{item.status}</span>
@@ -264,7 +278,7 @@ export default function ManagerDashboard() {
         {isOpen && (
           <div className="border-t border-gray-100 px-3 py-3 bg-gray-50 space-y-1.5 text-sm">
             {[
-              ['Barcode', item.barcode], ['Product', item.product_type], ['Brand', item.brand],
+              ['Barcode', item.barcode], ['Product', canonicalProductType(item.product_type)], ['Brand', canonicalBrand(item.brand)],
               ['Status', item.status], ['Problems', item.problems?.join(', ')],
               ['Shop', item.shop ? `Shop ${item.shop}` : null], ['Needs Jurf', item.needs_jurf ? 'Yes' : 'No'],
               ['Date Received', fmtDate(item.date_received)], ['Sent to Jurf', fmtDate(item.date_sent_to_jurf)],
@@ -351,7 +365,7 @@ export default function ManagerDashboard() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-sm truncate">{item.product_type} {item.brand ? `— ${item.brand}` : ''}</p>
+                    <p className="font-bold text-sm truncate">{canonicalProductType(item.product_type)} {item.brand ? `— ${canonicalBrand(item.brand)}` : ''}</p>
                     <p className="text-xs text-gray-500">{item.barcode} &bull; Shop {item.shop} &bull; {fmtDate(item.date_received || item.created_at)}</p>
                     <div className="flex items-center gap-1.5 mt-1">
                       <span className={`text-[10px] font-bold text-white px-1.5 py-0.5 rounded ${SC[item.status || ''] || 'bg-gray-400'}`}>{item.status}</span>
@@ -483,12 +497,24 @@ export default function ManagerDashboard() {
               {['A','B','C','D','E'].map((s) => (<button key={s} onClick={() => setEditForm((f) => ({...f, shop: s}))} className={`py-3 rounded-xl font-heading text-xl active:scale-95 ${editForm.shop === s ? 'bg-black text-yellow' : 'bg-gray-200'}`}>{s}</button>))}
             </div>
             <p className="font-bold text-sm mb-2">PRODUCT</p>
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {PRODUCTS.map((p) => (<button key={p} onClick={() => setEditForm((f) => ({...f, product_type: p}))} className={`py-3 px-2 rounded-xl text-sm font-bold active:scale-95 ${editForm.product_type === p ? 'bg-black text-yellow' : 'bg-gray-200'}`}>{p}</button>))}
+            <div className="mb-4">
+              <SearchableSelect
+                value={editForm.product_type}
+                onChange={(v) => setEditForm((f) => ({ ...f, product_type: v }))}
+                options={PRODUCT_TYPES}
+                placeholder="Search product type..."
+                otherLabel={PRODUCT_OTHER}
+              />
             </div>
             <p className="font-bold text-sm mb-2">BRAND</p>
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {BRANDS.map((b) => (<button key={b} onClick={() => setEditForm((f) => ({...f, brand: b}))} className={`py-3 px-2 rounded-xl text-sm font-bold active:scale-95 ${editForm.brand === b ? 'bg-black text-yellow' : 'bg-gray-200'}`}>{b}</button>))}
+            <div className="mb-4">
+              <SearchableSelect
+                value={editForm.brand}
+                onChange={(v) => setEditForm((f) => ({ ...f, brand: v }))}
+                options={BRANDS}
+                placeholder="Search brand..."
+                otherLabel={BRAND_OTHER}
+              />
             </div>
             <p className="font-bold text-sm mb-2">STATUS</p>
             <div className="grid grid-cols-3 gap-2 mb-4">

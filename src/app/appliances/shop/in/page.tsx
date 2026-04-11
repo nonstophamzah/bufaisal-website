@@ -7,12 +7,12 @@ import { insertItem } from '@/lib/appliance-api';
 import CameraCapture from '../../components/Camera';
 import SuccessFlash from '../../components/SuccessFlash';
 import ErrorFlash from '../../components/ErrorFlash';
+import SearchableSelect from '../../components/SearchableSelect';
+import { PRODUCT_TYPES, BRANDS, PRODUCT_OTHER, BRAND_OTHER } from '@/lib/appliance-catalog';
 
 type Screen = 'details' | 'photo' | 'confirm';
 
 const SHOPS = ['A', 'B', 'C', 'D', 'E'];
-const PRODUCTS = ['Fridge', 'Washer', 'Oven', 'Microwave', 'AC / Cooler', 'Other'];
-const BRANDS = ['Samsung', 'LG', 'Bosch', 'Whirlpool', 'Midea', 'Other'];
 const STATUSES = [
   { value: 'Working', color: 'bg-green-500 text-white' },
   { value: 'Not Working', color: 'bg-orange-500 text-white' },
@@ -249,34 +249,26 @@ export default function ShopInPage() {
 
       {/* Product */}
       <p className="font-bold text-sm mb-2">PRODUCT</p>
-      <div className="grid grid-cols-3 gap-2 mb-5">
-        {PRODUCTS.map((p) => (
-          <button
-            key={p}
-            onClick={() => setProduct(p)}
-            className={`py-3.5 px-2 rounded-xl text-sm font-bold active:scale-95 transition-all ${
-              product === p ? 'bg-black text-yellow ring-2 ring-yellow' : 'bg-gray-200'
-            }`}
-          >
-            {p}
-          </button>
-        ))}
+      <div className="mb-5">
+        <SearchableSelect
+          value={product}
+          onChange={setProduct}
+          options={PRODUCT_TYPES}
+          placeholder="Search product type..."
+          otherLabel={PRODUCT_OTHER}
+        />
       </div>
 
       {/* Brand */}
       <p className="font-bold text-sm mb-2">BRAND</p>
-      <div className="grid grid-cols-3 gap-2 mb-5">
-        {BRANDS.map((b) => (
-          <button
-            key={b}
-            onClick={() => setBrand(b)}
-            className={`py-3.5 px-2 rounded-xl text-sm font-bold active:scale-95 transition-all ${
-              brand === b ? 'bg-black text-yellow ring-2 ring-yellow' : 'bg-gray-200'
-            }`}
-          >
-            {b}
-          </button>
-        ))}
+      <div className="mb-5">
+        <SearchableSelect
+          value={brand}
+          onChange={setBrand}
+          options={BRANDS}
+          placeholder="Search brand..."
+          otherLabel={BRAND_OTHER}
+        />
       </div>
 
       {/* Status */}
