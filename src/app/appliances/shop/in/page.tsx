@@ -115,11 +115,14 @@ export default function ShopInPage() {
     setSaving(true);
     setErrorMsg('');
 
+    const condition = status === 'Working' ? 'working' : status === 'Scrap' ? 'scrap' : 'not_working';
     const result = await insertItem({
       barcode: barcode.trim(),
       product_type: product,
       brand,
       status,
+      condition,
+      location_status: 'at_shop',
       problems: status === 'Not Working' ? problems : [],
       shop,
       photo_url: photoUrl || null,
