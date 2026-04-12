@@ -29,6 +29,7 @@ export async function getWorkers(): Promise<{ id: string; name: string; role: st
 export async function getItems(opts: {
   columns?: string;
   filter?: Record<string, string>;
+  is_null?: string[];
   order?: { column: string; ascending?: boolean };
   limit?: number;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

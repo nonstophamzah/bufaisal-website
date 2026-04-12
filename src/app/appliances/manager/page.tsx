@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Loader2, RefreshCw, Package, CheckCircle, AlertTriangle, Wrench,
   Trash2, Truck, ChevronDown, ChevronUp, Check, X, Pencil, Clock,
-  Save, Search, Download, Undo2,
+  Save, Search, Download, Undo2, MapPin, AlertCircle,
 } from 'lucide-react';
 import { getItems, updateItem, bulkUpdateItems } from '@/lib/appliance-api';
 
@@ -15,6 +15,8 @@ interface Item {
   product_type: string | null;
   brand: string | null;
   status: string | null;
+  condition: string | null;
+  location_status: string | null;
   problems: string[] | null;
   shop: string | null;
   photo_url: string | null;
@@ -31,7 +33,7 @@ interface Item {
 }
 
 const SHOPS_F = ['All', 'A', 'B', 'C', 'D', 'E'];
-const STATUSES_F = ['All', 'Working', 'Not Working', 'Pending Scrap', 'Repaired', 'Delivered'];
+const STATUSES_F = ['All', 'Working', 'Not Working', 'Pending Scrap', 'Repaired', 'In Transit', 'At Jurf', 'Delivered'];
 const DATES_F = ['All Time', 'Today', 'This Week', 'This Month'];
 const PRODUCTS = ['Fridge', 'Washer', 'Oven', 'Microwave', 'AC / Cooler', 'Other'];
 const BRANDS = ['Samsung', 'LG', 'Bosch', 'Whirlpool', 'Midea', 'Other'];
@@ -39,9 +41,17 @@ const ITEM_STATUSES = ['Working', 'Not Working', 'Scrap'];
 const PROBLEMS_LIST = ['No power', 'Not cooling', 'Leaking', 'Part missing', 'Other'];
 
 const SC: Record<string, string> = {
+  working: 'bg-green-500', not_working: 'bg-orange-500', pending_scrap: 'bg-red-500',
+  repaired: 'bg-blue-500', scrap: 'bg-red-600',
+  // Legacy fallbacks
   Working: 'bg-green-500', 'Not Working': 'bg-orange-500', 'Pending Scrap': 'bg-red-500',
   Repaired: 'bg-blue-500', Delivered: 'bg-gray-500', Scrap: 'bg-red-500',
 };
+
+function conditionLabel(c: string | null) {
+  if (!c) return 'Unknown';
+  return c.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+}
 
 function fmtDate(d: string | null) {
   if (!d) return '—';
@@ -122,7 +132,16 @@ export default function ManagerDashboard() {
   const filtered = (() => {
     let items = [...listItems];
     if (shopFilter !== 'All') items = items.filter((i) => i.shop === shopFilter);
-    if (statusFilter !== 'All') items = items.filter((i) => i.status === statusFilter);
+    const conditionFilterMap: Record<string, string> = {
+      Working: 'working', 'Not Working': 'not_working', 'Pending Scrap': 'pending_scrap', Repaired: 'repaired',
+    };
+    if (statusFilter === 'In Transit') items = items.filter((i) => i.location_status === 'sent_to_jurf');
+    else if (statusFilter === 'At Jurf') items = items.filter((i) => i.location_status === 'at_jurf');
+    else if (statusFilter === 'Delivered') items = items.filter((i) => i.location_status === 'delivered');
+    else if (statusFilter !== 'All') {
+      const cond = conditionFilterMap[statusFilter];
+      if (cond) items = items.filter((i) => i.condition === cond);
+    }
     if (dateFilter !== 'All Time') {
       const now = new Date();
       let cutoff: Date;
@@ -134,15 +153,31 @@ export default function ManagerDashboard() {
     return items;
   })();
 
+  // Overdue = sent_to_jurf more than 24h ago
+  const overdueItems = approved.filter((i) => {
+    if (i.location_status !== 'sent_to_jurf' || !i.date_sent_to_jurf) return false;
+    return (Date.now() - new Date(i.date_sent_to_jurf).getTime()) > 24 * 60 * 60 * 1000;
+  });
+
+  // Items by shop (at_shop only)
+  const shopCounts: Record<string, number> = {};
+  for (const item of approved) {
+    if (item.location_status === 'at_shop' && item.shop) {
+      shopCounts[item.shop] = (shopCounts[item.shop] || 0) + 1;
+    }
+  }
+
   const counts = {
     pending: pending.length,
     total: approved.length,
-    working: approved.filter((i) => i.status === 'Working').length,
-    notWorking: approved.filter((i) => i.status === 'Not Working').length,
-    atJurf: approved.filter((i) => i.needs_jurf && i.date_sent_to_jurf).length,
-    scrap: approved.filter((i) => i.status === 'Pending Scrap' || i.status === 'Scrap').length,
-    repaired: approved.filter((i) => i.status === 'Repaired').length,
-    delivered: approved.filter((i) => i.status === 'Delivered').length,
+    working: approved.filter((i) => i.condition === 'working').length,
+    notWorking: approved.filter((i) => i.condition === 'not_working').length,
+    inTransit: approved.filter((i) => i.location_status === 'sent_to_jurf').length,
+    atJurf: approved.filter((i) => i.location_status === 'at_jurf').length,
+    scrap: approved.filter((i) => i.condition === 'pending_scrap' || i.condition === 'scrap').length,
+    repaired: approved.filter((i) => i.condition === 'repaired').length,
+    delivered: approved.filter((i) => i.location_status === 'delivered').length,
+    overdue: overdueItems.length,
   };
 
   // Actions
@@ -187,7 +222,10 @@ export default function ManagerDashboard() {
   };
 
   const openEdit = (item: Item) => {
-    setEditForm({ product_type: item.product_type || '', brand: item.brand || '', status: item.status || '', problems: item.problems || [], shop: item.shop || '', barcode: item.barcode });
+    // Map condition back to user-facing label for edit form
+    const condToLabel: Record<string, string> = { working: 'Working', not_working: 'Not Working', scrap: 'Scrap', pending_scrap: 'Not Working', repaired: 'Working' };
+    const label = condToLabel[item.condition || ''] || item.status || '';
+    setEditForm({ product_type: item.product_type || '', brand: item.brand || '', status: label, problems: item.problems || [], shop: item.shop || '', barcode: item.barcode });
     setEditItem(item);
   };
 
@@ -195,8 +233,10 @@ export default function ManagerDashboard() {
     if (!editItem) return;
     setEditSaving(true);
     try {
+      const conditionMap: Record<string, string> = { Working: 'working', 'Not Working': 'not_working', Scrap: 'scrap' };
       const result = await updateItem(editItem.id, {
         product_type: editForm.product_type, brand: editForm.brand, status: editForm.status,
+        condition: conditionMap[editForm.status] || editForm.status.toLowerCase().replace(/ /g, '_'),
         problems: editForm.status === 'Not Working' ? editForm.problems : [],
         shop: editForm.shop, barcode: editForm.barcode, needs_jurf: editForm.status === 'Not Working',
       });
@@ -223,10 +263,11 @@ export default function ManagerDashboard() {
 
   // Export CSV
   const exportCSV = () => {
-    const headers = ['barcode', 'product_type', 'brand', 'status', 'shop', 'date_received', 'approval_status', 'problems'];
+    const headers = ['barcode', 'product_type', 'brand', 'condition', 'location_status', 'status', 'shop', 'date_received', 'date_sent_to_jurf', 'approval_status', 'problems'];
     const rows = filtered.map((i) => [
-      i.barcode, i.product_type || '', i.brand || '', i.status || '', i.shop || '',
-      i.date_received || '', i.approval_status || '', (i.problems || []).join('; '),
+      i.barcode, i.product_type || '', i.brand || '', i.condition || '', i.location_status || '',
+      i.status || '', i.shop || '', i.date_received || '', i.date_sent_to_jurf || '',
+      i.approval_status || '', (i.problems || []).join('; '),
     ]);
     const csv = [headers.join(','), ...rows.map((r) => r.map((c) => `"${c}"`).join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -254,7 +295,10 @@ export default function ManagerDashboard() {
             <p className="font-bold text-sm truncate">{item.product_type || 'Unknown'} {item.brand ? `— ${item.brand}` : ''}</p>
             <p className="text-xs text-gray-500 truncate">{item.barcode}</p>
             <div className="flex items-center gap-2 mt-1">
-              <span className={`text-[10px] font-bold text-white px-1.5 py-0.5 rounded ${SC[item.status || ''] || 'bg-gray-400'}`}>{item.status}</span>
+              <span className={`text-[10px] font-bold text-white px-1.5 py-0.5 rounded ${SC[item.condition || ''] || 'bg-gray-400'}`}>{conditionLabel(item.condition)}</span>
+              {item.location_status && item.location_status !== 'at_shop' && (
+                <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">{conditionLabel(item.location_status)}</span>
+              )}
               {item.shop && <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">Shop {item.shop}</span>}
               <span className="text-[10px] text-gray-400 ml-auto">{fmtDate(item.date_received || item.created_at)}</span>
             </div>
@@ -265,7 +309,8 @@ export default function ManagerDashboard() {
           <div className="border-t border-gray-100 px-3 py-3 bg-gray-50 space-y-1.5 text-sm">
             {[
               ['Barcode', item.barcode], ['Product', item.product_type], ['Brand', item.brand],
-              ['Status', item.status], ['Problems', item.problems?.join(', ')],
+              ['Condition', conditionLabel(item.condition)], ['Location', conditionLabel(item.location_status)],
+              ['Problems', item.problems?.join(', ')],
               ['Shop', item.shop ? `Shop ${item.shop}` : null], ['Needs Jurf', item.needs_jurf ? 'Yes' : 'No'],
               ['Date Received', fmtDate(item.date_received)], ['Sent to Jurf', fmtDate(item.date_sent_to_jurf)],
               ['Tested By', item.tested_by], ['Repair Notes', item.repair_notes],
@@ -354,7 +399,7 @@ export default function ManagerDashboard() {
                     <p className="font-bold text-sm truncate">{item.product_type} {item.brand ? `— ${item.brand}` : ''}</p>
                     <p className="text-xs text-gray-500">{item.barcode} &bull; Shop {item.shop} &bull; {fmtDate(item.date_received || item.created_at)}</p>
                     <div className="flex items-center gap-1.5 mt-1">
-                      <span className={`text-[10px] font-bold text-white px-1.5 py-0.5 rounded ${SC[item.status || ''] || 'bg-gray-400'}`}>{item.status}</span>
+                      <span className={`text-[10px] font-bold text-white px-1.5 py-0.5 rounded ${SC[item.condition || ''] || 'bg-gray-400'}`}>{conditionLabel(item.condition)}</span>
                       {item.problems && item.problems.length > 0 && <span className="text-[10px] text-gray-500">{item.problems.join(', ')}</span>}
                     </div>
                   </div>
@@ -379,6 +424,17 @@ export default function ManagerDashboard() {
         </div>
       )}
 
+      {/* Overdue alert */}
+      {counts.overdue > 0 && (
+        <div className="mx-4 mt-4 p-4 bg-red-50 border-2 border-red-300 rounded-xl flex items-center gap-3">
+          <AlertCircle size={24} className="text-red-500 flex-shrink-0" />
+          <div>
+            <p className="font-bold text-red-700">{counts.overdue} OVERDUE TRANSFER{counts.overdue > 1 ? 'S' : ''}</p>
+            <p className="text-xs text-red-500">Items sent to Jurf over 24 hours ago and not yet received</p>
+          </div>
+        </div>
+      )}
+
       {/* Count cards */}
       <div className="overflow-x-auto hide-scrollbar px-4 py-4">
         <div className="flex gap-2 min-w-max">
@@ -387,7 +443,8 @@ export default function ManagerDashboard() {
             { label: 'Total', value: counts.total, icon: Package, color: 'bg-gray-100 text-black' },
             { label: 'Working', value: counts.working, icon: CheckCircle, color: 'bg-green-50 text-green-700' },
             { label: 'Not Working', value: counts.notWorking, icon: AlertTriangle, color: 'bg-orange-50 text-orange-700' },
-            { label: 'At Jurf (sent)', value: counts.atJurf, icon: Wrench, color: 'bg-blue-50 text-blue-700' },
+            { label: 'In Transit', value: counts.inTransit, icon: Truck, color: counts.overdue > 0 ? 'bg-red-50 text-red-700 ring-2 ring-red-300' : 'bg-yellow-50 text-yellow-700' },
+            { label: 'At Jurf', value: counts.atJurf, icon: Wrench, color: 'bg-blue-50 text-blue-700' },
             { label: 'Scrap', value: counts.scrap, icon: Trash2, color: 'bg-red-50 text-red-700' },
             { label: 'Repaired', value: counts.repaired, icon: CheckCircle, color: 'bg-blue-50 text-blue-700' },
             { label: 'Delivered', value: counts.delivered, icon: Truck, color: 'bg-gray-100 text-gray-700' },
@@ -398,6 +455,24 @@ export default function ManagerDashboard() {
           ); })}
         </div>
       </div>
+
+      {/* Items by Shop breakdown */}
+      {Object.keys(shopCounts).length > 0 && (
+        <div className="mx-4 mb-4 p-3 bg-gray-50 rounded-xl border border-gray-200">
+          <div className="flex items-center gap-2 mb-2">
+            <MapPin size={16} className="text-gray-500" />
+            <p className="font-bold text-sm text-gray-700">Items at Shop</p>
+          </div>
+          <div className="flex gap-3">
+            {['A', 'B', 'C', 'D', 'E'].map((s) => (
+              <div key={s} className="text-center">
+                <p className="font-heading text-xl">{shopCounts[s] || 0}</p>
+                <p className="text-xs text-gray-500">Shop {s}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Tab: Approved / Rejected */}
       <div className="flex gap-2 px-4 mb-2">

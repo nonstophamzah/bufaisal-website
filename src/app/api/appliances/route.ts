@@ -53,6 +53,11 @@ export async function POST(request: NextRequest) {
           query = query.eq(key, val as string);
         }
       }
+      if (body.is_null) {
+        for (const col of body.is_null as string[]) {
+          query = query.is(col, null);
+        }
+      }
       if (body.order) {
         query = query.order(body.order.column, { ascending: body.order.ascending ?? false });
       }
