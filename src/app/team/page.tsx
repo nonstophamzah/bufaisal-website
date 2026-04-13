@@ -3,8 +3,8 @@
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { Upload, Sparkles, Loader2, LogOut, Camera, ArrowLeft, Check } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { CATEGORIES } from '@/lib/constants';
+import { insertItem } from '@/lib/admin-api';
 
 const SHOP_LABELS = ['A', 'B', 'C', 'D', 'E'] as const;
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Brand New'] as const;
@@ -181,6 +181,7 @@ export default function TeamPage() {
           body: JSON.stringify({
             imageBase64: img.base64,
             mimeType: img.mimeType,
+            action: 'item_analysis',
           }),
         });
         const data = await res.json();
@@ -200,12 +201,7 @@ export default function TeamPage() {
           body: JSON.stringify({
             imageBase64: img.base64,
             mimeType: img.mimeType,
-            prompt: `Read the barcode label in this image. Extract any barcode number, item name, brand name, or model number visible on the label.
-Return a JSON object with these fields:
-- barcode: the barcode number/text (string of digits or alphanumeric code)
-- item_name: product name if visible
-- brand: brand name if visible
-Return ONLY the JSON object, no other text.`,
+            action: 'barcode_scan',
           }),
         });
         const data = await res.json();
@@ -256,7 +252,7 @@ Return ONLY the JSON object, no other text.`,
     setError('');
     setUploading(true);
 
-    const { error: dbError } = await supabase.from('shop_items').insert({
+    const result = await insertItem({
       item_name: form.item_name,
       brand: form.brand || null,
       product_type: form.product_type || null,
@@ -278,8 +274,8 @@ Return ONLY the JSON object, no other text.`,
       seo_description: form.seo_description || null,
     });
 
-    if (dbError) {
-      setError(dbError.message);
+    if (result.error) {
+      setError(result.error);
     } else {
       setSuccess(true);
     }
