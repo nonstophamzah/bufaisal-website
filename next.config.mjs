@@ -9,13 +9,7 @@ const nextConfig = {
     ],
   },
   async redirects() {
-    return [
-      {
-        source: '/shop',
-        destination: '/',
-        permanent: true,
-      },
-    ];
+    return [];
   },
   async headers() {
     return [

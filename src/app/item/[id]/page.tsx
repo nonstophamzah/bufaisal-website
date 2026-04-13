@@ -44,6 +44,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       type: 'website',
       url: `https://bufaisal.ae/item/${id}`,
     },
+    alternates: {
+      canonical: `/item/${id}`,
+    },
   };
 }
 
