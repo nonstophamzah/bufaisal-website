@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { imageBase64, mimeType, prompt: customPrompt } = await request.json();
+    const { imageBase64, mimeType, action } = await request.json();
 
     if (!imageBase64 || !mimeType) {
       return NextResponse.json(
@@ -51,7 +51,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const defaultPrompt = `Analyze this image of a used item for sale in a second-hand store. Return a JSON object with these fields:
+    // All prompts defined server-side — clients select by action name
+    const PROMPTS: Record<string, string> = {
+      item_analysis: `Analyze this image of a used item for sale in a second-hand store. Return a JSON object with these fields:
 - item_name: a clear, concise name for this item
 - brand: the brand if visible, or "Unknown"
 - description: a short 1-2 sentence description of the item's condition and features
@@ -60,7 +62,20 @@ export async function POST(request: NextRequest) {
 - seo_title: a short SEO-friendly title for this product listing (under 60 characters)
 - seo_description: a 1-2 sentence SEO meta description for this listing
 
-Return ONLY the JSON object, no other text.`;
+Return ONLY the JSON object, no other text.`,
+
+      barcode_scan: `Read the barcode number from this label photo. Return JSON only: {"barcode": "the number or null"}`,
+
+      appliance_analysis: `Analyze this image of a used appliance. Return a JSON object with these fields:
+- product_type: one of these exact values: "Refrigerator", "Washing Machine", "Dishwasher", "Freezer", "Microwave", "Gas Stove", "Electric Stove", "Clothes Dryer", "Water Cooler", "Oven", "Air Water Cooler", "Other"
+- brand: the brand if visible, or "Unknown"
+- condition: one of these exact values: "working", "not_working", "scrap"
+- problems: array of visible problems from: "No power", "Not cooling", "Leaking", "Part missing", "Other" — empty array if none visible
+
+Return ONLY the JSON object, no other text.`,
+    };
+
+    const prompt = PROMPTS[action || 'item_analysis'] || PROMPTS.item_analysis;
 
     // DO NOT CHANGE THIS MODEL — paid Tier 1 account, gemini-2.5-flash-lite only
     const res = await fetch(
@@ -72,7 +87,7 @@ Return ONLY the JSON object, no other text.`;
           contents: [
             {
               parts: [
-                { text: customPrompt || defaultPrompt },
+                { text: prompt },
                 { inline_data: { mime_type: mimeType, data: imageBase64 } },
               ],
             },

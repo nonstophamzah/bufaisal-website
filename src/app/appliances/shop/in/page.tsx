@@ -83,7 +83,7 @@ export default function ShopInPage() {
         body: JSON.stringify({
           imageBase64: base64,
           mimeType: 'image/jpeg',
-          prompt: 'Read the barcode number from this label photo. Return JSON only: {"barcode": "the number or null"}',
+          action: 'barcode_scan',
         }),
       });
       const data = await resp.json();
