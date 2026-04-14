@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, Truck, Trash2, Lock, X, CheckSquare, Square } from 'lucide-react';
+import { ArrowLeft, Loader2, Truck, Trash2, Lock, X, CheckSquare, Square, Search } from 'lucide-react';
 import { getItems, bulkUpdateItems, checkManagerCode } from '@/lib/appliance-api';
 import { canonicalProductType, canonicalBrand } from '@/lib/appliance-catalog';
 import SuccessFlash from '../../components/SuccessFlash';
@@ -45,6 +45,11 @@ export default function ShopOutPage() {
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Barcode search
+  const [barcodeQuery, setBarcodeQuery] = useState('');
+  const [barcodeSearching, setBarcodeSearching] = useState(false);
+  const [barcodeError, setBarcodeError] = useState('');
+
   // Confirm modal
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -78,6 +83,8 @@ export default function ShopOutPage() {
 
   const handleShopSelect = (shop: string) => {
     setSelectedShop(shop);
+    setBarcodeQuery('');
+    setBarcodeError('');
     fetchItems(shop);
   };
 
@@ -94,6 +101,29 @@ export default function ShopOutPage() {
     if (selectedIds.size === items.length) setSelectedIds(new Set());
     else setSelectedIds(new Set(items.map((i) => i.id)));
   };
+
+  // ── Barcode search ──
+  const handleBarcodeSearch = useCallback(() => {
+    const q = barcodeQuery.trim();
+    if (!q) return;
+    setBarcodeSearching(true);
+    setBarcodeError('');
+
+    const found = items.find((i) => i.barcode === q);
+    if (found) {
+      setSelectedIds(new Set([found.id]));
+      setBarcodeError('');
+    } else {
+      setBarcodeError('Barcode not found');
+      setSelectedIds(new Set());
+    }
+    setBarcodeSearching(false);
+  }, [barcodeQuery, items]);
+
+  // Filter displayed items: if barcode search active, show only match
+  const displayItems = barcodeQuery.trim() && !barcodeError
+    ? items.filter((i) => i.barcode === barcodeQuery.trim())
+    : items;
 
   // ── Send to Jurf (batch) ──
   const handleSendToJurf = useCallback(async () => {
@@ -212,7 +242,39 @@ export default function ShopOutPage() {
         </button>
       </div>
       <h1 className="font-heading text-3xl mb-1">SHOP {selectedShop} — <span className="text-orange-500">ITEMS READY FOR JURF</span></h1>
-      <p className="text-gray-500 text-sm mb-6">{items.length} item{items.length !== 1 ? 's' : ''}</p>
+      <p className="text-gray-500 text-sm mb-4">{items.length} item{items.length !== 1 ? 's' : ''}</p>
+
+      {/* Barcode search */}
+      <div className="mb-4">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            inputMode="text"
+            value={barcodeQuery}
+            onChange={(e) => { setBarcodeQuery(e.target.value); setBarcodeError(''); }}
+            onKeyDown={(e) => e.key === 'Enter' && handleBarcodeSearch()}
+            placeholder="Type barcode to search..."
+            className="flex-1 px-4 py-3 text-sm border-2 border-gray-200 rounded-xl focus:outline-none focus:border-orange-400"
+          />
+          <button
+            onClick={handleBarcodeSearch}
+            disabled={!barcodeQuery.trim() || barcodeSearching}
+            className="px-4 py-3 rounded-xl bg-orange-500 text-white font-bold text-sm flex items-center gap-1.5 active:scale-95 disabled:opacity-40"
+          >
+            {barcodeSearching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+            SEARCH
+          </button>
+          {barcodeQuery.trim() && (
+            <button
+              onClick={() => { setBarcodeQuery(''); setBarcodeError(''); setSelectedIds(new Set()); }}
+              className="px-3 py-3 rounded-xl bg-gray-200 text-gray-500 font-bold text-sm active:scale-95"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+        {barcodeError && <p className="text-red-500 text-sm font-bold mt-2">{barcodeError}</p>}
+      </div>
 
       {/* Select all + count */}
       {items.length > 0 && (
@@ -232,11 +294,13 @@ export default function ShopOutPage() {
 
       {loading ? (
         <div className="flex justify-center py-10"><Loader2 size={28} className="animate-spin text-gray-400" /></div>
-      ) : items.length === 0 ? (
-        <p className="text-center text-gray-400 py-10">No items ready to send from Shop {selectedShop}</p>
+      ) : displayItems.length === 0 ? (
+        <p className="text-center text-gray-400 py-10">
+          {barcodeQuery.trim() ? 'Barcode not found in this shop' : `No items ready to send from Shop ${selectedShop}`}
+        </p>
       ) : (
         <div className="space-y-2">
-          {items.map((item) => {
+          {displayItems.map((item) => {
             const isSelected = selectedIds.has(item.id);
             return (
               <button
