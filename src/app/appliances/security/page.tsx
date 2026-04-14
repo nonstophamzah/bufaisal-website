@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Loader2, RefreshCw, CheckCircle, XCircle,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Search, X,
 } from 'lucide-react';
 import { getItems, updateItem } from '@/lib/appliance-api';
 import { canonicalProductType, canonicalBrand } from '@/lib/appliance-catalog';
@@ -49,6 +49,10 @@ export default function SecurityPage() {
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Barcode search
+  const [barcodeQuery, setBarcodeQuery] = useState('');
+  const [barcodeError, setBarcodeError] = useState('');
+
   // Confirm modal
   const [confirmAction, setConfirmAction] = useState<{ id: string; action: 'accept' | 'deny' } | null>(null);
 
@@ -82,6 +86,25 @@ export default function SecurityPage() {
     if (shop) fetchItems(shop);
     else setLoading(false);
   }, [router, fetchItems]);
+
+  // ── Barcode search ──
+  const handleBarcodeSearch = useCallback(() => {
+    const q = barcodeQuery.trim();
+    if (!q) return;
+    setBarcodeError('');
+
+    const found = items.find((i) => i.barcode === q);
+    if (found) {
+      setExpanded(found.id);
+      setBarcodeError('');
+    } else {
+      setBarcodeError('Barcode not found');
+    }
+  }, [barcodeQuery, items]);
+
+  const displayItems = barcodeQuery.trim() && !barcodeError
+    ? items.filter((i) => i.barcode === barcodeQuery.trim())
+    : items;
 
   const handleAccept = useCallback(async (itemId: string) => {
     setConfirmAction(null);
@@ -164,19 +187,55 @@ export default function SecurityPage() {
       </div>
 
       <h1 className="font-heading text-3xl mb-1">SECURITY — <span className="text-green-500">SHOP {myShop}</span></h1>
-      <p className="text-gray-500 text-sm mb-6">Hi {worker} &bull; {items.length} item{items.length !== 1 ? 's' : ''} pending</p>
+      <p className="text-gray-500 text-sm mb-4">Hi {worker} &bull; {items.length} item{items.length !== 1 ? 's' : ''} pending</p>
+
+      {/* Barcode search */}
+      <div className="mb-4">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            inputMode="text"
+            value={barcodeQuery}
+            onChange={(e) => { setBarcodeQuery(e.target.value); setBarcodeError(''); }}
+            onKeyDown={(e) => e.key === 'Enter' && handleBarcodeSearch()}
+            placeholder="Search by barcode..."
+            className="flex-1 px-4 py-3 text-sm border-2 border-gray-200 rounded-xl focus:outline-none focus:border-green-400"
+          />
+          <button
+            onClick={handleBarcodeSearch}
+            disabled={!barcodeQuery.trim()}
+            className="px-4 py-3 rounded-xl bg-green-500 text-white font-bold text-sm flex items-center gap-1.5 active:scale-95 disabled:opacity-40"
+          >
+            <Search size={16} />
+            SEARCH
+          </button>
+          {barcodeQuery.trim() && (
+            <button
+              onClick={() => { setBarcodeQuery(''); setBarcodeError(''); }}
+              className="px-3 py-3 rounded-xl bg-gray-200 text-gray-500 font-bold text-sm active:scale-95"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+        {barcodeError && <p className="text-red-500 text-sm font-bold mt-2">{barcodeError}</p>}
+      </div>
 
       {loading ? (
         <div className="flex justify-center py-10"><Loader2 size={28} className="animate-spin text-gray-400" /></div>
-      ) : items.length === 0 ? (
+      ) : displayItems.length === 0 ? (
         <div className="text-center py-10">
           <CheckCircle size={48} className="mx-auto text-gray-200 mb-3" />
-          <p className="text-gray-400 font-heading text-lg">No items to review</p>
-          <p className="text-gray-300 text-sm mt-1">All clear for Shop {myShop}</p>
+          <p className="text-gray-400 font-heading text-lg">
+            {barcodeQuery.trim() ? 'Barcode not found' : 'No items to review'}
+          </p>
+          <p className="text-gray-300 text-sm mt-1">
+            {barcodeQuery.trim() ? 'Try another barcode' : `All clear for Shop ${myShop}`}
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
-          {items.map((item) => {
+          {displayItems.map((item) => {
             const isExpanded = expanded === item.id;
             return (
               <div key={item.id} className="rounded-xl border-2 border-gray-200 bg-white overflow-hidden">

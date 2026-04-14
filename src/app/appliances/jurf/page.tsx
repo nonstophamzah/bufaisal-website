@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Loader2, RefreshCw, Wrench, PackageCheck, Truck,
-  Lock, ChevronDown, ChevronUp,
+  Lock, ChevronDown, ChevronUp, Search, X,
 } from 'lucide-react';
 import { getItems, updateItem } from '@/lib/appliance-api';
 import { canonicalProductType, canonicalBrand } from '@/lib/appliance-catalog';
@@ -56,6 +56,10 @@ export default function JurfPage() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Barcode search
+  const [barcodeQuery, setBarcodeQuery] = useState('');
+  const [barcodeError, setBarcodeError] = useState('');
 
   // Repair notes per item
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -180,6 +184,31 @@ export default function JurfPage() {
     fetchAll(worker);
   }, [worker, destShop, fetchAll]);
 
+  // ── Barcode search ──
+  const handleBarcodeSearch = useCallback(() => {
+    const q = barcodeQuery.trim();
+    if (!q) return;
+    setBarcodeError('');
+
+    // Search across all tabs
+    const inQueue = queueItems.find((i) => i.barcode === q);
+    if (inQueue) { setTab('queue'); setBarcodeError(''); return; }
+
+    const inRepairs = repairItems.find((i) => i.barcode === q);
+    if (inRepairs) { setTab('repairs'); setExpanded(inRepairs.id); setBarcodeError(''); return; }
+
+    const inSend = sendItems.find((i) => i.barcode === q);
+    if (inSend) { setTab('send'); setBarcodeError(''); return; }
+
+    setBarcodeError('Barcode not found');
+  }, [barcodeQuery, queueItems, repairItems, sendItems]);
+
+  // Filter items in current tab by barcode search
+  const q = barcodeQuery.trim();
+  const filteredQueue = q && !barcodeError ? queueItems.filter((i) => i.barcode === q) : queueItems;
+  const filteredRepairs = q && !barcodeError ? repairItems.filter((i) => i.barcode === q) : repairItems;
+  const filteredSend = q && !barcodeError ? sendItems.filter((i) => i.barcode === q) : sendItems;
+
   if (showSuccess) {
     return (
       <SuccessFlash
@@ -193,9 +222,9 @@ export default function JurfPage() {
     return <ErrorFlash message={errorMsg} onRetry={() => setErrorMsg('')} />;
   }
 
-  // Group queue items by shop
+  // Group queue items by shop (using filtered list)
   const queueByShop: Record<string, Item[]> = {};
-  for (const item of queueItems) {
+  for (const item of filteredQueue) {
     const s = item.shop || '?';
     if (!queueByShop[s]) queueByShop[s] = [];
     queueByShop[s].push(item);
@@ -216,6 +245,38 @@ export default function JurfPage() {
 
       <h1 className="font-heading text-3xl mb-1">JURF — <span className="text-blue-500">WORKSHOP</span></h1>
       <p className="text-gray-500 text-sm mb-4">Hi {worker}</p>
+
+      {/* Barcode search */}
+      <div className="mb-4">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            inputMode="text"
+            value={barcodeQuery}
+            onChange={(e) => { setBarcodeQuery(e.target.value); setBarcodeError(''); }}
+            onKeyDown={(e) => e.key === 'Enter' && handleBarcodeSearch()}
+            placeholder="Search by barcode..."
+            className="flex-1 px-4 py-3 text-sm border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-400"
+          />
+          <button
+            onClick={handleBarcodeSearch}
+            disabled={!barcodeQuery.trim()}
+            className="px-4 py-3 rounded-xl bg-blue-500 text-white font-bold text-sm flex items-center gap-1.5 active:scale-95 disabled:opacity-40"
+          >
+            <Search size={16} />
+            SEARCH
+          </button>
+          {barcodeQuery.trim() && (
+            <button
+              onClick={() => { setBarcodeQuery(''); setBarcodeError(''); }}
+              className="px-3 py-3 rounded-xl bg-gray-200 text-gray-500 font-bold text-sm active:scale-95"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+        {barcodeError && <p className="text-red-500 text-sm font-bold mt-2">{barcodeError}</p>}
+      </div>
 
       {/* Tabs */}
       <div className="flex bg-gray-200 rounded-xl p-1 mb-6">
@@ -246,11 +307,15 @@ export default function JurfPage() {
       ) : tab === 'queue' ? (
         /* ═══ QUEUE TAB ═══ */
         <>
-          {queueItems.length === 0 ? (
+          {filteredQueue.length === 0 ? (
             <div className="text-center py-10">
               <PackageCheck size={48} className="mx-auto text-gray-200 mb-3" />
-              <p className="text-gray-400 font-heading text-lg">No items in queue</p>
-              <p className="text-gray-300 text-sm mt-1">All items have been claimed</p>
+              <p className="text-gray-400 font-heading text-lg">
+                {barcodeQuery.trim() ? 'Barcode not found in queue' : 'No items in queue'}
+              </p>
+              <p className="text-gray-300 text-sm mt-1">
+                {barcodeQuery.trim() ? 'Try another barcode or check other tabs' : 'All items have been claimed'}
+              </p>
             </div>
           ) : (
             shopGroups.map(([shop, shopItems]) => (
@@ -328,15 +393,19 @@ export default function JurfPage() {
       ) : tab === 'repairs' ? (
         /* ═══ MY REPAIRS TAB ═══ */
         <>
-          {repairItems.length === 0 ? (
+          {filteredRepairs.length === 0 ? (
             <div className="text-center py-10">
               <Wrench size={48} className="mx-auto text-gray-200 mb-3" />
-              <p className="text-gray-400 font-heading text-lg">No active repairs</p>
-              <p className="text-gray-300 text-sm mt-1">Claim items from the queue to start</p>
+              <p className="text-gray-400 font-heading text-lg">
+                {barcodeQuery.trim() ? 'Barcode not found in repairs' : 'No active repairs'}
+              </p>
+              <p className="text-gray-300 text-sm mt-1">
+                {barcodeQuery.trim() ? 'Try another barcode or check other tabs' : 'Claim items from the queue to start'}
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
-              {repairItems.map((item) => {
+              {filteredRepairs.map((item) => {
                 const isExpanded = expanded === item.id;
                 return (
                   <div key={item.id} className="rounded-xl border-2 border-blue-200 bg-white overflow-hidden">
@@ -397,15 +466,19 @@ export default function JurfPage() {
       ) : (
         /* ═══ SEND TO SHOP TAB ═══ */
         <>
-          {sendItems.length === 0 ? (
+          {filteredSend.length === 0 ? (
             <div className="text-center py-10">
               <Truck size={48} className="mx-auto text-gray-200 mb-3" />
-              <p className="text-gray-400 font-heading text-lg">No items to send</p>
-              <p className="text-gray-300 text-sm mt-1">Complete repairs first</p>
+              <p className="text-gray-400 font-heading text-lg">
+                {barcodeQuery.trim() ? 'Barcode not found in send queue' : 'No items to send'}
+              </p>
+              <p className="text-gray-300 text-sm mt-1">
+                {barcodeQuery.trim() ? 'Try another barcode or check other tabs' : 'Complete repairs first'}
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
-              {sendItems.map((item) => (
+              {filteredSend.map((item) => (
                 <div key={item.id} className="rounded-xl border-2 border-green-200 bg-white p-3">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
