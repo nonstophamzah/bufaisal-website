@@ -42,7 +42,7 @@ export default function SelectWorkerPage() {
   const filtered = workers.filter((w) => w.tab === tab);
 
   return (
-    <div className="px-4 pt-4 pb-8 min-h-[calc(100vh-56px)] flex flex-col">
+    <div className="px-4 pt-4 pb-24 min-h-[calc(100vh-56px)] flex flex-col">
       {/* Tabs */}
       <div className="flex bg-gray-200 rounded-xl p-1 mb-6">
         {TABS.map((t) => (

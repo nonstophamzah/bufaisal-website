@@ -342,7 +342,7 @@ export default function ManagerDashboard() {
   };
 
   return (
-    <div className="pb-8">
+    <div className="pb-24 max-w-full overflow-x-hidden">
       {/* Toast */}
       {toast && (
         <div className={`fixed top-16 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-xl text-sm font-bold shadow-lg ${toast.type === 'ok' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
@@ -419,9 +419,9 @@ export default function ManagerDashboard() {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3">
-                  <button onClick={() => approveItem(item.id)} className="flex-1 py-3 rounded-xl bg-green-500 text-white font-bold text-sm flex items-center justify-center gap-1 active:scale-95"><Check size={16} /> APPROVE</button>
-                  <button onClick={() => openEdit(item)} className="py-3 px-4 rounded-xl bg-yellow text-black font-bold text-sm flex items-center justify-center gap-1 active:scale-95"><Pencil size={16} /> EDIT</button>
-                  <button onClick={() => setRejectConfirm(item.id)} className="py-3 px-4 rounded-xl bg-red-500 text-white font-bold text-sm flex items-center justify-center gap-1 active:scale-95"><X size={16} /></button>
+                  <button onClick={() => approveItem(item.id)} className="flex-1 py-3 rounded-xl bg-green-500 text-white font-bold text-sm flex items-center justify-center gap-1 active:scale-95 min-h-[48px]"><Check size={16} /> APPROVE</button>
+                  <button onClick={() => openEdit(item)} className="py-3 px-4 rounded-xl bg-yellow text-black font-bold text-sm flex items-center justify-center gap-1 active:scale-95 min-h-[48px]"><Pencil size={16} /> EDIT</button>
+                  <button onClick={() => setRejectConfirm(item.id)} className="py-3 px-4 rounded-xl bg-red-500 text-white font-bold text-sm flex items-center justify-center gap-1 active:scale-95 min-h-[48px]"><X size={16} /></button>
                 </div>
               </div>
             ))}
@@ -490,10 +490,10 @@ export default function ManagerDashboard() {
 
       {/* Tab: Approved / Rejected */}
       <div className="flex gap-2 px-4 mb-2">
-        <button onClick={() => { setListTab('approved'); setVisibleCount(20); }} className={`px-4 py-2 rounded-lg text-sm font-bold ${listTab === 'approved' ? 'bg-black text-yellow' : 'bg-gray-200 text-gray-600'}`}>
+        <button onClick={() => { setListTab('approved'); setVisibleCount(20); }} className={`px-4 py-2 rounded-lg text-sm font-bold min-h-[44px] ${listTab === 'approved' ? 'bg-black text-yellow' : 'bg-gray-200 text-gray-600'}`}>
           APPROVED ({approved.length})
         </button>
-        <button onClick={() => { setListTab('rejected'); setVisibleCount(20); }} className={`px-4 py-2 rounded-lg text-sm font-bold ${listTab === 'rejected' ? 'bg-black text-yellow' : 'bg-gray-200 text-gray-600'}`}>
+        <button onClick={() => { setListTab('rejected'); setVisibleCount(20); }} className={`px-4 py-2 rounded-lg text-sm font-bold min-h-[44px] ${listTab === 'rejected' ? 'bg-black text-yellow' : 'bg-gray-200 text-gray-600'}`}>
           REJECTED ({rejected.length})
         </button>
       </div>
@@ -501,17 +501,17 @@ export default function ManagerDashboard() {
       {/* Filters */}
       <div className="bg-gray-50 border-b border-gray-200 px-4 py-3 space-y-2">
         <div className="flex gap-1.5 overflow-x-auto hide-scrollbar">
-          {SHOPS_F.map((s) => (<button key={s} onClick={() => setShopFilter(s)} className={`px-3 py-2 rounded-lg text-sm font-bold whitespace-nowrap active:scale-95 ${shopFilter === s ? 'bg-black text-yellow' : 'bg-white text-gray-600 border border-gray-200'}`}>{s === 'All' ? 'All Shops' : `Shop ${s}`}</button>))}
+          {SHOPS_F.map((s) => (<button key={s} onClick={() => setShopFilter(s)} className={`px-3 py-2 rounded-lg text-sm font-bold whitespace-nowrap active:scale-95 min-h-[44px] ${shopFilter === s ? 'bg-black text-yellow' : 'bg-white text-gray-600 border border-gray-200'}`}>{s === 'All' ? 'All Shops' : `Shop ${s}`}</button>))}
         </div>
         <div className="flex gap-1.5 overflow-x-auto hide-scrollbar">
-          {STATUSES_F.map((s) => (<button key={s} onClick={() => setStatusFilter(s)} className={`px-3 py-2 rounded-lg text-sm font-bold whitespace-nowrap active:scale-95 ${statusFilter === s ? 'bg-black text-yellow' : 'bg-white text-gray-600 border border-gray-200'}`}>{s}</button>))}
+          {STATUSES_F.map((s) => (<button key={s} onClick={() => setStatusFilter(s)} className={`px-3 py-2 rounded-lg text-sm font-bold whitespace-nowrap active:scale-95 min-h-[44px] ${statusFilter === s ? 'bg-black text-yellow' : 'bg-white text-gray-600 border border-gray-200'}`}>{s}</button>))}
         </div>
         <div className="flex gap-1.5 overflow-x-auto hide-scrollbar">
-          {DATES_F.map((d) => (<button key={d} onClick={() => setDateFilter(d)} className={`px-3 py-2 rounded-lg text-sm font-bold whitespace-nowrap active:scale-95 ${dateFilter === d ? 'bg-black text-yellow' : 'bg-white text-gray-600 border border-gray-200'}`}>{d}</button>))}
-          <button onClick={() => fetchItems(true)} disabled={refreshing} className="px-3 py-2 rounded-lg bg-white border border-gray-200 text-gray-500 active:scale-95" aria-label="Refresh">
+          {DATES_F.map((d) => (<button key={d} onClick={() => setDateFilter(d)} className={`px-3 py-2 rounded-lg text-sm font-bold whitespace-nowrap active:scale-95 min-h-[44px] ${dateFilter === d ? 'bg-black text-yellow' : 'bg-white text-gray-600 border border-gray-200'}`}>{d}</button>))}
+          <button onClick={() => fetchItems(true)} disabled={refreshing} className="px-3 py-2 rounded-lg bg-white border border-gray-200 text-gray-500 active:scale-95 min-h-[44px]" aria-label="Refresh">
             <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
           </button>
-          <button onClick={exportCSV} className="px-3 py-2 rounded-lg bg-white border border-gray-200 text-gray-500 active:scale-95 flex items-center gap-1 text-sm font-bold" aria-label="Export">
+          <button onClick={exportCSV} className="px-3 py-2 rounded-lg bg-white border border-gray-200 text-gray-500 active:scale-95 flex items-center gap-1 text-sm font-bold min-h-[44px]" aria-label="Export">
             <Download size={14} /> CSV
           </button>
         </div>
@@ -531,7 +531,7 @@ export default function ManagerDashboard() {
           {filtered.slice(0, visibleCount).map((item) =>
             listTab === 'rejected'
               ? renderItemCard(item, (
-                  <button onClick={() => undoReject(item.id)} className="w-full py-3 rounded-xl bg-orange-500 text-white font-bold text-sm flex items-center justify-center gap-1 active:scale-95">
+                  <button onClick={() => undoReject(item.id)} className="w-full py-3 rounded-xl bg-orange-500 text-white font-bold text-sm flex items-center justify-center gap-1 active:scale-95 min-h-[48px]">
                     <Undo2 size={16} /> UNDO — MOVE TO PENDING
                   </button>
                 ))
@@ -561,8 +561,8 @@ export default function ManagerDashboard() {
 
       {/* Edit modal */}
       {editItem && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center">
-          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-5">
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center px-0 sm:px-6">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-heading text-2xl">EDIT ITEM</h2>
               <button onClick={() => setEditItem(null)} className="text-gray-400 p-1"><X size={24} /></button>
@@ -600,11 +600,11 @@ export default function ManagerDashboard() {
             {editForm.status === 'Not Working' && (<>
               <p className="font-bold text-sm mb-2">PROBLEMS</p>
               <div className="flex flex-wrap gap-2 mb-4">
-                {PROBLEMS_LIST.map((p) => (<button key={p} onClick={() => toggleEditProblem(p)} className={`py-2 px-3 rounded-xl text-sm font-bold active:scale-95 ${editForm.problems.includes(p) ? 'bg-orange-500 text-white' : 'bg-gray-200'}`}>{p}</button>))}
+                {PROBLEMS_LIST.map((p) => (<button key={p} onClick={() => toggleEditProblem(p)} className={`py-2.5 px-3 rounded-xl text-sm font-bold active:scale-95 min-h-[44px] ${editForm.problems.includes(p) ? 'bg-orange-500 text-white' : 'bg-gray-200'}`}>{p}</button>))}
               </div>
             </>)}
             <p className="font-bold text-sm mb-2">BARCODE</p>
-            <input type="text" value={editForm.barcode} onChange={(e) => setEditForm((f) => ({...f, barcode: e.target.value}))} className="w-full px-4 py-3 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow mb-4" />
+            <input type="text" value={editForm.barcode} onChange={(e) => setEditForm((f) => ({...f, barcode: e.target.value}))} className="w-full px-4 py-3 text-base border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow mb-4" />
             <button onClick={saveEdit} disabled={editSaving} className="w-full py-4 rounded-2xl bg-yellow text-black font-heading text-2xl flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50">
               {editSaving ? <Loader2 size={22} className="animate-spin" /> : <Save size={22} />} SAVE
             </button>

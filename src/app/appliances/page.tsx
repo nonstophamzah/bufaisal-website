@@ -30,7 +30,7 @@ export default function AppliancesCodePage() {
   // After entry code: show two paths
   if (authenticated) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-4 min-h-[calc(100vh-56px)] gap-6">
+      <div className="flex-1 flex flex-col items-center justify-center px-4 min-h-[calc(100vh-56px)] gap-6 pb-16">
         <h1 className="font-heading text-3xl mb-4">SELECT PORTAL</h1>
 
         <button
@@ -55,7 +55,7 @@ export default function AppliancesCodePage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-4 min-h-[calc(100vh-56px)]">
+    <div className="flex-1 flex flex-col items-center justify-center px-4 min-h-[calc(100vh-56px)] pb-16">
       <h1 className="font-heading text-4xl mb-8">ENTER ACCESS CODE</h1>
 
       <input

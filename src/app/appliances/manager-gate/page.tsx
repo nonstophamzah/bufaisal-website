@@ -27,10 +27,10 @@ export default function ManagerGatePage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-4 min-h-[calc(100vh-56px)]">
+    <div className="flex-1 flex flex-col items-center justify-center px-4 min-h-[calc(100vh-56px)] pb-16">
       <button
         onClick={() => router.push('/appliances')}
-        className="absolute top-20 left-4 flex items-center gap-1 text-gray-500"
+        className="absolute top-20 left-4 flex items-center gap-1 text-gray-500 min-h-[48px]"
       >
         <ArrowLeft size={20} /> Back
       </button>

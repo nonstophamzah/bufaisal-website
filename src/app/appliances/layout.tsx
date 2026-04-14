@@ -13,7 +13,7 @@ export default function AppliancesLayout({ children }: { children: React.ReactNo
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 font-body">
+    <div className="min-h-screen bg-gray-50 font-body overflow-x-hidden">
       <header className="bg-black text-white flex items-center justify-between px-4 h-14">
         <span className="font-heading text-xl text-yellow tracking-wide">BU FAISAL TRACKER</span>
         <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-white" aria-label="Logout">

@@ -66,7 +66,7 @@ export default function CameraCapture({
           <img src={preview} alt="Preview" className="max-h-[60vh] rounded-2xl" />
         </div>
         {error && <p className="text-red-400 text-center text-sm mb-2">{error}</p>}
-        <div className="flex gap-3 p-4 pb-8">
+        <div className="flex gap-3 p-4 pb-12">
           <button
             onClick={() => { setPreview(null); setFile(null); inputRef.current?.click(); }}
             className="flex-1 py-4 rounded-2xl bg-gray-700 text-white font-bold text-lg flex items-center justify-center gap-2"
@@ -97,7 +97,7 @@ export default function CameraCapture({
         <CameraIcon size={64} className="text-black" />
       </button>
       <p className="text-gray-500 text-sm mb-4">Tap to open camera</p>
-      <button onClick={onBack} className="text-gray-500 text-sm">Cancel</button>
+      <button onClick={onBack} className="text-gray-500 text-base py-3 px-6 min-h-[48px]">Cancel</button>
       {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
       <input ref={inputRef} type="file" accept="image/*" capture="environment" onChange={handleCapture} className="hidden" />
     </div>

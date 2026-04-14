@@ -232,13 +232,13 @@ export default function JurfPage() {
   const shopGroups = Object.entries(queueByShop).sort(([a], [b]) => a.localeCompare(b));
 
   return (
-    <div className="px-4 pt-4 pb-8 min-h-[calc(100vh-56px)]">
+    <div className="px-4 pt-4 pb-24 min-h-[calc(100vh-56px)] max-w-full overflow-x-hidden">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <button onClick={() => router.push('/appliances/select')} className="flex items-center gap-1 text-gray-500">
+        <button onClick={() => router.push('/appliances/select')} className="flex items-center gap-1 text-gray-500 min-h-[48px]">
           <ArrowLeft size={20} /> Back
         </button>
-        <button onClick={() => fetchAll(worker)} className="flex items-center gap-1 text-gray-500 active:opacity-50">
+        <button onClick={() => fetchAll(worker)} className="flex items-center gap-1 text-gray-500 active:opacity-50 min-h-[48px]">
           <RefreshCw size={18} /> Refresh
         </button>
       </div>
@@ -256,12 +256,12 @@ export default function JurfPage() {
             onChange={(e) => { setBarcodeQuery(e.target.value); setBarcodeError(''); }}
             onKeyDown={(e) => e.key === 'Enter' && handleBarcodeSearch()}
             placeholder="Search by barcode..."
-            className="flex-1 px-4 py-3 text-sm border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-400"
+            className="flex-1 px-4 py-3 text-base border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-400"
           />
           <button
             onClick={handleBarcodeSearch}
             disabled={!barcodeQuery.trim()}
-            className="px-4 py-3 rounded-xl bg-blue-500 text-white font-bold text-sm flex items-center gap-1.5 active:scale-95 disabled:opacity-40"
+            className="px-4 py-3 rounded-xl bg-blue-500 text-white font-bold text-sm flex items-center gap-1.5 active:scale-95 disabled:opacity-40 min-h-[48px]"
           >
             <Search size={16} />
             SEARCH
@@ -269,7 +269,7 @@ export default function JurfPage() {
           {barcodeQuery.trim() && (
             <button
               onClick={() => { setBarcodeQuery(''); setBarcodeError(''); }}
-              className="px-3 py-3 rounded-xl bg-gray-200 text-gray-500 font-bold text-sm active:scale-95"
+              className="px-3 py-3 rounded-xl bg-gray-200 text-gray-500 font-bold text-sm active:scale-95 min-h-[48px]"
             >
               <X size={16} />
             </button>
@@ -288,7 +288,7 @@ export default function JurfPage() {
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex-1 py-3 rounded-lg font-heading text-sm transition-colors relative ${
+            className={`flex-1 py-3 rounded-lg font-heading text-sm transition-colors relative min-h-[48px] ${
               tab === t.key ? 'bg-white text-black shadow-sm' : 'text-gray-500'
             }`}
           >
@@ -371,7 +371,7 @@ export default function JurfPage() {
                               <button
                                 onClick={() => handleClaim(item.id)}
                                 disabled={actionLoading === item.id}
-                                className="px-4 py-2 rounded-xl bg-blue-500 text-white font-heading text-sm active:scale-95 transition-transform disabled:opacity-50"
+                                className="px-4 py-3 rounded-xl bg-blue-500 text-white font-heading text-sm active:scale-95 transition-transform disabled:opacity-50 min-h-[48px]"
                               >
                                 {actionLoading === item.id ? (
                                   <Loader2 size={16} className="animate-spin" />
@@ -441,7 +441,7 @@ export default function JurfPage() {
                           onChange={(e) => setNotes((prev) => ({ ...prev, [item.id]: e.target.value }))}
                           placeholder="What did you do? (e.g. replaced compressor, fixed thermostat)"
                           rows={3}
-                          className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400 resize-none mb-3"
+                          className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl text-base focus:outline-none focus:border-blue-400 resize-none mb-3"
                         />
                         <button
                           onClick={() => handleRepairDone(item.id)}

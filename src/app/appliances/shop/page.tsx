@@ -17,7 +17,7 @@ export default function ShopHomePage() {
   if (!name) return null;
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-56px)] px-4 gap-6">
+    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-56px)] px-4 gap-6 pb-16">
       <p className="font-heading text-2xl text-gray-400">{name.toUpperCase()}</p>
 
       <button

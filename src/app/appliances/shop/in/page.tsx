@@ -184,8 +184,8 @@ export default function ShopInPage() {
   // ── SCREEN 3: Confirm ──
   if (screen === 'confirm') {
     return (
-      <div className="px-4 pt-4 pb-8 min-h-[calc(100vh-56px)]">
-        <button onClick={() => setScreen('photo')} className="flex items-center gap-1 text-gray-500 mb-4">
+      <div className="px-4 pt-4 pb-24 min-h-[calc(100vh-56px)] max-w-full overflow-x-hidden">
+        <button onClick={() => setScreen('photo')} className="flex items-center gap-1 text-gray-500 mb-4 min-h-[48px]">
           <ArrowLeft size={20} /> Back
         </button>
 
@@ -228,8 +228,8 @@ export default function ShopInPage() {
 
   // ── SCREEN 1: Details ──
   return (
-    <div className="px-4 pt-4 pb-8 min-h-[calc(100vh-56px)]">
-      <button onClick={() => router.push('/appliances/shop')} className="flex items-center gap-1 text-gray-500 mb-4">
+    <div className="px-4 pt-4 pb-24 min-h-[calc(100vh-56px)] max-w-full overflow-x-hidden">
+      <button onClick={() => router.push('/appliances/shop')} className="flex items-center gap-1 text-gray-500 mb-4 min-h-[48px]">
         <ArrowLeft size={20} /> Back
       </button>
 
@@ -300,7 +300,7 @@ export default function ShopInPage() {
               <button
                 key={p}
                 onClick={() => toggleProblem(p)}
-                className={`py-3 px-4 rounded-xl text-sm font-bold active:scale-95 transition-all ${
+                className={`py-3 px-4 rounded-xl text-sm font-bold active:scale-95 transition-all min-h-[48px] ${
                   problems.includes(p) ? 'bg-orange-500 text-white ring-2 ring-orange-700' : 'bg-gray-200'
                 }`}
               >

@@ -212,8 +212,8 @@ export default function ShopOutPage() {
   // ── STEP 1: Shop selector ──
   if (!selectedShop) {
     return (
-      <div className="px-4 pt-4 pb-8 min-h-[calc(100vh-56px)]">
-        <button onClick={() => router.push('/appliances/shop')} className="flex items-center gap-1 text-gray-500 mb-6">
+      <div className="px-4 pt-4 pb-24 min-h-[calc(100vh-56px)] max-w-full overflow-x-hidden">
+        <button onClick={() => router.push('/appliances/shop')} className="flex items-center gap-1 text-gray-500 mb-6 min-h-[48px]">
           <ArrowLeft size={20} /> Back
         </button>
         <h1 className="font-heading text-3xl mb-2">LOG OUT — <span className="text-orange-500">SEND</span></h1>
@@ -235,9 +235,9 @@ export default function ShopOutPage() {
 
   // ── STEP 2: Item list with multi-select ──
   return (
-    <div className="px-4 pt-4 pb-32 min-h-[calc(100vh-56px)]">
+    <div className="px-4 pt-4 pb-32 min-h-[calc(100vh-56px)] max-w-full overflow-x-hidden">
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => { setSelectedShop(null); setItems([]); setSelectedIds(new Set()); }} className="flex items-center gap-1 text-gray-500">
+        <button onClick={() => { setSelectedShop(null); setItems([]); setSelectedIds(new Set()); }} className="flex items-center gap-1 text-gray-500 min-h-[48px]">
           <ArrowLeft size={20} /> Shop {selectedShop}
         </button>
       </div>
@@ -254,12 +254,12 @@ export default function ShopOutPage() {
             onChange={(e) => { setBarcodeQuery(e.target.value); setBarcodeError(''); }}
             onKeyDown={(e) => e.key === 'Enter' && handleBarcodeSearch()}
             placeholder="Type barcode to search..."
-            className="flex-1 px-4 py-3 text-sm border-2 border-gray-200 rounded-xl focus:outline-none focus:border-orange-400"
+            className="flex-1 px-4 py-3 text-base border-2 border-gray-200 rounded-xl focus:outline-none focus:border-orange-400"
           />
           <button
             onClick={handleBarcodeSearch}
             disabled={!barcodeQuery.trim() || barcodeSearching}
-            className="px-4 py-3 rounded-xl bg-orange-500 text-white font-bold text-sm flex items-center gap-1.5 active:scale-95 disabled:opacity-40"
+            className="px-4 py-3 rounded-xl bg-orange-500 text-white font-bold text-sm flex items-center gap-1.5 active:scale-95 disabled:opacity-40 min-h-[48px]"
           >
             {barcodeSearching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
             SEARCH
@@ -267,7 +267,7 @@ export default function ShopOutPage() {
           {barcodeQuery.trim() && (
             <button
               onClick={() => { setBarcodeQuery(''); setBarcodeError(''); setSelectedIds(new Set()); }}
-              className="px-3 py-3 rounded-xl bg-gray-200 text-gray-500 font-bold text-sm active:scale-95"
+              className="px-3 py-3 rounded-xl bg-gray-200 text-gray-500 font-bold text-sm active:scale-95 min-h-[48px]"
             >
               <X size={16} />
             </button>
@@ -281,7 +281,7 @@ export default function ShopOutPage() {
         <div className="flex items-center justify-between mb-3">
           <button
             onClick={toggleAll}
-            className="flex items-center gap-2 text-sm font-bold text-orange-500 active:opacity-70"
+            className="flex items-center gap-2 text-sm font-bold text-orange-500 active:opacity-70 min-h-[48px]"
           >
             {selectedIds.size === items.length ? <CheckSquare size={20} /> : <Square size={20} />}
             {selectedIds.size === items.length ? 'Deselect All' : 'Select All'}
@@ -396,7 +396,7 @@ export default function ShopOutPage() {
               onKeyDown={(e) => e.key === 'Enter' && handleScrapConfirm()}
               placeholder="Manager code"
               autoFocus
-              className={`w-full text-center text-xl px-4 py-4 rounded-xl border-2 focus:outline-none mb-3 ${
+              className={`w-full text-center text-xl px-4 py-4 rounded-xl border-2 focus:outline-none mb-3 min-h-[48px] ${
                 pinError ? 'border-red-500 animate-[shake_0.3s_ease-in-out]' : 'border-gray-200 focus:border-yellow'
               }`}
             />
