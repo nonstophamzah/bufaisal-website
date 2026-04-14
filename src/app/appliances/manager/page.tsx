@@ -510,7 +510,7 @@ export default function ManagerDashboard() {
       )}
 
       {/* ═══ S1: STICKY HEADER ═══ */}
-      <div className="sticky top-14 z-30 bg-black border-b border-gray-800 px-4 py-3">
+      <div className="sticky top-14 z-30 bg-black border-b border-gray-800 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-heading text-lg text-yellow">OPERATIONS DASHBOARD</h1>
