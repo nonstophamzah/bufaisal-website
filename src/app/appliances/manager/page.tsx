@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Loader2, RefreshCw, Package, CheckCircle, AlertTriangle, Wrench,
-  Trash2, Truck, ChevronDown, ChevronUp, Check, X, Pencil, Clock,
-  Save, Search, Download, Undo2, MapPin, AlertCircle,
+  Loader2, RefreshCw, Package, ChevronDown, ChevronUp, Check, X, Pencil, Clock,
+  Save, Search, Download, Undo2, AlertCircle, TrendingUp, TrendingDown,
+  Minus, DollarSign, BarChart3, Activity, Shield,
 } from 'lucide-react';
 import { getItems, updateItem, bulkUpdateItems } from '@/lib/appliance-api';
 import SearchableSelect from '../components/SearchableSelect';
@@ -47,12 +47,23 @@ const DATES_F = ['All Time', 'Today', 'This Week', 'This Month'];
 const ITEM_STATUSES = ['Working', 'Not Working', 'Scrap'];
 const PROBLEMS_LIST = ['No power', 'Not cooling', 'Leaking', 'Part missing', 'Other'];
 
-const SC: Record<string, string> = {
-  working: 'bg-green-500', not_working: 'bg-orange-500', pending_scrap: 'bg-red-500',
-  repaired: 'bg-blue-500', scrap: 'bg-red-600',
-  // Legacy fallbacks
-  Working: 'bg-green-500', 'Not Working': 'bg-orange-500', 'Pending Scrap': 'bg-red-500',
-  Repaired: 'bg-blue-500', Delivered: 'bg-gray-500', Scrap: 'bg-red-500',
+const CONDITION_COLORS: Record<string, string> = {
+  working: 'bg-green-500',
+  not_working: 'bg-red-500',
+  pending_scrap: 'bg-orange-500',
+  scrap: 'bg-red-700',
+  repaired: 'bg-blue-500',
+};
+
+const LOCATION_COLORS: Record<string, string> = {
+  at_shop: 'bg-green-500',
+  sent_to_jurf: 'bg-yellow',
+  at_jurf: 'bg-orange-500',
+  in_repair: 'bg-orange-500',
+  repaired: 'bg-blue-500',
+  delivered: 'bg-gray-500',
+  sent_to_shop: 'bg-blue-400',
+  denied: 'bg-red-500',
 };
 
 function conditionLabel(c: string | null) {
@@ -65,6 +76,67 @@ function fmtDate(d: string | null) {
   return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
+function fmtCurrency(n: number) {
+  return n.toLocaleString('en-AE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+function fmtTime(d: Date) {
+  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+}
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// ── Collapsible Section wrapper ──
+function Section({ title, icon: Icon, children, defaultOpen = true }: {
+  title: string;
+  icon: React.ElementType;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border-b border-gray-800">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-2 px-4 py-3 text-left min-h-[48px]"
+      >
+        <Icon size={16} className="text-yellow flex-shrink-0" />
+        <span className="font-heading text-sm text-gray-300 flex-1">{title}</span>
+        {open ? <ChevronUp size={16} className="text-gray-500" /> : <ChevronDown size={16} className="text-gray-500" />}
+      </button>
+      {open && <div className="px-4 pb-4">{children}</div>}
+    </div>
+  );
+}
+
+// ── Metric Card ──
+function MetricCard({ label, value, trend, color }: {
+  label: string;
+  value: number;
+  trend?: number;
+  color?: string;
+}) {
+  return (
+    <div className={`rounded-xl p-3 border border-gray-800 ${color || 'bg-dark'}`}>
+      <p className="font-heading text-3xl text-white">{value}</p>
+      <div className="flex items-center justify-between mt-1">
+        <p className="text-xs text-gray-400">{label}</p>
+        {trend !== undefined && trend !== 0 && (
+          <div className={`flex items-center gap-0.5 text-xs font-bold ${trend > 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {trend > 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+            {Math.abs(trend)}
+          </div>
+        )}
+        {trend === 0 && (
+          <div className="flex items-center gap-0.5 text-xs text-gray-500">
+            <Minus size={12} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ManagerDashboard() {
   const router = useRouter();
   const [worker, setWorker] = useState<{ name: string } | null>(null);
@@ -72,6 +144,7 @@ export default function ManagerDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
 
   // Search
   const [searchQ, setSearchQ] = useState('');
@@ -117,6 +190,7 @@ export default function ManagerDashboard() {
     try {
       const data = await getItems({ order: { column: 'created_at', ascending: false }, limit: 500 });
       setAllItems(data as Item[]);
+      setLastRefreshed(new Date());
     } catch { showToast('err', 'Failed to load items'); }
     setLoading(false);
     setRefreshing(false);
@@ -124,19 +198,22 @@ export default function ManagerDashboard() {
 
   useEffect(() => { if (worker) fetchItems(); }, [worker, fetchItems]);
 
-  // Categorize
+  // ══════════════════════════════════════
+  //  COMPUTED DATA (all client-side)
+  // ══════════════════════════════════════
+
   const pending = allItems.filter((i) => i.approval_status === 'pending');
   const approved = allItems.filter((i) => i.approval_status !== 'pending' && i.approval_status !== 'rejected');
   const rejected = allItems.filter((i) => i.approval_status === 'rejected');
 
-  // Search results
+  // Search
   const searchResults = searchQ.trim().length >= 2
     ? allItems.filter((i) => i.barcode.toLowerCase().includes(searchQ.trim().toLowerCase()))
     : [];
 
-  // Apply filters
+  // Filters
   const listItems = listTab === 'rejected' ? rejected : approved;
-  const filtered = (() => {
+  const filtered = useMemo(() => {
     let items = [...listItems];
     if (shopFilter !== 'All') items = items.filter((i) => i.shop === shopFilter);
     const conditionFilterMap: Record<string, string> = {
@@ -158,36 +235,87 @@ export default function ManagerDashboard() {
       items = items.filter((i) => new Date(i.created_at) >= cutoff);
     }
     return items;
-  })();
+  }, [listItems, shopFilter, statusFilter, dateFilter]);
 
-  // Overdue = sent_to_jurf more than 24h ago
+  // Overdue
   const overdueItems = approved.filter((i) => {
     if (i.location_status !== 'sent_to_jurf' || !i.date_sent_to_jurf) return false;
     return (Date.now() - new Date(i.date_sent_to_jurf).getTime()) > 24 * 60 * 60 * 1000;
   });
 
-  // Items by shop (at_shop only)
+  // Shop counts (at_shop only)
   const shopCounts: Record<string, number> = {};
   for (const item of approved) {
     if (item.location_status === 'at_shop' && item.shop) {
       shopCounts[item.shop] = (shopCounts[item.shop] || 0) + 1;
     }
   }
+  const maxShopCount = Math.max(...Object.values(shopCounts), 1);
 
-  const counts = {
-    pending: pending.length,
-    total: approved.length,
-    working: approved.filter((i) => i.condition === 'working').length,
-    notWorking: approved.filter((i) => i.condition === 'not_working').length,
-    inTransit: approved.filter((i) => i.location_status === 'sent_to_jurf').length,
-    atJurf: approved.filter((i) => i.location_status === 'at_jurf').length,
-    scrap: approved.filter((i) => i.condition === 'pending_scrap' || i.condition === 'scrap').length,
-    repaired: approved.filter((i) => i.condition === 'repaired').length,
-    delivered: approved.filter((i) => i.location_status === 'delivered').length,
-    overdue: overdueItems.length,
-  };
+  // Pipeline metrics
+  const metrics = useMemo(() => {
+    const totalActive = approved.filter((i) => i.condition !== 'scrap' && i.location_status !== 'delivered').length;
+    const inRepair = approved.filter((i) => i.location_status === 'at_jurf' || i.location_status === 'in_repair').length;
+    const readyToShip = approved.filter((i) => i.condition === 'repaired' && i.location_status !== 'delivered').length;
+    const delivered = approved.filter((i) => i.location_status === 'delivered').length;
+    const working = approved.filter((i) => i.condition === 'working').length;
+    const notWorking = approved.filter((i) => i.condition === 'not_working').length;
+    const pendingScrap = approved.filter((i) => i.condition === 'pending_scrap').length;
+    const scrap = approved.filter((i) => i.condition === 'scrap').length;
+    return { totalActive, inRepair, readyToShip, delivered, working, notWorking, pendingScrap, scrap };
+  }, [approved]);
 
-  // Actions
+  // Trends (today vs yesterday by date_received)
+  const trends = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+    const isToday = (d: string | null) => d && new Date(d) >= today;
+    const isYesterday = (d: string | null) => d && new Date(d) >= yesterday && new Date(d) < today;
+
+    const todayItems = approved.filter((i) => isToday(i.date_received));
+    const yesterdayItems = approved.filter((i) => isYesterday(i.date_received));
+
+    const todayCount = todayItems.length;
+    const yesterdayCount = yesterdayItems.length;
+    const intakeDelta = todayCount - yesterdayCount;
+
+    return { todayCount, yesterdayCount, intakeDelta };
+  }, [approved]);
+
+  // Repair cost metrics
+  const costMetrics = useMemo(() => {
+    const itemsWithCost = approved.filter((i) => i.repair_cost && i.repair_cost > 0);
+    const totalCost = itemsWithCost.reduce((sum, i) => sum + (i.repair_cost || 0), 0);
+    const avgCost = itemsWithCost.length > 0 ? totalCost / itemsWithCost.length : 0;
+    const sorted = [...itemsWithCost].sort((a, b) => (b.repair_cost || 0) - (a.repair_cost || 0));
+    const mostExpensive = sorted[0] || null;
+    return { totalCost, avgCost, mostExpensive, count: itemsWithCost.length };
+  }, [approved]);
+
+  // Intake velocity (last 7 days)
+  const intakeVelocity = useMemo(() => {
+    const days: { date: Date; dayName: string; count: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
+      const nextD = new Date(d);
+      nextD.setDate(nextD.getDate() + 1);
+      const count = allItems.filter((item) => {
+        if (!item.date_received) return false;
+        const rd = new Date(item.date_received);
+        return rd >= d && rd < nextD;
+      }).length;
+      days.push({ date: d, dayName: DAY_NAMES[d.getDay()], count });
+    }
+    return days;
+  }, [allItems]);
+  const maxIntake = Math.max(...intakeVelocity.map((d) => d.count), 1);
+
+  // ══════════════════════════════════════
+  //  ACTIONS (preserved exactly)
+  // ══════════════════════════════════════
+
   const approveItem = async (id: string) => {
     try {
       const result = await updateItem(id, { approval_status: 'approved' });
@@ -229,7 +357,6 @@ export default function ManagerDashboard() {
   };
 
   const openEdit = (item: Item) => {
-    // Map condition back to user-facing label for edit form
     const condToLabel: Record<string, string> = { working: 'Working', not_working: 'Not Working', scrap: 'Scrap', pending_scrap: 'Not Working', repaired: 'Working' };
     const label = condToLabel[item.condition || ''] || item.status || '';
     setEditForm({
@@ -275,7 +402,6 @@ export default function ManagerDashboard() {
     else setSelected(new Set(pending.map((i) => i.id)));
   };
 
-  // Export CSV
   const exportCSV = () => {
     const headers = ['barcode', 'product_type', 'brand', 'condition', 'location_status', 'status', 'shop', 'date_received', 'date_sent_to_jurf', 'approval_status', 'problems'];
     const rows = filtered.map((i) => [
@@ -291,15 +417,16 @@ export default function ManagerDashboard() {
     URL.revokeObjectURL(url);
   };
 
-  if (!worker) return null;
+  // ══════════════════════════════════════
+  //  ITEM CARD RENDERER (preserved)
+  // ══════════════════════════════════════
 
-  // --- Item card renderer ---
-  const renderItemCard = (item: Item, actions?: React.ReactNode) => {
+  const renderItemCard = (item: Item, idx: number, actions?: React.ReactNode) => {
     const isOpen = expanded === item.id;
     return (
-      <div key={item.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div key={item.id} className={`rounded-xl border border-gray-200 overflow-hidden ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
         <button onClick={() => setExpanded(isOpen ? null : item.id)} className="w-full text-left flex items-center gap-3 p-3">
-          <div className="w-14 h-14 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
+          <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
             {item.photo_url && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={item.photo_url} alt="" className="w-full h-full object-cover" />
@@ -308,16 +435,20 @@ export default function ManagerDashboard() {
           <div className="flex-1 min-w-0">
             <p className="font-bold text-sm truncate">{canonicalProductType(item.product_type) || 'Unknown'} {item.brand ? `— ${canonicalBrand(item.brand)}` : ''}</p>
             <p className="text-xs text-gray-500 truncate">{item.barcode}</p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className={`text-[10px] font-bold text-white px-1.5 py-0.5 rounded ${SC[item.condition || ''] || 'bg-gray-400'}`}>{conditionLabel(item.condition)}</span>
+            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+              <span className={`text-[10px] font-bold text-white px-1.5 py-0.5 rounded ${CONDITION_COLORS[item.condition || ''] || 'bg-gray-400'}`}>
+                {conditionLabel(item.condition)}
+              </span>
               {item.location_status && item.location_status !== 'at_shop' && (
-                <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">{conditionLabel(item.location_status)}</span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${LOCATION_COLORS[item.location_status] || 'bg-gray-400'} ${item.location_status === 'sent_to_jurf' ? 'text-black' : 'text-white'}`}>
+                  {conditionLabel(item.location_status)}
+                </span>
               )}
               {item.shop && <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">Shop {item.shop}</span>}
               <span className="text-[10px] text-gray-400 ml-auto">{fmtDate(item.date_received || item.created_at)}</span>
             </div>
           </div>
-          {isOpen ? <ChevronUp size={18} className="text-gray-400 flex-shrink-0" /> : <ChevronDown size={18} className="text-gray-400 flex-shrink-0" />}
+          {isOpen ? <ChevronUp size={16} className="text-gray-400 flex-shrink-0" /> : <ChevronDown size={16} className="text-gray-400 flex-shrink-0" />}
         </button>
         {isOpen && (
           <div className="border-t border-gray-100 px-3 py-3 bg-gray-50 space-y-1.5 text-sm">
@@ -328,7 +459,7 @@ export default function ManagerDashboard() {
               ['Shop', item.shop ? `Shop ${item.shop}` : null], ['Needs Jurf', item.needs_jurf ? 'Yes' : 'No'],
               ['Date Received', fmtDate(item.date_received)], ['Sent to Jurf', fmtDate(item.date_sent_to_jurf)],
               ['Tested By', item.tested_by], ['Repair Notes', item.repair_notes],
-              ['Repair Cost', item.repair_cost ? `AED ${item.repair_cost}` : null],
+              ['Repair Cost', item.repair_cost ? `AED ${fmtCurrency(item.repair_cost)}` : null],
               ['Destination', item.destination_shop ? `Shop ${item.destination_shop}` : null],
               ['Created By', item.created_by],
             ].filter(([, v]) => v).map(([label, val]) => (
@@ -341,8 +472,22 @@ export default function ManagerDashboard() {
     );
   };
 
+  if (!worker) return null;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-56px)]">
+        <Loader2 size={32} className="animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  // ══════════════════════════════════════
+  //  RENDER
+  // ══════════════════════════════════════
+
   return (
-    <div className="pb-24 max-w-full overflow-x-hidden">
+    <div className="pb-24 max-w-full overflow-x-hidden bg-[#111]">
       {/* Toast */}
       {toast && (
         <div className={`fixed top-16 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-xl text-sm font-bold shadow-lg ${toast.type === 'ok' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
@@ -350,202 +495,304 @@ export default function ManagerDashboard() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="bg-black text-white px-4 py-3">
-        <p className="font-heading text-xl text-yellow">APPLIANCE DASHBOARD</p>
-        <p className="text-sm text-gray-400">{worker.name}</p>
+      {/* ═══ S1: STICKY HEADER ═══ */}
+      <div className="sticky top-14 z-30 bg-black border-b border-gray-800 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="font-heading text-lg text-yellow">OPERATIONS DASHBOARD</h1>
+            <p className="text-xs text-gray-500">
+              {worker.name}
+              {lastRefreshed && <> &middot; Updated {fmtTime(lastRefreshed)}</>}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold bg-gray-800 text-gray-300 px-2.5 py-1 rounded-full">
+              {allItems.length}
+            </span>
+            <button
+              onClick={() => fetchItems(true)}
+              disabled={refreshing}
+              className="p-2 rounded-lg bg-gray-800 text-gray-300 active:scale-95 min-h-[40px] min-w-[40px] flex items-center justify-center"
+            >
+              <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Search bar — sticky */}
-      <div className="sticky top-14 z-20 bg-white border-b border-gray-200 px-4 py-3">
-        <div className="relative max-w-lg">
+      {/* ═══ S2: CRITICAL ALERTS ═══ */}
+      {(overdueItems.length > 0 || pending.length > 0) && (
+        <div className="px-4 pt-4 space-y-2">
+          {overdueItems.length > 0 && (
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-red-500/15 border border-red-500/30">
+              <AlertCircle size={20} className="text-red-400 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-bold text-red-400">{overdueItems.length} OVERDUE AT JURF</p>
+                <p className="text-xs text-red-400/70">Sent over 24 hours ago, not yet received</p>
+              </div>
+              <span className="font-heading text-2xl text-red-400">{overdueItems.length}</span>
+            </div>
+          )}
+          {pending.length > 0 && (
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-orange-500/15 border border-orange-500/30">
+              <Clock size={20} className="text-orange-400 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-bold text-orange-400">{pending.length} PENDING APPROVAL</p>
+                <p className="text-xs text-orange-400/70">Items waiting for manager review</p>
+              </div>
+              <span className="font-heading text-2xl text-orange-400">{pending.length}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══ S3: KEY METRICS GRID ═══ */}
+      <Section title="PIPELINE METRICS" icon={Activity} defaultOpen={true}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <MetricCard label="Total Active" value={metrics.totalActive} trend={trends.intakeDelta} />
+          <MetricCard label="In Repair" value={metrics.inRepair} color="bg-dark" />
+          <MetricCard label="Ready to Ship" value={metrics.readyToShip} color="bg-dark" />
+          <MetricCard label="Delivered" value={metrics.delivered} color="bg-dark" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
+          <MetricCard label="Working" value={metrics.working} />
+          <MetricCard label="Not Working" value={metrics.notWorking} />
+          <MetricCard label="Pending Scrap" value={metrics.pendingScrap} />
+          <MetricCard label="Scrap" value={metrics.scrap} />
+        </div>
+      </Section>
+
+      {/* ═══ S4: SHOP BREAKDOWN ═══ */}
+      <Section title="SHOP BREAKDOWN" icon={BarChart3} defaultOpen={true}>
+        <div className="space-y-2">
+          {['A', 'B', 'C', 'D', 'E'].map((s) => {
+            const count = shopCounts[s] || 0;
+            const pct = maxShopCount > 0 ? (count / maxShopCount) * 100 : 0;
+            const isActive = shopFilter === s;
+            return (
+              <button
+                key={s}
+                onClick={() => setShopFilter(isActive ? 'All' : s)}
+                className={`w-full flex items-center gap-3 group min-h-[44px] ${isActive ? 'opacity-100' : 'opacity-80 hover:opacity-100'}`}
+              >
+                <span className={`font-heading text-lg w-8 text-right ${isActive ? 'text-yellow' : 'text-gray-400'}`}>{s}</span>
+                <div className="flex-1 bg-gray-800 rounded-full h-7 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${isActive ? 'bg-yellow' : 'bg-yellow/60'}`}
+                    style={{ width: `${Math.max(pct, 2)}%` }}
+                  />
+                </div>
+                <span className={`font-heading text-lg w-8 ${isActive ? 'text-yellow' : 'text-white'}`}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      </Section>
+
+      {/* ═══ S5: REPAIR COST TRACKER ═══ */}
+      <Section title="REPAIR COSTS" icon={DollarSign} defaultOpen={true}>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-xl p-3 border border-gray-800 bg-dark">
+            <p className="text-xs text-gray-400 mb-1">Total Spent</p>
+            <p className="font-heading text-xl text-white">AED {fmtCurrency(costMetrics.totalCost)}</p>
+            <p className="text-[10px] text-gray-500 mt-1">{costMetrics.count} repairs</p>
+          </div>
+          <div className="rounded-xl p-3 border border-gray-800 bg-dark">
+            <p className="text-xs text-gray-400 mb-1">Avg / Item</p>
+            <p className="font-heading text-xl text-white">AED {fmtCurrency(Math.round(costMetrics.avgCost))}</p>
+          </div>
+          <div className="rounded-xl p-3 border border-gray-800 bg-dark">
+            <p className="text-xs text-gray-400 mb-1">Most Expensive</p>
+            <p className="font-heading text-xl text-white">
+              {costMetrics.mostExpensive ? `AED ${fmtCurrency(costMetrics.mostExpensive.repair_cost || 0)}` : '—'}
+            </p>
+            {costMetrics.mostExpensive && (
+              <p className="text-[10px] text-gray-500 mt-1 truncate">{costMetrics.mostExpensive.barcode}</p>
+            )}
+          </div>
+        </div>
+      </Section>
+
+      {/* ═══ S6: INTAKE VELOCITY ═══ */}
+      <Section title="7-DAY INTAKE" icon={TrendingUp} defaultOpen={true}>
+        <div className="flex items-end gap-1.5 h-28">
+          {intakeVelocity.map((day) => {
+            const heightPct = maxIntake > 0 ? (day.count / maxIntake) * 100 : 0;
+            const isToday = day.date.toDateString() === new Date().toDateString();
+            return (
+              <div key={day.date.toISOString()} className="flex-1 flex flex-col items-center gap-1">
+                <span className={`text-xs font-bold ${day.count > 0 ? 'text-white' : 'text-gray-600'}`}>
+                  {day.count || ''}
+                </span>
+                <div className="w-full flex-1 flex items-end">
+                  <div
+                    className={`w-full rounded-t-md transition-all duration-500 min-h-[2px] ${
+                      day.count > 0 ? (isToday ? 'bg-yellow' : 'bg-yellow/50') : 'bg-gray-800'
+                    }`}
+                    style={{ height: `${Math.max(heightPct, 3)}%` }}
+                  />
+                </div>
+                <span className={`text-[10px] font-bold ${isToday ? 'text-yellow' : 'text-gray-500'}`}>
+                  {day.dayName}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex items-center justify-between mt-3 text-xs">
+          <span className="text-gray-500">Today: <span className="text-white font-bold">{trends.todayCount}</span></span>
+          <span className="text-gray-500">Yesterday: <span className="text-white font-bold">{trends.yesterdayCount}</span></span>
+          <span className={`font-bold ${trends.intakeDelta > 0 ? 'text-green-400' : trends.intakeDelta < 0 ? 'text-red-400' : 'text-gray-500'}`}>
+            {trends.intakeDelta > 0 ? '+' : ''}{trends.intakeDelta} delta
+          </span>
+        </div>
+      </Section>
+
+      {/* ═══ S7: ITEMS TABLE ═══ */}
+      <Section title="ITEMS LIST" icon={Package} defaultOpen={true}>
+        {/* Search */}
+        <div className="relative mb-3">
           <input
             type="text" value={searchQ} onChange={(e) => setSearchQ(e.target.value)}
             placeholder="Search by barcode..."
-            className="w-full pl-10 pr-10 py-3 text-base border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow"
+            className="w-full pl-10 pr-10 py-3 text-base border-2 border-gray-700 bg-gray-900 text-white rounded-xl focus:outline-none focus:border-yellow placeholder:text-gray-600"
           />
-          <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
           {searchQ && (
-            <button onClick={() => setSearchQ('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"><X size={16} /></button>
+            <button onClick={() => setSearchQ('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"><X size={16} /></button>
           )}
         </div>
+
         {/* Search results */}
         {searchResults.length > 0 && (
-          <div className="mt-2 space-y-2 max-h-[50vh] overflow-y-auto">
+          <div className="mb-3 space-y-2 max-h-[50vh] overflow-y-auto bg-white rounded-xl p-3">
             <p className="text-xs text-gray-500">{searchResults.length} result{searchResults.length !== 1 ? 's' : ''}</p>
-            {searchResults.slice(0, 10).map((item) => renderItemCard(item))}
+            {searchResults.slice(0, 10).map((item, idx) => renderItemCard(item, idx))}
           </div>
         )}
         {searchQ.trim().length >= 2 && searchResults.length === 0 && (
-          <p className="text-sm text-gray-400 mt-2">No items match &quot;{searchQ}&quot;</p>
+          <p className="text-sm text-gray-500 mb-3">No items match &quot;{searchQ}&quot;</p>
         )}
-      </div>
 
-      {/* Pending section */}
-      <div className="px-4 pt-4 pb-2">
-        <div className="flex items-center gap-2 mb-3">
-          <Clock size={20} className="text-orange-500" />
-          <h2 className="font-heading text-xl">PENDING APPROVAL</h2>
-          <span className="bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{pending.length}</span>
-          {pending.length > 0 && (
-            <label className="ml-auto flex items-center gap-1.5 text-xs font-bold text-gray-500 cursor-pointer">
-              <input type="checkbox" checked={selected.size === pending.length && pending.length > 0} onChange={toggleSelectAll} className="w-4 h-4 accent-yellow" />
-              Select All
-            </label>
-          )}
+        {/* Tabs */}
+        <div className="flex gap-2 mb-3">
+          <button onClick={() => { setListTab('approved'); setVisibleCount(20); }} className={`px-4 py-2 rounded-lg text-sm font-bold min-h-[44px] ${listTab === 'approved' ? 'bg-yellow text-black' : 'bg-gray-800 text-gray-400'}`}>
+            APPROVED ({approved.length})
+          </button>
+          <button onClick={() => { setListTab('rejected'); setVisibleCount(20); }} className={`px-4 py-2 rounded-lg text-sm font-bold min-h-[44px] ${listTab === 'rejected' ? 'bg-yellow text-black' : 'bg-gray-800 text-gray-400'}`}>
+            REJECTED ({rejected.length})
+          </button>
         </div>
 
-        {pending.length === 0 ? (
-          <p className="text-gray-400 text-sm py-4">No items pending approval</p>
-        ) : (
-          <div className="space-y-2">
-            {pending.map((item) => (
-              <div key={item.id} className="bg-white rounded-xl border-2 border-orange-200 p-3">
-                <div className="flex items-center gap-3">
-                  <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggleSelect(item.id)} className="w-5 h-5 accent-yellow flex-shrink-0" />
-                  <div className="w-14 h-14 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
-                    {item.photo_url && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={item.photo_url} alt="" className="w-full h-full object-cover" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-sm truncate">{canonicalProductType(item.product_type)} {item.brand ? `— ${canonicalBrand(item.brand)}` : ''}</p>
-                    <p className="text-xs text-gray-500">{item.barcode} &bull; Shop {item.shop} &bull; {fmtDate(item.date_received || item.created_at)}</p>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <span className={`text-[10px] font-bold text-white px-1.5 py-0.5 rounded ${SC[item.condition || ''] || 'bg-gray-400'}`}>{conditionLabel(item.condition)}</span>
-                      {item.problems && item.problems.length > 0 && <span className="text-[10px] text-gray-500">{item.problems.join(', ')}</span>}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-3">
-                  <button onClick={() => approveItem(item.id)} className="flex-1 py-3 rounded-xl bg-green-500 text-white font-bold text-sm flex items-center justify-center gap-1 active:scale-95 min-h-[48px]"><Check size={16} /> APPROVE</button>
-                  <button onClick={() => openEdit(item)} className="py-3 px-4 rounded-xl bg-yellow text-black font-bold text-sm flex items-center justify-center gap-1 active:scale-95 min-h-[48px]"><Pencil size={16} /> EDIT</button>
-                  <button onClick={() => setRejectConfirm(item.id)} className="py-3 px-4 rounded-xl bg-red-500 text-white font-bold text-sm flex items-center justify-center gap-1 active:scale-95 min-h-[48px]"><X size={16} /></button>
-                </div>
-              </div>
+        {/* Filters */}
+        <div className="space-y-2 mb-3">
+          <div className="flex gap-1.5 overflow-x-auto hide-scrollbar">
+            {SHOPS_F.map((s) => (
+              <button key={s} onClick={() => setShopFilter(s)} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap active:scale-95 min-h-[36px] ${shopFilter === s ? 'bg-yellow text-black' : 'bg-gray-800 text-gray-400'}`}>
+                {s === 'All' ? 'All Shops' : `Shop ${s}`}
+              </button>
             ))}
           </div>
+          <div className="flex gap-1.5 overflow-x-auto hide-scrollbar">
+            {STATUSES_F.map((s) => (
+              <button key={s} onClick={() => setStatusFilter(s)} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap active:scale-95 min-h-[36px] ${statusFilter === s ? 'bg-yellow text-black' : 'bg-gray-800 text-gray-400'}`}>
+                {s}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-1.5 overflow-x-auto hide-scrollbar">
+            {DATES_F.map((d) => (
+              <button key={d} onClick={() => setDateFilter(d)} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap active:scale-95 min-h-[36px] ${dateFilter === d ? 'bg-yellow text-black' : 'bg-gray-800 text-gray-400'}`}>
+                {d}
+              </button>
+            ))}
+            <button onClick={exportCSV} className="px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 active:scale-95 flex items-center gap-1 text-xs font-bold min-h-[36px]">
+              <Download size={12} /> CSV
+            </button>
+          </div>
+        </div>
+
+        <p className="text-xs text-gray-500 mb-2">{filtered.length} {listTab} items</p>
+
+        {/* Items */}
+        {filtered.length === 0 ? (
+          <p className="text-center text-gray-500 py-10 font-heading text-lg">NO ITEMS FOUND</p>
+        ) : (
+          <div className="space-y-1.5">
+            {filtered.slice(0, visibleCount).map((item, idx) =>
+              listTab === 'rejected'
+                ? renderItemCard(item, idx, (
+                    <button onClick={() => undoReject(item.id)} className="w-full py-3 rounded-xl bg-orange-500 text-white font-bold text-sm flex items-center justify-center gap-1 active:scale-95 min-h-[48px]">
+                      <Undo2 size={16} /> UNDO — MOVE TO PENDING
+                    </button>
+                  ))
+                : renderItemCard(item, idx)
+            )}
+            {visibleCount < filtered.length && (
+              <button onClick={() => setVisibleCount((v) => v + 20)} className="w-full py-4 text-center text-sm font-bold text-gray-400 bg-gray-800 rounded-xl active:scale-95">
+                Load more ({filtered.length - visibleCount} remaining)
+              </button>
+            )}
+          </div>
         )}
-      </div>
+      </Section>
+
+      {/* ═══ S8: PENDING APPROVALS ═══ */}
+      <Section title={`PENDING APPROVALS (${pending.length})`} icon={Shield} defaultOpen={pending.length > 0}>
+        {pending.length === 0 ? (
+          <p className="text-gray-500 text-sm py-4">No items pending approval</p>
+        ) : (
+          <>
+            {pending.length > 1 && (
+              <label className="flex items-center gap-2 text-xs font-bold text-gray-400 cursor-pointer mb-3">
+                <input type="checkbox" checked={selected.size === pending.length} onChange={toggleSelectAll} className="w-4 h-4 accent-yellow" />
+                Select All ({pending.length})
+              </label>
+            )}
+            <div className="space-y-2">
+              {pending.map((item) => (
+                <div key={item.id} className="bg-white rounded-xl border-2 border-orange-200 p-3">
+                  <div className="flex items-center gap-3">
+                    <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggleSelect(item.id)} className="w-5 h-5 accent-yellow flex-shrink-0" />
+                    <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
+                      {item.photo_url && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={item.photo_url} alt="" className="w-full h-full object-cover" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm truncate">{canonicalProductType(item.product_type)} {item.brand ? `— ${canonicalBrand(item.brand)}` : ''}</p>
+                      <p className="text-xs text-gray-500">{item.barcode} &bull; Shop {item.shop} &bull; {fmtDate(item.date_received || item.created_at)}</p>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className={`text-[10px] font-bold text-white px-1.5 py-0.5 rounded ${CONDITION_COLORS[item.condition || ''] || 'bg-gray-400'}`}>{conditionLabel(item.condition)}</span>
+                        {item.problems && item.problems.length > 0 && <span className="text-[10px] text-gray-500">{item.problems.join(', ')}</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <button onClick={() => approveItem(item.id)} className="flex-1 py-3 rounded-xl bg-green-500 text-white font-bold text-sm flex items-center justify-center gap-1 active:scale-95 min-h-[48px]"><Check size={16} /> APPROVE</button>
+                    <button onClick={() => openEdit(item)} className="py-3 px-4 rounded-xl bg-yellow text-black font-bold text-sm flex items-center justify-center gap-1 active:scale-95 min-h-[48px]"><Pencil size={16} /> EDIT</button>
+                    <button onClick={() => setRejectConfirm(item.id)} className="py-3 px-4 rounded-xl bg-red-500 text-white font-bold text-sm flex items-center justify-center gap-1 active:scale-95 min-h-[48px]"><X size={16} /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </Section>
 
       {/* Bulk approve bar */}
       {selected.size > 0 && (
-        <div className="sticky bottom-0 z-20 bg-white border-t-2 border-green-500 p-4">
+        <div className="fixed bottom-0 left-0 right-0 z-20 bg-black border-t-2 border-green-500 p-4">
           <button onClick={bulkApprove} className="w-full py-4 rounded-2xl bg-green-500 text-white font-heading text-xl flex items-center justify-center gap-2 active:scale-95">
             <Check size={22} strokeWidth={3} /> APPROVE SELECTED ({selected.size})
           </button>
         </div>
       )}
 
-      {/* Overdue alert */}
-      {counts.overdue > 0 && (
-        <div className="mx-4 mt-4 p-4 bg-red-50 border-2 border-red-300 rounded-xl flex items-center gap-3">
-          <AlertCircle size={24} className="text-red-500 flex-shrink-0" />
-          <div>
-            <p className="font-bold text-red-700">{counts.overdue} OVERDUE TRANSFER{counts.overdue > 1 ? 'S' : ''}</p>
-            <p className="text-xs text-red-500">Items sent to Jurf over 24 hours ago and not yet received</p>
-          </div>
-        </div>
-      )}
+      {/* ═══ MODALS ═══ */}
 
-      {/* Count cards */}
-      <div className="overflow-x-auto hide-scrollbar px-4 py-4">
-        <div className="flex gap-2 min-w-max">
-          {[
-            { label: 'Pending', value: counts.pending, icon: Clock, color: 'bg-orange-50 text-orange-700' },
-            { label: 'Total', value: counts.total, icon: Package, color: 'bg-gray-100 text-black' },
-            { label: 'Working', value: counts.working, icon: CheckCircle, color: 'bg-green-50 text-green-700' },
-            { label: 'Not Working', value: counts.notWorking, icon: AlertTriangle, color: 'bg-orange-50 text-orange-700' },
-            { label: 'In Transit', value: counts.inTransit, icon: Truck, color: counts.overdue > 0 ? 'bg-red-50 text-red-700 ring-2 ring-red-300' : 'bg-yellow-50 text-yellow-700' },
-            { label: 'At Jurf', value: counts.atJurf, icon: Wrench, color: 'bg-blue-50 text-blue-700' },
-            { label: 'Scrap', value: counts.scrap, icon: Trash2, color: 'bg-red-50 text-red-700' },
-            { label: 'Repaired', value: counts.repaired, icon: CheckCircle, color: 'bg-blue-50 text-blue-700' },
-            { label: 'Delivered', value: counts.delivered, icon: Truck, color: 'bg-gray-100 text-gray-700' },
-          ].map((c) => { const Icon = c.icon; return (
-            <div key={c.label} className={`rounded-xl px-4 py-3 min-w-[110px] ${c.color}`}>
-              <Icon size={18} className="mb-1" /><p className="font-heading text-2xl">{c.value}</p><p className="text-xs">{c.label}</p>
-            </div>
-          ); })}
-        </div>
-      </div>
-
-      {/* Items by Shop breakdown */}
-      {Object.keys(shopCounts).length > 0 && (
-        <div className="mx-4 mb-4 p-3 bg-gray-50 rounded-xl border border-gray-200">
-          <div className="flex items-center gap-2 mb-2">
-            <MapPin size={16} className="text-gray-500" />
-            <p className="font-bold text-sm text-gray-700">Items at Shop</p>
-          </div>
-          <div className="flex gap-3">
-            {['A', 'B', 'C', 'D', 'E'].map((s) => (
-              <div key={s} className="text-center">
-                <p className="font-heading text-xl">{shopCounts[s] || 0}</p>
-                <p className="text-xs text-gray-500">Shop {s}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Tab: Approved / Rejected */}
-      <div className="flex gap-2 px-4 mb-2">
-        <button onClick={() => { setListTab('approved'); setVisibleCount(20); }} className={`px-4 py-2 rounded-lg text-sm font-bold min-h-[44px] ${listTab === 'approved' ? 'bg-black text-yellow' : 'bg-gray-200 text-gray-600'}`}>
-          APPROVED ({approved.length})
-        </button>
-        <button onClick={() => { setListTab('rejected'); setVisibleCount(20); }} className={`px-4 py-2 rounded-lg text-sm font-bold min-h-[44px] ${listTab === 'rejected' ? 'bg-black text-yellow' : 'bg-gray-200 text-gray-600'}`}>
-          REJECTED ({rejected.length})
-        </button>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-gray-50 border-b border-gray-200 px-4 py-3 space-y-2">
-        <div className="flex gap-1.5 overflow-x-auto hide-scrollbar">
-          {SHOPS_F.map((s) => (<button key={s} onClick={() => setShopFilter(s)} className={`px-3 py-2 rounded-lg text-sm font-bold whitespace-nowrap active:scale-95 min-h-[44px] ${shopFilter === s ? 'bg-black text-yellow' : 'bg-white text-gray-600 border border-gray-200'}`}>{s === 'All' ? 'All Shops' : `Shop ${s}`}</button>))}
-        </div>
-        <div className="flex gap-1.5 overflow-x-auto hide-scrollbar">
-          {STATUSES_F.map((s) => (<button key={s} onClick={() => setStatusFilter(s)} className={`px-3 py-2 rounded-lg text-sm font-bold whitespace-nowrap active:scale-95 min-h-[44px] ${statusFilter === s ? 'bg-black text-yellow' : 'bg-white text-gray-600 border border-gray-200'}`}>{s}</button>))}
-        </div>
-        <div className="flex gap-1.5 overflow-x-auto hide-scrollbar">
-          {DATES_F.map((d) => (<button key={d} onClick={() => setDateFilter(d)} className={`px-3 py-2 rounded-lg text-sm font-bold whitespace-nowrap active:scale-95 min-h-[44px] ${dateFilter === d ? 'bg-black text-yellow' : 'bg-white text-gray-600 border border-gray-200'}`}>{d}</button>))}
-          <button onClick={() => fetchItems(true)} disabled={refreshing} className="px-3 py-2 rounded-lg bg-white border border-gray-200 text-gray-500 active:scale-95 min-h-[44px]" aria-label="Refresh">
-            <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
-          </button>
-          <button onClick={exportCSV} className="px-3 py-2 rounded-lg bg-white border border-gray-200 text-gray-500 active:scale-95 flex items-center gap-1 text-sm font-bold min-h-[44px]" aria-label="Export">
-            <Download size={14} /> CSV
-          </button>
-        </div>
-      </div>
-
-      <div className="px-4 pt-3 pb-1">
-        <p className="text-sm text-gray-500">{filtered.length} {listTab} items</p>
-      </div>
-
-      {/* Items list */}
-      {loading ? (
-        <div className="flex justify-center py-16"><Loader2 size={32} className="animate-spin text-gray-400" /></div>
-      ) : filtered.length === 0 ? (
-        <p className="text-center text-gray-400 py-16 font-heading text-xl">NO ITEMS FOUND</p>
-      ) : (
-        <div className="px-4 space-y-2">
-          {filtered.slice(0, visibleCount).map((item) =>
-            listTab === 'rejected'
-              ? renderItemCard(item, (
-                  <button onClick={() => undoReject(item.id)} className="w-full py-3 rounded-xl bg-orange-500 text-white font-bold text-sm flex items-center justify-center gap-1 active:scale-95 min-h-[48px]">
-                    <Undo2 size={16} /> UNDO — MOVE TO PENDING
-                  </button>
-                ))
-              : renderItemCard(item)
-          )}
-          {visibleCount < filtered.length && (
-            <button onClick={() => setVisibleCount((v) => v + 20)} className="w-full py-4 text-center text-sm font-bold text-gray-500 bg-white rounded-xl border border-gray-200 active:scale-95">
-              Load more ({filtered.length - visibleCount} remaining)
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Reject confirm modal */}
+      {/* Reject confirm */}
       {rejectConfirm && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center px-6">
           <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center">
@@ -573,23 +820,11 @@ export default function ManagerDashboard() {
             </div>
             <p className="font-bold text-sm mb-2">PRODUCT</p>
             <div className="mb-4">
-              <SearchableSelect
-                value={editForm.product_type}
-                onChange={(v) => setEditForm((f) => ({ ...f, product_type: v }))}
-                options={PRODUCT_TYPES}
-                placeholder="Search product type..."
-                otherLabel={PRODUCT_OTHER}
-              />
+              <SearchableSelect value={editForm.product_type} onChange={(v) => setEditForm((f) => ({ ...f, product_type: v }))} options={PRODUCT_TYPES} placeholder="Search product type..." otherLabel={PRODUCT_OTHER} />
             </div>
             <p className="font-bold text-sm mb-2">BRAND</p>
             <div className="mb-4">
-              <SearchableSelect
-                value={editForm.brand}
-                onChange={(v) => setEditForm((f) => ({ ...f, brand: v }))}
-                options={BRANDS}
-                placeholder="Search brand..."
-                otherLabel={BRAND_OTHER}
-              />
+              <SearchableSelect value={editForm.brand} onChange={(v) => setEditForm((f) => ({ ...f, brand: v }))} options={BRANDS} placeholder="Search brand..." otherLabel={BRAND_OTHER} />
             </div>
             <p className="font-bold text-sm mb-2">STATUS</p>
             <div className="grid grid-cols-3 gap-2 mb-4">
