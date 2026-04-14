@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Loader2, RefreshCw, Package, ChevronDown, ChevronUp, Check, X, Pencil, Clock,
   Save, Search, Download, Undo2, AlertCircle, TrendingUp, TrendingDown,
-  Minus, DollarSign, BarChart3, Activity, Shield,
+  Minus, DollarSign, BarChart3, Activity, Shield, Grid3X3,
 } from 'lucide-react';
 import { getItems, updateItem, bulkUpdateItems } from '@/lib/appliance-api';
 import SearchableSelect from '../components/SearchableSelect';
@@ -145,6 +145,7 @@ export default function ManagerDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const [sheetsExporting, setSheetsExporting] = useState(false);
 
   // Search
   const [searchQ, setSearchQ] = useState('');
@@ -417,6 +418,19 @@ export default function ManagerDashboard() {
     URL.revokeObjectURL(url);
   };
 
+  const exportToSheets = async () => {
+    setSheetsExporting(true);
+    try {
+      const res = await fetch('/api/export-to-sheets', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Export failed');
+      showToast('ok', `Exported ${data.itemCount} items to Google Sheets`);
+    } catch (err) {
+      showToast('err', err instanceof Error ? err.message : 'Export failed');
+    }
+    setSheetsExporting(false);
+  };
+
   // ══════════════════════════════════════
   //  ITEM CARD RENDERER (preserved)
   // ══════════════════════════════════════
@@ -509,6 +523,14 @@ export default function ManagerDashboard() {
             <span className="text-xs font-bold bg-gray-800 text-gray-300 px-2.5 py-1 rounded-full">
               {allItems.length}
             </span>
+            <button
+              onClick={exportToSheets}
+              disabled={sheetsExporting}
+              className="px-3 py-2 rounded-lg bg-yellow text-black font-bold text-xs flex items-center gap-1.5 active:scale-95 min-h-[40px] disabled:opacity-50"
+            >
+              {sheetsExporting ? <Loader2 size={14} className="animate-spin" /> : <Grid3X3 size={14} />}
+              Sheets
+            </button>
             <button
               onClick={() => fetchItems(true)}
               disabled={refreshing}
