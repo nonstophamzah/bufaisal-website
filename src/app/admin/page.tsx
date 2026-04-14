@@ -25,7 +25,6 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import {
-  supabase,
   ShopItem,
   WebsiteConfig,
   DutyManager,
