@@ -504,13 +504,13 @@ export default function ManagerDashboard() {
     <div className="pb-24 max-w-full overflow-x-hidden bg-[#111]">
       {/* Toast */}
       {toast && (
-        <div className={`fixed top-16 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-xl text-sm font-bold shadow-lg ${toast.type === 'ok' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+        <div className={`fixed left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-xl text-sm font-bold shadow-lg top-[calc(env(safe-area-inset-top)+70px)] ${toast.type === 'ok' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
           {toast.msg}
         </div>
       )}
 
-      {/* ═══ S1: STICKY HEADER ═══ */}
-      <div className="sticky top-14 z-30 bg-black border-b border-gray-800 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+      {/* ═══ S1: FIXED HEADER ═══ */}
+      <div className="fixed top-0 left-0 right-0 z-50 bg-black border-b border-gray-800 px-4 py-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-heading text-lg text-yellow">OPERATIONS DASHBOARD</h1>
@@ -541,6 +541,9 @@ export default function ManagerDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Spacer for fixed header (60px + safe area) */}
+      <div className="h-[calc(env(safe-area-inset-top)+60px)]" />
 
       {/* ═══ S2: CRITICAL ALERTS ═══ */}
       {(overdueItems.length > 0 || pending.length > 0) && (
