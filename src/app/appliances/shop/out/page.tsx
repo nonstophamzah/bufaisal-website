@@ -67,7 +67,7 @@ export default function ShopOutPage() {
       filter: {
         approval_status: 'approved',
         shop: shop,
-        needs_jurf: 'true',
+        condition: 'not_working',
         location_status: 'at_shop',
       },
       order: { column: 'created_at', ascending: false },

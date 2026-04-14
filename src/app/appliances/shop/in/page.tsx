@@ -38,6 +38,7 @@ export default function ShopInPage() {
   const [photoUrl, setPhotoUrl] = useState('');
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState('');
+  const [shopError, setShopError] = useState('');
   const scanInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -240,7 +241,7 @@ export default function ShopInPage() {
         {SHOPS.map((s) => (
           <button
             key={s}
-            onClick={() => setShop(s)}
+            onClick={() => { setShop(s); setShopError(''); }}
             className={`py-4 rounded-xl font-heading text-xl active:scale-95 transition-all ${
               shop === s ? 'bg-black text-yellow ring-2 ring-yellow' : 'bg-gray-200'
             }`}
@@ -342,11 +343,20 @@ export default function ShopInPage() {
       {scanMsg && <p className="text-orange-500 text-sm font-bold mb-4">{scanMsg}</p>}
       {!scanMsg && <div className="mb-5" />}
 
+      {/* Shop error */}
+      {shopError && <p className="text-red-500 text-sm font-bold mb-3">{shopError}</p>}
+
       {/* Next */}
       <button
-        onClick={() => setScreen('photo')}
-        disabled={!isValid}
-        className="w-full py-5 rounded-2xl bg-black text-white font-heading text-2xl flex items-center justify-center gap-2 active:scale-95 transition-transform disabled:opacity-30"
+        onClick={() => {
+          if (!shop) {
+            setShopError('Please select a shop');
+            return;
+          }
+          setShopError('');
+          if (isValid) setScreen('photo');
+        }}
+        className={`w-full py-5 rounded-2xl bg-black text-white font-heading text-2xl flex items-center justify-center gap-2 active:scale-95 transition-transform ${!isValid ? 'opacity-30' : ''}`}
       >
         NEXT <ArrowRight size={22} />
       </button>
