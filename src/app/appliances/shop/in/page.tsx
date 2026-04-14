@@ -129,7 +129,7 @@ export default function ShopInPage() {
       needs_jurf: status === 'Not Working',
       date_received: new Date().toISOString().split('T')[0],
       created_by: worker,
-      approval_status: 'pending',
+      approval_status: condition === 'scrap' ? 'pending' : 'approved',
     });
 
     if (result.error) {
