@@ -146,8 +146,19 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
               {item.item_name}
             </h1>
             {item.brand && (
-              <p className="text-muted text-sm mb-4">{item.brand}</p>
+              <p className="text-muted text-sm mb-2">{item.brand}</p>
             )}
+
+            <div className="flex items-center gap-2 mb-4">
+              <span className="font-heading text-2xl">
+                {item.sale_price ? `${item.sale_price} AED` : 'Ask for price'}
+              </span>
+              {!!item.sale_price && (
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#F9D923', color: '#111' }}>
+                  Negotiable
+                </span>
+              )}
+            </div>
 
             {item.description && (
               <div className="mb-6">
@@ -199,7 +210,7 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
               className="hidden md:flex w-full items-center justify-center gap-2 bg-yellow hover:bg-yellow/90 disabled:bg-gray-300 disabled:cursor-not-allowed text-black font-bold py-4 rounded-xl text-lg transition-colors active:scale-[0.98]"
             >
               <MessageCircle size={22} />
-              {item.is_sold ? 'Item Sold' : 'PRICE'}
+              {item.is_sold ? 'Item Sold' : 'WHATSAPP'}
             </button>
           </div>
         </div>
@@ -213,7 +224,7 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
           className="w-full flex items-center justify-center gap-2 bg-yellow hover:bg-yellow/90 disabled:bg-gray-300 disabled:cursor-not-allowed text-black font-bold py-4 rounded-xl text-lg transition-colors active:scale-[0.98]"
         >
           <MessageCircle size={22} />
-          {item.is_sold ? 'Item Sold' : 'PRICE'}
+          {item.is_sold ? 'Item Sold' : 'WHATSAPP'}
         </button>
       </div>
     </div>

@@ -53,6 +53,7 @@ export default function TeamPage() {
     condition_notes: '',
     seo_title: '',
     seo_description: '',
+    sale_price: '',
   });
 
   // --- STEP 2: password validation (server-side, never exposes hashes) ---
@@ -243,6 +244,12 @@ export default function TeamPage() {
       return;
     }
 
+    const price = Number(form.sale_price);
+    if (!form.sale_price || isNaN(price) || price <= 0) {
+      setError('Price is required and must be greater than 0');
+      return;
+    }
+
     const urls = imageUrls.filter((u) => !!u);
     if (urls.length === 0) {
       setError('Upload at least one photo');
@@ -259,7 +266,7 @@ export default function TeamPage() {
       description: form.description || null,
       category: form.category,
       condition: form.condition,
-      sale_price: 0,
+      sale_price: price,
       shop_source: `Shop ${shopLabel}`,
       shop_label: shopLabel,
       duty_manager: managerName,
@@ -295,6 +302,7 @@ export default function TeamPage() {
       condition_notes: '',
       seo_title: '',
       seo_description: '',
+      sale_price: '',
     });
     setImageUrls([]);
     setSuccess(false);
@@ -600,6 +608,24 @@ export default function TeamPage() {
                 value={form.brand}
                 onChange={(e) => setForm({ ...form, brand: e.target.value })}
                 className="w-full px-4 py-3.5 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow"
+              />
+            </div>
+
+            <div>
+              <label className="block text-base font-bold mb-1">
+                Price (AED) *
+              </label>
+              <input
+                type="number"
+                inputMode="numeric"
+                min="1"
+                value={form.sale_price}
+                onChange={(e) =>
+                  setForm({ ...form, sale_price: e.target.value })
+                }
+                placeholder="0"
+                className="w-full px-4 py-3.5 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow"
+                required
               />
             </div>
 

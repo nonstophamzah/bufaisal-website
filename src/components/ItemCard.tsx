@@ -98,13 +98,22 @@ export default function ItemCard({ item }: { item: ShopItem }) {
           )}
           <ConditionBadge condition={item.condition} />
         </div>
-        <p className="text-[10px] text-muted mt-1">Only 1 available — First come, first serve</p>
+        <div className="flex items-center gap-1.5 mt-1.5">
+          <span className="font-bold text-sm">
+            {item.sale_price ? `${item.sale_price} AED` : 'Ask for price'}
+          </span>
+          {!!item.sale_price && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#F9D923', color: '#111' }}>
+              Negotiable
+            </span>
+          )}
+        </div>
         <button
           onClick={handleWhatsAppClick}
           className="w-full flex items-center justify-center gap-2 bg-yellow hover:bg-yellow/90 text-black font-bold text-sm py-2.5 rounded-lg mt-2 active:scale-95 transition-all"
         >
           <MessageCircle size={16} />
-          PRICE
+          WHATSAPP
         </button>
       </div>
     </div>
