@@ -1,20 +1,38 @@
+import { Metadata } from 'next';
 import CategoryCard from '@/components/CategoryCard';
 import { CATEGORIES } from '@/lib/constants';
 import { supabase } from '@/lib/supabase';
 
 export const revalidate = 60;
 
+export const metadata: Metadata = {
+  title: 'Browse All Categories | Bu Faisal',
+  description:
+    'Browse used furniture, appliances, electronics, clothing and more at Bu Faisal. 8 categories of quality second-hand goods across 5 showrooms in Ajman, UAE.',
+  alternates: { canonical: '/categories' },
+  openGraph: {
+    title: 'Browse All Categories | Bu Faisal',
+    description: 'Browse used furniture, appliances, electronics, clothing and more at Bu Faisal.',
+    images: [{ url: '/og-image.png', width: 1200, height: 630 }],
+  },
+};
+
 async function getCategoryCounts() {
+  // Parallel queries instead of sequential N+1
+  const results = await Promise.all(
+    CATEGORIES.map(cat =>
+      supabase
+        .from('shop_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_published', true)
+        .eq('is_sold', false)
+        .eq('category', cat.name)
+    )
+  );
   const counts: Record<string, number> = {};
-  for (const cat of CATEGORIES) {
-    const { count } = await supabase
-      .from('shop_items')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_published', true)
-      .eq('is_sold', false)
-      .eq('category', cat.name);
-    counts[cat.slug] = count || 0;
-  }
+  CATEGORIES.forEach((cat, i) => {
+    counts[cat.slug] = results[i].count || 0;
+  });
   return counts;
 }
 

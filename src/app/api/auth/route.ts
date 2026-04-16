@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { rateLimit } from '@/lib/rate-limit';
+import { createSessionToken } from '@/lib/admin-session';
 
 // PIN-to-name mapping is stored as JSON in ADMIN_PIN_HASHES env var.
 // Format: [{"hash":"$2a$10$...","name":"Admin"},{"hash":"$2a$10$...","name":"Humaan"}]
@@ -41,7 +42,8 @@ export async function POST(request: NextRequest) {
     // Check each admin entry
     for (const entry of entries) {
       if (await bcrypt.compare(pin, entry.hash)) {
-        return NextResponse.json({ name: entry.name });
+        const token = createSessionToken(entry.name);
+        return NextResponse.json({ name: entry.name, token });
       }
     }
 

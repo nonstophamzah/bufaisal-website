@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from 'next';
+import { Suspense } from 'react';
 import { Bebas_Neue, DM_Sans } from 'next/font/google';
 import Script from 'next/script';
 import './globals.css';
 import { LangProvider } from '@/lib/lang';
+import PageViewTracker from '@/components/PageViewTracker';
 
 const bebasNeue = Bebas_Neue({
   weight: '400',
@@ -21,8 +23,6 @@ export const viewport: Viewport = {
   themeColor: '#000000',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: 'cover',
 };
 
@@ -39,26 +39,48 @@ export const metadata: Metadata = {
     title: "Bu Faisal | UAE's Largest Second-Hand Market",
     description: "UAE's largest used goods market since 2009. Browse thousands of used furniture, appliances, and household items. 5 showrooms, 24-48hr delivery.",
     siteName: 'Bu Faisal', type: 'website', url: 'https://bufaisal.ae',
+    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'Bu Faisal - UAE\'s Largest Second-Hand Market' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: "Bu Faisal | UAE's Largest Second-Hand Market",
     description: "UAE's largest used goods market since 2009. Browse thousands of used furniture, appliances, and household items. 5 showrooms, 24-48hr delivery.",
+    images: ['/og-image.png'],
   },
   alternates: {
     canonical: '/',
   },
-  verification: {
-    google: 'VERIFICATION_CODE_HERE',
-  },
 };
 
 const FB_PIXEL_ID = process.env.NEXT_PUBLIC_FB_PIXEL_ID;
+const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
+        {/* Google Analytics 4 */}
+        {GA_MEASUREMENT_ID && (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+              strategy="afterInteractive"
+            />
+            <Script
+              id="ga4-init"
+              strategy="afterInteractive"
+              dangerouslySetInnerHTML={{
+                __html: `
+                  window.dataLayer = window.dataLayer || [];
+                  function gtag(){dataLayer.push(arguments);}
+                  gtag('js', new Date());
+                  gtag('config', '${GA_MEASUREMENT_ID}', { send_page_view: true });
+                `,
+              }}
+            />
+          </>
+        )}
+        {/* Facebook Pixel */}
         {FB_PIXEL_ID && (
           <>
             <Script
@@ -88,7 +110,54 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         )}
       </head>
       <body className={`${bebasNeue.variable} ${dmSans.variable} font-body antialiased bg-white text-black`}>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'Organization',
+            name: 'Bu Faisal General Trading',
+            url: 'https://bufaisal.ae',
+            logo: 'https://bufaisal.ae/og-image.png',
+            foundingDate: '2009',
+            description: "UAE's largest second-hand market since 2009. 5 showrooms in Ajman.",
+            address: {
+              '@type': 'PostalAddress',
+              addressLocality: 'Ajman',
+              addressCountry: 'AE',
+            },
+            contactPoint: {
+              '@type': 'ContactPoint',
+              telephone: '+971585932499',
+              contactType: 'sales',
+              availableLanguage: ['English', 'Arabic'],
+            },
+            sameAs: [
+              'https://www.instagram.com/bufaisal.ae',
+              'https://www.tiktok.com/@bufaisal.ae',
+            ],
+          }).replace(/</g, '\\u003c') }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'WebSite',
+            name: 'Bu Faisal',
+            url: 'https://bufaisal.ae',
+            potentialAction: {
+              '@type': 'SearchAction',
+              target: {
+                '@type': 'EntryPoint',
+                urlTemplate: 'https://bufaisal.ae/shop?q={search_term_string}',
+              },
+              'query-input': 'required name=search_term_string',
+            },
+          }).replace(/</g, '\\u003c') }}
+        />
         <LangProvider>
+          <Suspense fallback={null}>
+            <PageViewTracker />
+          </Suspense>
           {children}
         </LangProvider>
       </body>

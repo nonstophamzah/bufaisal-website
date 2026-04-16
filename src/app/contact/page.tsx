@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
-import { MapPin, Phone, Clock, MessageCircle } from 'lucide-react';
+import { MapPin, Phone, Clock } from 'lucide-react';
+import ContactWhatsApp from './contact-wa';
 
 export const metadata: Metadata = {
   title: 'Contact Us — Bu Faisal',
@@ -16,15 +17,7 @@ export default function ContactPage() {
         <p className="text-center text-muted mb-10">We&apos;d love to hear from you</p>
 
         {/* WhatsApp CTA */}
-        <a
-          href="https://wa.me/971585932499?text=Hi!%20I%20have%20a%20question%20about%20Bu%20Faisal."
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center justify-center gap-3 bg-green-500 hover:bg-green-600 text-white font-bold text-lg py-4 rounded-xl transition-colors mb-10"
-        >
-          <MessageCircle size={24} />
-          Message Us on WhatsApp
-        </a>
+        <ContactWhatsApp />
 
         {/* Info cards */}
         <div className="grid sm:grid-cols-3 gap-4 mb-10">

@@ -174,6 +174,12 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (res.ok && data.name) {
+        // Store signed session token for API auth
+        sessionStorage.setItem('admin_session', JSON.stringify({
+          name: data.name,
+          token: data.token,
+          ts: Date.now(),
+        }));
         setUser(data.name);
         setLastActivity(Date.now());
       } else {
@@ -232,10 +238,18 @@ export default function AdminPage() {
 
   // ─── Fetch team ────────────────────────────────────────
 
-  const adminHeaders = useCallback(() => ({
-    'Content-Type': 'application/json',
-    'x-admin-name': user,
-  }), [user]);
+  const adminHeaders = useCallback(() => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    try {
+      const session = sessionStorage.getItem('admin_session');
+      if (session) {
+        const parsed = JSON.parse(session);
+        if (parsed.token) headers['Authorization'] = `Bearer ${parsed.token}`;
+      }
+    } catch { /* ignore */ }
+    headers['x-admin-name'] = user;
+    return headers;
+  }, [user]);
 
   const fetchTeam = useCallback(async () => {
     setLoading(true);

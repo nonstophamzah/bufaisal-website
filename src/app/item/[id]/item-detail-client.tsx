@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { MessageCircle, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ShopItem } from '@/lib/supabase';
 import { buildWhatsAppUrl } from '@/lib/constants';
-import { trackWhatsAppClick } from '@/lib/fbpixel';
+import { trackWhatsAppClick, trackViewContent } from '@/lib/fbpixel';
 
 function ConditionBadge({ condition }: { condition: string | null }) {
   if (!condition) return null;
@@ -31,13 +31,23 @@ function ConditionBadge({ condition }: { condition: string | null }) {
 export default function ItemDetailClient({ item }: { item: ShopItem }) {
   const [activeImage, setActiveImage] = useState(0);
 
+  // Track ViewContent on mount
+  useEffect(() => {
+    trackViewContent({
+      id: item.id,
+      item_name: item.item_name,
+      category: item.category,
+      sale_price: item.sale_price,
+    });
+  }, [item.id, item.item_name, item.category, item.sale_price]);
+
   const handleWhatsAppClick = () => {
     fetch('/api/track-click', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ itemId: item.id }),
     }).catch(() => {});
-    trackWhatsAppClick();
+    trackWhatsAppClick({ id: item.id, item_name: item.item_name, sale_price: item.sale_price });
     window.location.href = buildWhatsAppUrl(item);
   };
 
@@ -242,7 +252,7 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ itemId: item.id }),
             }).catch(() => {});
-            trackWhatsAppClick();
+            trackWhatsAppClick({ id: item.id, item_name: item.item_name, sale_price: item.sale_price });
           }}
           className="fixed bottom-20 md:bottom-6 right-4 z-50 w-14 h-14 bg-yellow hover:bg-yellow/90 rounded-full flex items-center justify-center shadow-lg transition-colors"
           aria-label="WhatsApp"

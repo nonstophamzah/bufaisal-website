@@ -32,7 +32,7 @@ function isJustArrived(createdAt: string) {
   return diff < 7 * 24 * 60 * 60 * 1000; // 7 days
 }
 
-export default function ItemCard({ item }: { item: ShopItem }) {
+export default function ItemCard({ item, priority = false }: { item: ShopItem; priority?: boolean }) {
   const imageUrl =
     item.thumbnail_url || item.image_urls?.[0] || '/placeholder.png';
   const justArrived = isJustArrived(item.created_at);
@@ -45,7 +45,7 @@ export default function ItemCard({ item }: { item: ShopItem }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ itemId: item.id }),
     }).catch(() => {});
-    trackWhatsAppClick();
+    trackWhatsAppClick({ id: item.id, item_name: item.item_name, sale_price: item.sale_price });
     window.location.href = buildWhatsAppUrl(item);
   };
 
@@ -59,6 +59,7 @@ export default function ItemCard({ item }: { item: ShopItem }) {
             fill
             className="object-cover group-hover:scale-105 transition-transform duration-300"
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            priority={priority}
           />
           {/* Just Arrived badge */}
           {justArrived && (
