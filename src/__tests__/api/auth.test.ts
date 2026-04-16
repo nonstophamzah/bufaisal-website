@@ -16,6 +16,11 @@ vi.mock('@/lib/rate-limit', () => ({
   rateLimit: vi.fn(() => ({ allowed: true, remaining: 10 })),
 }));
 
+// Mock admin-session token creation
+vi.mock('@/lib/admin-session', () => ({
+  createSessionToken: vi.fn((name: string) => `mock-token-${name}`),
+}));
+
 describe('POST /api/auth', () => {
   beforeEach(() => {
     vi.resetModules();

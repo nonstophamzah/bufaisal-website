@@ -5,6 +5,7 @@ import { ShopItem } from '@/lib/supabase';
 import MarketplaceClient from './marketplace-client';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
 function getSupabase() {
   return createClient(
@@ -33,7 +34,7 @@ export const metadata: Metadata = {
 async function getItems(): Promise<ShopItem[]> {
   const { data } = await getSupabase()
     .from('shop_items')
-    .select('*')
+    .select('id, item_name, brand, category, sale_price, thumbnail_url, image_urls, condition, is_featured, is_sold, created_at, shop_source, barcode, description, product_type, condition_notes')
     .eq('is_published', true)
     .eq('is_sold', false)
     .eq('is_hidden', false)

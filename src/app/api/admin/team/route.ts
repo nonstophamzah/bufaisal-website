@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { verifyOrigin } from '@/lib/verify-origin';
+import { verifyAdmin } from '@/lib/verify-admin';
 import { rateLimit } from '@/lib/rate-limit';
-
-function verifyAdmin(request: NextRequest): string | null {
-  if (!verifyOrigin(request)) return null;
-  const adminName = request.headers.get('x-admin-name');
-  return adminName || null;
-}
 
 // GET /api/admin/team — fetch managers and shop passwords (labels only, not hashes)
 export async function GET(request: NextRequest) {
@@ -18,7 +12,7 @@ export async function GET(request: NextRequest) {
   if (!allowed) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
   }
-  const admin = await verifyAdmin(request);
+  const admin = verifyAdmin(request);
   if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const [{ data: mgrs }, { data: pwds }] = await Promise.all([
@@ -37,7 +31,7 @@ export async function POST(request: NextRequest) {
   if (!allowed) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
   }
-  const admin = await verifyAdmin(request);
+  const admin = verifyAdmin(request);
   if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { action, ...body } = await request.json();

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleAuth } from 'google-auth-library';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { verifyAdmin } from '@/lib/verify-admin';
 import { rateLimit } from '@/lib/rate-limit';
-import { verifyOrigin } from '@/lib/verify-origin';
 
-const SHEET_ID = process.env.GOOGLE_SHEETS_ID || '1bUMqgugOM7GomlKgZnAjBsjNLUTt6KmiK0GpU3ct61E';
+const SHEET_ID = process.env.GOOGLE_SHEETS_ID;
+if (!SHEET_ID) console.warn('GOOGLE_SHEETS_ID not set — export-to-sheets will fail');
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 
 function getAuth() {
@@ -22,23 +23,23 @@ async function sheetsRequest(auth: GoogleAuth, path: string, method: string, bod
 }
 
 export async function POST(request: NextRequest) {
-  // Security: verify origin
-  if (!verifyOrigin(request)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // Auth: require admin session token
+  const admin = verifyAdmin(request);
+  if (!admin) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Security: rate limit (5 exports per minute — this is expensive)
+  // Rate limit: 5 exports per minute
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
   const { allowed } = rateLimit(`export-sheets:${ip}`, 5, 60_000);
   if (!allowed) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
   }
 
-  // Security: require manager auth header
-  const managerName = request.headers.get('x-manager-name');
-  if (!managerName) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!SHEET_ID) {
+    return NextResponse.json({ error: 'GOOGLE_SHEETS_ID not configured' }, { status: 500 });
   }
+
   try {
     const auth = getAuth();
     const supabase = getSupabaseAdmin();

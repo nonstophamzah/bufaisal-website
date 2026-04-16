@@ -1,7 +1,20 @@
+import { Metadata } from 'next';
 import { MapPin, Store, Calendar, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 export const revalidate = 60;
+
+export const metadata: Metadata = {
+  title: "About Bu Faisal | UAE's Largest Second-Hand Market Since 2009",
+  description:
+    "Learn about Bu Faisal — Ajman's trusted destination for quality pre-owned goods since 2009. 5 showrooms, 10,000+ customers served, and a mission to give quality items a second life.",
+  alternates: { canonical: '/about' },
+  openGraph: {
+    title: "About Bu Faisal | UAE's Largest Second-Hand Market Since 2009",
+    description: "Learn about Bu Faisal — Ajman's trusted destination for quality pre-owned goods since 2009.",
+    images: [{ url: '/og-image.png', width: 1200, height: 630 }],
+  },
+};
 
 const stats = [
   { icon: Calendar, label: 'Since', value: '2009' },

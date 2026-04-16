@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { cache } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { ShopItem } from '@/lib/supabase';
 import ItemDetailClient from './item-detail-client';
@@ -11,14 +12,15 @@ function getSupabase() {
   );
 }
 
-async function getItem(id: string): Promise<ShopItem | null> {
+// React.cache deduplicates across generateMetadata + page component
+const getItem = cache(async (id: string): Promise<ShopItem | null> => {
   const { data } = await getSupabase()
     .from('shop_items')
     .select('*')
     .eq('id', id)
     .single();
   return data;
-}
+});
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -31,7 +33,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const description =
     item.seo_description ||
     item.description ||
-    `${item.item_name} available at Bu Faisal second-hand store in Abu Dhabi.`;
+    `${item.item_name} available at Bu Faisal second-hand store in Ajman, UAE.`;
   const image = item.thumbnail_url || item.image_urls?.[0];
 
   return {
@@ -66,7 +68,7 @@ export default async function ItemDetailPage({ params }: Props) {
 
   // Product JSON-LD structured data for Google Shopping / rich results
   const image = item.thumbnail_url || item.image_urls?.[0];
-  const jsonLd = {
+  const productSchema = {
     '@context': 'https://schema.org',
     '@type': 'Product',
     name: item.item_name,
@@ -95,13 +97,34 @@ export default async function ItemDetailPage({ params }: Props) {
         name: 'Bu Faisal General Trading',
       },
     },
+    ...(item.category && { category: item.category }),
+  };
+
+  // BreadcrumbList JSON-LD
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://bufaisal.ae' },
+      { '@type': 'ListItem', position: 2, name: 'Shop', item: 'https://bufaisal.ae/shop' },
+      ...(item.category ? [{
+        '@type': 'ListItem', position: 3,
+        name: item.category,
+        item: `https://bufaisal.ae/shop?category=${encodeURIComponent(item.category)}`,
+      }] : []),
+      { '@type': 'ListItem', position: item.category ? 4 : 3, name: item.item_name },
+    ],
   };
 
   return (
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema).replace(/</g, '\\u003c') }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema).replace(/</g, '\\u003c') }}
       />
       <ItemDetailClient item={item} />
     </>

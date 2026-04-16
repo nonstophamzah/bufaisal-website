@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { Search, X, MessageCircle, Zap } from 'lucide-react';
 import { ShopItem } from '@/lib/supabase';
 import { buildWhatsAppUrl, CATEGORIES } from '@/lib/constants';
-import { trackWhatsAppClick } from '@/lib/fbpixel';
+import { trackWhatsAppClick, trackSearch } from '@/lib/fbpixel';
 import { useLang } from '@/lib/lang';
 
 const CAT_PILLS = ['All', ...CATEGORIES.map((c) => c.name)];
@@ -27,6 +27,13 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Shop
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [cat, setCat] = useState(searchParams.get('category') || 'All');
   const [visible, setVisible] = useState(BATCH);
+
+  // Track search events (debounced)
+  useEffect(() => {
+    if (!search.trim() || search.trim().length < 2) return;
+    const timeout = setTimeout(() => trackSearch(search.trim()), 800);
+    return () => clearTimeout(timeout);
+  }, [search]);
 
   // Client-side filter
   const filtered = items.filter((item) => {
@@ -59,7 +66,7 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Shop
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ itemId: item.id }),
     }).catch(() => {});
-    trackWhatsAppClick();
+    trackWhatsAppClick({ id: item.id, item_name: item.item_name, sale_price: item.sale_price });
     window.location.href = buildWhatsAppUrl(item);
   };
 
@@ -160,14 +167,14 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Shop
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 px-3">
-            {filtered.slice(0, visible).map((item) => {
+            {filtered.slice(0, visible).map((item, idx) => {
               const img = item.thumbnail_url || item.image_urls?.[0];
               const hasPrice = item.sale_price && item.sale_price > 0;
               return (
                 <div key={item.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
                   <Link href={`/item/${item.id}`} className="block relative aspect-square bg-gray-100">
                     {img ? (
-                      <Image src={img} alt={item.item_name} fill className="object-cover" sizes="(max-width:640px) 50vw, 25vw" loading="lazy" />
+                      <Image src={img} alt={item.item_name} fill className="object-cover" sizes="(max-width:640px) 50vw, 25vw" {...(idx < 4 ? { priority: true } : { loading: 'lazy' as const })} />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-gray-300"><Zap size={32} /></div>
                     )}

@@ -1,40 +1,62 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-/**
- * Global middleware for security and route protection.
- * Runs on every matched request before the route handler.
- */
+// Routes that require admin authentication
+const ADMIN_ROUTES = ['/admin'];
+
+// Routes that require appliance entry code
+const APPLIANCE_PROTECTED_ROUTES = [
+  '/appliances/select',
+  '/appliances/shop',
+  '/appliances/jurf',
+  '/appliances/cleaning',
+  '/appliances/security',
+  '/appliances/delivery',
+  '/appliances/manager',
+];
+
+// Internal routes that should not be accessible to search engines
+const INTERNAL_ROUTES = ['/team', '/admin', '/appliances', '/login'];
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const response = NextResponse.next();
 
-  // ── Block direct access to admin pages without referer from site ──
-  // (Defense-in-depth — admin page also checks auth client-side)
-  if (pathname.startsWith('/admin') && !pathname.startsWith('/api/')) {
-    // Allow if coming from the site itself (has valid referer)
-    const referer = request.headers.get('referer') || '';
-    const isFromSite =
-      referer.includes('bufaisal.ae') ||
-      referer.includes('localhost:3000') ||
-      referer === ''; // Direct navigation is OK (user typing URL)
-
-    // We don't block — admin has its own PIN auth — but we add security headers
-    if (!isFromSite) {
-      response.headers.set('X-Robots-Tag', 'noindex, nofollow');
-    }
-  }
-
-  // ── Prevent search engines from indexing internal routes ──
-  if (
-    pathname.startsWith('/appliances') ||
-    pathname.startsWith('/admin') ||
-    pathname.startsWith('/team') ||
-    pathname.startsWith('/login')
-  ) {
+  // ── Add X-Robots-Tag for internal routes ──
+  if (INTERNAL_ROUTES.some(route => pathname.startsWith(route))) {
     response.headers.set('X-Robots-Tag', 'noindex, nofollow');
   }
 
-  // ── Block API abuse: reject requests with suspicious user agents ──
+  // ── Admin route protection ──
+  if (ADMIN_ROUTES.some(route => pathname.startsWith(route))) {
+    response.headers.set('X-Frame-Options', 'DENY');
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  }
+
+  // ── Appliance routes: ensure they go through the gate ──
+  if (APPLIANCE_PROTECTED_ROUTES.some(route => pathname.startsWith(route))) {
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  }
+
+  // ── Block direct access to API routes from non-allowed origins ──
+  if (pathname.startsWith('/api/admin') || pathname.startsWith('/api/appliances')) {
+    const origin = request.headers.get('origin');
+    const referer = request.headers.get('referer');
+    const allowedOrigins = [
+      'https://bufaisal.ae',
+      'https://www.bufaisal.ae',
+      'http://localhost:3000',
+    ];
+
+    const isAllowed =
+      (origin && allowedOrigins.includes(origin)) ||
+      (referer && allowedOrigins.some(o => referer.startsWith(o)));
+
+    if (!isAllowed && request.method !== 'GET') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+  }
+
+  // ── Block API abuse: reject requests with no user agent ──
   const ua = request.headers.get('user-agent') || '';
   if (pathname.startsWith('/api/') && !ua) {
     return NextResponse.json(
@@ -48,7 +70,11 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Match all routes except static files and Next.js internals
-    '/((?!_next/static|_next/image|favicon.ico|og-image.png|robots.txt|sitemap.xml).*)',
+    // Match admin, appliance, team, login, and API routes
+    '/admin/:path*',
+    '/appliances/:path*',
+    '/team/:path*',
+    '/login',
+    '/api/:path*',
   ],
 };

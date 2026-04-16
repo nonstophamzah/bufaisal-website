@@ -1,38 +1,55 @@
 // Client-side helper for admin API calls
-// Replaces direct Supabase anon access with secure server-side routes
+// Uses signed session tokens for authentication
 
-function getAdminName(): string {
+function getAdminSession(): { name: string; token: string } | null {
   try {
     const session = sessionStorage.getItem('admin_session');
     if (session) {
       const parsed = JSON.parse(session);
-      return parsed.name || 'Admin';
+      if (parsed.token) return parsed;
     }
   } catch { /* ignore */ }
-  return 'Admin';
+  return null;
+}
+
+function getAuthHeaders(): Record<string, string> {
+  const session = getAdminSession();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (session?.token) {
+    headers['Authorization'] = `Bearer ${session.token}`;
+  }
+  // Legacy fallback — remove after full migration
+  if (session?.name) {
+    headers['x-admin-name'] = session.name;
+  }
+  return headers;
 }
 
 async function adminItemsApi<T = Record<string, unknown>>(body: Record<string, unknown>): Promise<T> {
   const res = await fetch('/api/admin/items', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-admin-name': getAdminName(),
-    },
+    headers: getAuthHeaders(),
     body: JSON.stringify(body),
   });
+  if (res.status === 401) {
+    sessionStorage.removeItem('admin_session');
+    window.location.href = '/login';
+    throw new Error('Session expired');
+  }
   return res.json();
 }
 
 async function adminConfigApi<T = Record<string, unknown>>(body: Record<string, unknown>): Promise<T> {
   const res = await fetch('/api/admin/config', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-admin-name': getAdminName(),
-    },
+    headers: getAuthHeaders(),
     body: JSON.stringify(body),
   });
+  if (res.status === 401) {
+    sessionStorage.removeItem('admin_session');
+    window.location.href = '/login';
+    throw new Error('Session expired');
+  }
   return res.json();
 }
 
