@@ -227,6 +227,29 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
           {item.is_sold ? 'Item Sold' : 'WHATSAPP'}
         </button>
       </div>
+
+      {/* Sticky WhatsApp circle button — bottom right */}
+      {!item.is_sold && (
+        <a
+          href={`https://wa.me/971585932499?text=${encodeURIComponent(
+            `Hi, I'm interested in *${item.item_name}*${item.barcode ? ` (Barcode: ${item.barcode})` : ''}. Is this still available?\nhttps://bufaisal.ae/item/${item.id}`
+          )}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => {
+            fetch('/api/track-click', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ itemId: item.id }),
+            }).catch(() => {});
+            trackWhatsAppClick();
+          }}
+          className="fixed bottom-20 md:bottom-6 right-4 z-50 w-14 h-14 bg-yellow hover:bg-yellow/90 rounded-full flex items-center justify-center shadow-lg transition-colors"
+          aria-label="WhatsApp"
+        >
+          <MessageCircle size={28} className="text-black" />
+        </a>
+      )}
     </div>
   );
 }
