@@ -6,6 +6,7 @@ import { CATEGORY_SLUG_MAP } from '@/lib/constants';
 import ShopClient from './shop-client';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
 function getSupabase() {
   return createClient(

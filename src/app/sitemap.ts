@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next';
 import { createClient } from '@supabase/supabase-js';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 3600; // Regenerate sitemap hourly
 
 const BASE_URL = 'https://bufaisal.ae';
 
@@ -12,10 +12,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const supabase = createClient(url, key);
 
+  // Only include published, non-sold items
   const { data: items } = await supabase
     .from('shop_items')
     .select('id, updated_at')
-    .eq('is_published', true);
+    .eq('is_published', true)
+    .eq('is_sold', false);
 
   const itemEntries: MetadataRoute.Sitemap = (items || []).map((item) => ({
     url: `${BASE_URL}/item/${item.id}`,
@@ -27,7 +29,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [
     { url: BASE_URL, lastModified: new Date(), changeFrequency: 'daily', priority: 1 },
     { url: `${BASE_URL}/shop`, lastModified: new Date(), changeFrequency: 'daily', priority: 0.9 },
-    { url: `${BASE_URL}/team`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.3 },
+    { url: `${BASE_URL}/categories`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.8 },
+    { url: `${BASE_URL}/about`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.6 },
+    { url: `${BASE_URL}/contact`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.6 },
     ...itemEntries,
   ];
 }

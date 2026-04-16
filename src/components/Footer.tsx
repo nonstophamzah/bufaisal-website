@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { MapPin, Phone, Clock, Truck, MessageCircle, ExternalLink } from 'lucide-react';
 import { useLang } from '@/lib/lang';
+import { trackContactClick } from '@/lib/fbpixel';
 
 const MAPS_URL = 'https://maps.google.com/?q=Bu+Faisal+General+Trading+Ajman';
 
@@ -88,6 +89,7 @@ export default function Footer() {
                 href="https://wa.me/971585932499"
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => trackContactClick()}
                 className="flex items-center gap-2 text-gray-400 hover:text-yellow transition-colors"
               >
                 <MessageCircle size={16} className="text-green-500 flex-shrink-0" />

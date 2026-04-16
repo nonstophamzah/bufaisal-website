@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { verifyOrigin } from '@/lib/verify-origin';
-
-function verifyAdmin(request: NextRequest): string | null {
-  if (!verifyOrigin(request)) return null;
-  const adminName = request.headers.get('x-admin-name');
-  return adminName || null;
-}
+import { verifyAdmin } from '@/lib/verify-admin';
 
 // GET /api/admin/team — fetch managers and shop passwords (labels only, not hashes)
 export async function GET(request: NextRequest) {

@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { rateLimit } from '@/lib/rate-limit';
-import { verifyOrigin } from '@/lib/verify-origin';
-
-function verifyAdmin(request: NextRequest): string | null {
-  if (!verifyOrigin(request)) return null;
-  const adminName = request.headers.get('x-admin-name');
-  return adminName || null;
-}
+import { verifyAdmin } from '@/lib/verify-admin';
 
 export async function POST(request: NextRequest) {
   const admin = verifyAdmin(request);
