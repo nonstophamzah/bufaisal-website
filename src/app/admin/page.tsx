@@ -6,7 +6,6 @@ import {
   Eye,
   EyeOff,
   Clock,
-  Star,
   BarChart3,
   Settings,
   Users,
@@ -67,6 +66,7 @@ export default function AdminPage() {
     else if (tab === 'team') teamHook.fetchTeam();
     else if (tab === 'analytics') fetchAnalytics();
     else itemsHook.fetchItems();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, tab]);
 
   const fetchAnalytics = useCallback(async () => {

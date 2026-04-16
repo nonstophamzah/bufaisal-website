@@ -33,7 +33,7 @@ export function useAdminSettings(onToast: (type: 'ok' | 'err', msg: string) => v
       }
       await fetchSettings();
       onToast('ok', 'Settings saved');
-    } catch (err) {
+    } catch (_err) {
       onToast('err', 'Failed to save settings');
     }
     setSavingConfig(false);

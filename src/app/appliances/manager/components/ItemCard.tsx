@@ -1,7 +1,7 @@
 'use client';
 
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { useState } from 'react';
+// useState removed — not currently needed
 import { canonicalProductType, canonicalBrand } from '@/lib/appliance-catalog';
 
 interface Item {

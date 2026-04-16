@@ -36,7 +36,7 @@ export function AdminItems({
   onToggleSelectAll,
   onBulkApprove,
   onBulkDelete,
-  showToast,
+  showToast: _showToast,
 }: {
   tab: ItemsTab;
   items: ShopItem[];

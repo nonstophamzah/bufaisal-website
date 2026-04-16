@@ -1,7 +1,6 @@
 'use client';
 
 import { Save, Loader2 } from 'lucide-react';
-import { CATEGORIES } from '@/lib/constants';
 import { Section, Field, FieldTextarea, Spinner } from './shared';
 
 const SHOP_LABELS = ['A', 'B', 'C', 'D', 'E'];

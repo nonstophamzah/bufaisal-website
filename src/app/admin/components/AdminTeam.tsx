@@ -9,7 +9,7 @@ const SHOP_LABELS = ['A', 'B', 'C', 'D', 'E'];
 export function AdminTeam({
   loading,
   managers,
-  passwords,
+  passwords: _passwords,
   newManager,
   setNewManager,
   passwordDraft,
