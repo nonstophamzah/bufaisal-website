@@ -128,7 +128,11 @@ export default async function ShopPage({ searchParams }: Props) {
     openingHours: 'Mo-Su 09:00-22:00',
     priceRange: 'AED',
     image: 'https://bufaisal.ae/og-image.png',
-    sameAs: [],
+    sameAs: [
+      'https://www.instagram.com/bufaisal.ae',
+      'https://www.tiktok.com/@bufaisal.ae',
+      'https://www.facebook.com/bufaisal.ae',
+    ],
   };
 
   const faqSchema = {

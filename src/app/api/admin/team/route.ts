@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { verifyOrigin } from '@/lib/verify-origin';
+import { rateLimit } from '@/lib/rate-limit';
 
 function verifyAdmin(request: NextRequest): string | null {
   if (!verifyOrigin(request)) return null;
@@ -11,6 +12,12 @@ function verifyAdmin(request: NextRequest): string | null {
 
 // GET /api/admin/team — fetch managers and shop passwords (labels only, not hashes)
 export async function GET(request: NextRequest) {
+  // Rate limit: 20 requests per minute
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  const { allowed } = rateLimit(`admin-team:${ip}`, 20, 60_000);
+  if (!allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
   const admin = await verifyAdmin(request);
   if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -24,6 +31,12 @@ export async function GET(request: NextRequest) {
 
 // POST /api/admin/team — update shop passwords (hashed)
 export async function POST(request: NextRequest) {
+  // Rate limit: 10 writes per minute
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  const { allowed } = rateLimit(`admin-team-write:${ip}`, 10, 60_000);
+  if (!allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
   const admin = await verifyAdmin(request);
   if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

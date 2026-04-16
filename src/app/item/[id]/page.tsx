@@ -40,9 +40,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       title,
       description,
-      ...(image && { images: [{ url: image }] }),
+      ...(image && { images: [{ url: image, width: 1200, height: 630, alt: item.item_name }] }),
       type: 'website',
       url: `https://bufaisal.ae/item/${id}`,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      ...(image && { images: [image] }),
     },
     alternates: {
       canonical: `/item/${id}`,
@@ -58,5 +64,46 @@ export default async function ItemDetailPage({ params }: Props) {
   // Increment views server-side (fire-and-forget)
   getSupabase().rpc('increment_views', { item_id: id }).then(() => {});
 
-  return <ItemDetailClient item={item} />;
+  // Product JSON-LD structured data for Google Shopping / rich results
+  const image = item.thumbnail_url || item.image_urls?.[0];
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: item.item_name,
+    description:
+      item.seo_description ||
+      item.description ||
+      `${item.item_name} available at Bu Faisal second-hand store.`,
+    ...(image && { image: [image] }),
+    ...(item.brand && item.brand !== 'Other' && {
+      brand: { '@type': 'Brand', name: item.brand },
+    }),
+    ...(item.barcode && { sku: item.barcode }),
+    url: `https://bufaisal.ae/item/${id}`,
+    itemCondition: 'https://schema.org/UsedCondition',
+    offers: {
+      '@type': 'Offer',
+      url: `https://bufaisal.ae/item/${id}`,
+      priceCurrency: 'AED',
+      ...(item.sale_price && { price: String(item.sale_price) }),
+      ...(!item.sale_price && { price: '0', priceValidUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] }),
+      availability: item.is_sold
+        ? 'https://schema.org/SoldOut'
+        : 'https://schema.org/InStock',
+      seller: {
+        '@type': 'Organization',
+        name: 'Bu Faisal General Trading',
+      },
+    },
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <ItemDetailClient item={item} />
+    </>
+  );
 }

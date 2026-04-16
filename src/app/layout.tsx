@@ -39,11 +39,13 @@ export const metadata: Metadata = {
     title: "Bu Faisal | UAE's Largest Second-Hand Market",
     description: "UAE's largest used goods market since 2009. Browse thousands of used furniture, appliances, and household items. 5 showrooms, 24-48hr delivery.",
     siteName: 'Bu Faisal', type: 'website', url: 'https://bufaisal.ae',
+    images: [{ url: 'https://bufaisal.ae/og-image.png', width: 1200, height: 630, alt: "Bu Faisal - UAE's Largest Second-Hand Market" }],
   },
   twitter: {
     card: 'summary_large_image',
     title: "Bu Faisal | UAE's Largest Second-Hand Market",
     description: "UAE's largest used goods market since 2009. Browse thousands of used furniture, appliances, and household items. 5 showrooms, 24-48hr delivery.",
+    images: ['https://bufaisal.ae/og-image.png'],
   },
   alternates: {
     canonical: '/',
