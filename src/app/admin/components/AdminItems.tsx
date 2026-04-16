@@ -36,7 +36,6 @@ export function AdminItems({
   onToggleSelectAll,
   onBulkApprove,
   onBulkDelete,
-  showToast: _showToast,
 }: {
   tab: ItemsTab;
   items: ShopItem[];
@@ -60,7 +59,6 @@ export function AdminItems({
   onToggleSelectAll: () => void;
   onBulkApprove: () => Promise<void>;
   onBulkDelete: () => Promise<void>;
-  showToast: (type: 'ok' | 'err', msg: string) => void;
 }) {
   if (tab === 'pending') {
     return (

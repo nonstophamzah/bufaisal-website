@@ -9,7 +9,8 @@ const SHOP_LABELS = ['A', 'B', 'C', 'D', 'E'];
 export function AdminTeam({
   loading,
   managers,
-  passwords: _passwords,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  passwords,
   newManager,
   setNewManager,
   passwordDraft,

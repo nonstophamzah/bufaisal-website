@@ -242,7 +242,6 @@ export default function AdminPage() {
             onToggleSelectAll={itemsHook.toggleSelectAll}
             onBulkApprove={itemsHook.bulkApprove}
             onBulkDelete={itemsHook.bulkDelete}
-            showToast={showToast}
           />
         )}
 
