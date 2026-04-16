@@ -75,14 +75,14 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Shop
         </p>
       </section>
 
-      {/* 0B. SOCIAL PROOF BAR */}
-      <div className="w-full py-2.5 px-4 flex items-center justify-center gap-2 text-center flex-wrap" style={{ background: '#F9D923', color: '#111' }}>
-        <span className="text-xs md:text-sm font-bold whitespace-nowrap">15+ Years Trusted</span>
-        <span className="text-xs opacity-50">|</span>
-        <span className="text-xs md:text-sm font-bold whitespace-nowrap">Everything Your Home Needs for Less</span>
-        <span className="text-xs opacity-50">|</span>
+      {/* 0B. TRUST BAR */}
+      <div className="w-full py-3 px-4 flex items-center justify-center gap-3 md:gap-6 text-center flex-wrap" style={{ background: '#000', color: '#F9D923' }}>
+        <span className="text-xs md:text-sm font-bold whitespace-nowrap">Since 2009</span>
+        <span className="text-xs opacity-40 text-white">|</span>
+        <span className="text-xs md:text-sm font-bold whitespace-nowrap">5 Showrooms in Ajman</span>
+        <span className="text-xs opacity-40 text-white">|</span>
         <span className="text-xs md:text-sm font-bold whitespace-nowrap">All Items Inspected</span>
-        <span className="text-xs opacity-50">|</span>
+        <span className="text-xs opacity-40 text-white">|</span>
         <span className="text-xs md:text-sm font-bold whitespace-nowrap">24-48hr Delivery</span>
       </div>
 
