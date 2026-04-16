@@ -27,16 +27,22 @@ export default function SocialProof() {
         {/* Social stats */}
         <div className="flex flex-wrap items-center justify-center gap-4 md:gap-8 mb-8">
           {[
-            { label: 'Facebook', count: '63K+' },
-            { label: 'Instagram', count: '119K+' },
-            { label: 'TikTok', count: '133K+' },
+            { label: 'Facebook', count: '63K+', href: 'https://www.facebook.com/bufaisal.ae' },
+            { label: 'Instagram', count: '119K+', href: 'https://www.instagram.com/bufaisal.ae' },
+            { label: 'TikTok', count: '133K+', href: 'https://www.tiktok.com/@bufaisal.ae' },
           ].map((s) => (
-            <div key={s.label} className="flex items-center gap-2">
+            <a
+              key={s.label}
+              href={s.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 hover:opacity-75 transition-opacity"
+            >
               <span className="font-heading text-2xl md:text-3xl">
                 {s.count}
               </span>
               <span className="text-sm text-muted">{s.label}</span>
-            </div>
+            </a>
           ))}
           <div className="flex items-center gap-2">
             <span className="font-heading text-2xl md:text-3xl text-yellow">
