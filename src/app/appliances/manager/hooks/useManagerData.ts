@@ -23,6 +23,16 @@ interface Item {
   created_by: string | null;
   created_at: string;
   approval_status: string | null;
+  // cleaning fields
+  cleaning_status?: string | null;
+  cleaned_by?: string | null;
+  date_cleaning_claimed?: string | null;
+  date_cleaned?: string | null;
+  cleaning_flagged?: boolean | null;
+  cleaning_flag_note?: string | null;
+  cleaning_flagged_at?: string | null;
+  before_cleaning_photos?: string[] | null;
+  after_cleaning_photos?: string[] | null;
 }
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -48,6 +58,38 @@ export function useManagerData(
       if (i.location_status !== 'sent_to_jurf' || !i.date_sent_to_jurf) return false;
       return Date.now() - new Date(i.date_sent_to_jurf).getTime() > 24 * 60 * 60 * 1000;
     });
+  }, [approved]);
+
+  // ── Cleaning activity ───────────────────────────────────────────
+  // Flagged: cleaner hit ALERT MANAGER. Highest priority on dashboard.
+  const flaggedItems = useMemo(
+    () => approved.filter((i) => i.cleaning_flagged === true),
+    [approved],
+  );
+
+  // In-cleaning: cleaner has claimed but not yet marked clean
+  const inCleaningItems = useMemo(
+    () => approved.filter((i) => i.cleaning_status === 'in_cleaning'),
+    [approved],
+  );
+
+  // Awaiting a cleaner to claim (REPAIR DONE → pending)
+  const cleaningPendingItems = useMemo(
+    () =>
+      approved.filter(
+        (i) => i.cleaning_status === 'pending' && i.location_status === 'repaired',
+      ),
+    [approved],
+  );
+
+  // Cleaned in the last 24h
+  const recentlyCleaned = useMemo(() => {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    return approved
+      .filter(
+        (i) => i.cleaning_status === 'cleaned' && i.date_cleaned && new Date(i.date_cleaned).getTime() >= cutoff,
+      )
+      .sort((a, b) => new Date(b.date_cleaned!).getTime() - new Date(a.date_cleaned!).getTime());
   }, [approved]);
 
   // Shop counts (at_shop only)
@@ -158,6 +200,10 @@ export function useManagerData(
     approved,
     rejected,
     overdueItems,
+    flaggedItems,
+    inCleaningItems,
+    cleaningPendingItems,
+    recentlyCleaned,
     shopCounts,
     maxShopCount,
     metrics,

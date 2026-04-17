@@ -14,6 +14,7 @@ import { ItemsList } from './components/ItemsList';
 import { PendingApprovals } from './components/PendingApprovals';
 import { EditModal } from './components/EditModal';
 import { RejectConfirmModal } from './components/RejectConfirmModal';
+import { CleaningActivity } from './components/CleaningActivity';
 
 interface Item {
   id: string;
@@ -36,6 +37,16 @@ interface Item {
   created_by: string | null;
   created_at: string;
   approval_status: string | null;
+  // cleaning fields
+  cleaning_status?: string | null;
+  cleaned_by?: string | null;
+  date_cleaning_claimed?: string | null;
+  date_cleaned?: string | null;
+  cleaning_flagged?: boolean | null;
+  cleaning_flag_note?: string | null;
+  cleaning_flagged_at?: string | null;
+  before_cleaning_photos?: string[] | null;
+  after_cleaning_photos?: string[] | null;
 }
 
 interface EditFormData {
@@ -82,6 +93,9 @@ export default function ManagerDashboard() {
   // Reject confirm
   const [rejectConfirm, setRejectConfirm] = useState<string | null>(null);
 
+  // Clearing a cleaning flag (which item is in flight)
+  const [clearingFlag, setClearingFlag] = useState<string | null>(null);
+
   // Edit modal
   const [editItem, setEditItem] = useState<Item | null>(null);
   const [editForm, setEditForm] = useState<EditFormData>({
@@ -100,6 +114,10 @@ export default function ManagerDashboard() {
     approved,
     rejected,
     overdueItems,
+    flaggedItems,
+    inCleaningItems,
+    cleaningPendingItems,
+    recentlyCleaned,
     metrics,
     trends,
     costMetrics,
@@ -192,6 +210,26 @@ export default function ManagerDashboard() {
     } catch {
       showToast('err', 'Failed to reject. Try again.');
     }
+  };
+
+  const clearFlag = async (id: string) => {
+    setClearingFlag(id);
+    try {
+      const result = await updateItem(id, {
+        cleaning_flagged: false,
+        cleaning_flag_note: null,
+      });
+      if (result.error) throw new Error(result.error);
+      showToast('ok', 'Flag cleared');
+      fetchItems(true);
+    } catch {
+      showToast('err', 'Failed to clear flag. Try again.');
+    }
+    setClearingFlag(null);
+  };
+
+  const jumpToCleaning = () => {
+    document.getElementById('cleaning-activity')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const undoReject = async (id: string) => {
@@ -376,7 +414,23 @@ export default function ManagerDashboard() {
       <div className="h-[calc(env(safe-area-inset-top)+60px)]" />
 
       {/* Alert Banner */}
-      <AlertBanner overdueCount={overdueItems.length} pendingCount={pending.length} />
+      <AlertBanner
+        overdueCount={overdueItems.length}
+        pendingCount={pending.length}
+        flaggedCount={flaggedItems.length}
+        onJumpToFlagged={jumpToCleaning}
+      />
+
+      {/* Cleaning Activity (flagged items, in-progress, recently cleaned) */}
+      <CleaningActivity
+        sectionId="cleaning-activity"
+        flaggedItems={flaggedItems}
+        inCleaningItems={inCleaningItems}
+        cleaningPendingItems={cleaningPendingItems}
+        recentlyCleaned={recentlyCleaned}
+        onClearFlag={clearFlag}
+        clearingFlag={clearingFlag}
+      />
 
       {/* Metrics Grid */}
       <MetricsGrid
