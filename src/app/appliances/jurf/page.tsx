@@ -26,6 +26,7 @@ interface Item {
   repair_notes: string | null;
   problems: string[] | null;
   needs_jurf: boolean;
+  cleaning_status: string | null;
 }
 
 const SHOPS = ['A', 'B', 'C', 'D', 'E'];
@@ -68,7 +69,7 @@ export default function JurfPage() {
   // Expanded item for details
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const COLS = 'id, barcode, product_type, brand, condition, shop, photo_url, date_sent_to_jurf, date_received_jurf, date_claimed, claimed_by, repair_notes, problems, needs_jurf';
+  const COLS = 'id, barcode, product_type, brand, condition, shop, photo_url, date_sent_to_jurf, date_received_jurf, date_claimed, claimed_by, repair_notes, problems, needs_jurf, cleaning_status';
 
   const fetchQueue = useCallback(async () => {
     const data = await getItems({
@@ -89,9 +90,12 @@ export default function JurfPage() {
   }, []);
 
   const fetchSend = useCallback(async (name: string) => {
+    // Only show items that have cleared the cleaning gate. Items that are
+    // repaired but still 'pending' / 'in_cleaning' are held back until a
+    // cleaner has captured 4 before + 4 after photos and marked them clean.
     const data = await getItems({
       columns: COLS,
-      filter: { location_status: 'repaired', claimed_by: name },
+      filter: { location_status: 'repaired', claimed_by: name, cleaning_status: 'cleaned' },
       order: { column: 'date_repaired', ascending: false },
     });
     setSendItems(data as Item[]);
@@ -144,6 +148,9 @@ export default function JurfPage() {
       location_status: 'repaired',
       repair_notes: notes[itemId] || null,
       date_repaired: new Date().toISOString(),
+      // Hand the item to the cleaning queue. Send tab will only
+      // expose items once cleaning_status flips to 'cleaned'.
+      cleaning_status: 'pending',
     });
 
     if (result.error) {
@@ -473,7 +480,7 @@ export default function JurfPage() {
                 {barcodeQuery.trim() ? 'Barcode not found in send queue' : 'No items to send'}
               </p>
               <p className="text-gray-300 text-sm mt-1">
-                {barcodeQuery.trim() ? 'Try another barcode or check other tabs' : 'Complete repairs first'}
+                {barcodeQuery.trim() ? 'Try another barcode or check other tabs' : 'Items appear here after cleaning is done'}
               </p>
             </div>
           ) : (

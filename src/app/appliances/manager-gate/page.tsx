@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Delete, ArrowLeft } from 'lucide-react';
+import { Loader2, Delete, ArrowLeft, Home } from 'lucide-react';
 import { checkManagerCode } from '@/lib/appliance-api';
 
 const PIN_LENGTH = 4;
@@ -48,7 +48,15 @@ export default function ManagerGatePage() {
   }, [loading, success]);
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-6 min-h-[calc(100vh-56px)] bg-[#111] pb-16">
+    <div className="relative flex-1 flex flex-col items-center justify-center px-6 min-h-[calc(100vh-56px)] bg-[#111] pb-16">
+      {/* Home chip — always escape to marketplace */}
+      <button
+        onClick={() => router.push('/')}
+        className="absolute top-4 left-4 flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/5 border border-white/10 text-gray-300 text-xs font-bold active:scale-95 transition-transform min-h-[40px]"
+      >
+        <Home size={14} /> HOME
+      </button>
+
       {/* Brand */}
       <span className="font-heading text-yellow text-3xl tracking-widest mb-2">BU FAISAL</span>
       <p className="text-gray-500 text-sm mb-10">MANAGER ACCESS</p>

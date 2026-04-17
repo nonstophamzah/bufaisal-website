@@ -16,6 +16,13 @@ const ALLOWED_UPDATE_FIELDS = [
   'needs_jurf', 'date_sent_to_jurf', 'tested_by', 'repair_notes',
   'repair_cost', 'destination_shop', 'approval_status',
   'date_received', 'brand', 'product_type', 'barcode',
+  // cleaning workflow
+  'cleaning_status', 'cleaned_by', 'date_cleaning_claimed', 'date_cleaned',
+  'before_cleaning_photos', 'after_cleaning_photos',
+  'cleaning_flagged', 'cleaning_flag_note', 'cleaning_flagged_at',
+  // Jurf / shop lifecycle (already written by code, adding for safety)
+  'claimed_by', 'date_claimed', 'date_repaired', 'date_sent_to_shop',
+  'date_received_jurf', 'date_accepted_at_shop',
 ];
 
 function sanitizeFields(obj: Record<string, unknown>, allowedKeys: string[]): Record<string, unknown> {
@@ -32,6 +39,9 @@ const ALLOWED_QUERY_COLUMNS = [
   'location_status', 'shop', 'needs_jurf', 'date_received',
   'date_sent_to_jurf', 'tested_by', 'destination_shop', 'created_by',
   'created_at', 'approval_status', 'repair_cost',
+  // Jurf / cleaning lifecycle fields
+  'claimed_by', 'cleaning_status', 'cleaned_by', 'cleaning_flagged',
+  'date_claimed', 'date_repaired', 'date_cleaned',
 ];
 
 export async function POST(request: NextRequest) {

@@ -1,5 +1,8 @@
 'use client';
 
+import Link from 'next/link';
+import { Home } from 'lucide-react';
+
 export function AdminLogin({
   pin,
   setPin,
@@ -16,8 +19,19 @@ export function AdminLogin({
   onKeyDown: (e: React.KeyboardEvent) => void;
 }) {
   return (
-    <div className="pt-20 pb-16 flex items-center justify-center min-h-screen">
+    <div className="relative pt-20 pb-16 flex items-center justify-center min-h-screen bg-white">
+      {/* Home chip */}
+      <Link
+        href="/"
+        className="absolute top-4 left-4 flex items-center gap-1.5 px-3 py-2 rounded-full bg-gray-100 border border-gray-200 text-gray-600 text-xs font-bold active:scale-95 min-h-[40px]"
+      >
+        <Home size={14} /> HOME
+      </Link>
+
       <div className="max-w-sm w-full mx-4">
+        <div className="text-center mb-4">
+          <span className="font-heading text-yellow text-xl tracking-widest">BU FAISAL</span>
+        </div>
         <h1 className="font-heading text-4xl text-center mb-2">
           ADMIN <span className="text-yellow">PANEL</span>
         </h1>

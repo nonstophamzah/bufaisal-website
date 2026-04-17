@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import { Upload, Sparkles, Loader2, LogOut, Camera, ArrowLeft, Check } from 'lucide-react';
+import { Upload, Sparkles, Loader2, LogOut, Camera, ArrowLeft, Check, Home } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { CATEGORIES } from '@/lib/constants';
 import { insertItem } from '@/lib/admin-api';
 
@@ -13,6 +14,7 @@ const PHOTO_LABELS = ['Item Photo', 'Barcode Label', 'Extra (optional)'];
 type Step = 'shop' | 'password' | 'name' | 'upload';
 
 export default function TeamPage() {
+  const router = useRouter();
   // --- navigation state ---
   const [step, setStep] = useState<Step>('shop');
   const [shopLabel, setShopLabel] = useState('');
@@ -323,8 +325,18 @@ export default function TeamPage() {
   // =========================================================
   if (step === 'shop') {
     return (
-      <div className="min-h-screen bg-black flex flex-col pt-20 px-4 pb-8">
-        <h1 className="font-heading text-4xl text-white text-center mt-6 mb-8">
+      <div className="relative min-h-screen bg-black flex flex-col pt-20 px-4 pb-8">
+        {/* Home chip */}
+        <button
+          onClick={() => router.push('/')}
+          className="absolute top-4 left-4 flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/5 border border-white/10 text-gray-300 text-xs font-bold active:scale-95 min-h-[40px]"
+        >
+          <Home size={14} /> HOME
+        </button>
+        <div className="text-center">
+          <span className="font-heading text-yellow text-xl tracking-widest">BU FAISAL</span>
+        </div>
+        <h1 className="font-heading text-4xl text-white text-center mt-4 mb-8">
           SELECT <span className="text-yellow">SHOP</span>
         </h1>
         <div className="flex flex-col gap-4 max-w-lg mx-auto w-full flex-1 justify-center">
@@ -350,7 +362,14 @@ export default function TeamPage() {
   // =========================================================
   if (step === 'password') {
     return (
-      <div className="min-h-screen bg-black flex flex-col pt-20 px-4 pb-8">
+      <div className="relative min-h-screen bg-black flex flex-col pt-20 px-4 pb-8">
+        {/* Home chip */}
+        <button
+          onClick={() => router.push('/')}
+          className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/5 border border-white/10 text-gray-300 text-xs font-bold active:scale-95 min-h-[40px]"
+        >
+          <Home size={14} /> HOME
+        </button>
         <button
           onClick={() => {
             setStep('shop');
@@ -364,6 +383,7 @@ export default function TeamPage() {
         </button>
 
         <div className="flex-1 flex flex-col items-center justify-center max-w-lg mx-auto w-full">
+          <span className="font-heading text-yellow text-lg tracking-widest mb-4">BU FAISAL</span>
           <h1 className="font-heading text-5xl text-yellow mb-10 text-center">
             SHOP {shopLabel}
           </h1>
@@ -412,7 +432,14 @@ export default function TeamPage() {
   // =========================================================
   if (step === 'name') {
     return (
-      <div className="min-h-screen bg-black flex flex-col pt-20 px-4 pb-8">
+      <div className="relative min-h-screen bg-black flex flex-col pt-20 px-4 pb-8">
+        {/* Home chip */}
+        <button
+          onClick={() => router.push('/')}
+          className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/5 border border-white/10 text-gray-300 text-xs font-bold active:scale-95 min-h-[40px]"
+        >
+          <Home size={14} /> HOME
+        </button>
         <button
           onClick={() => setStep('password')}
           className="text-white flex items-center gap-2 mt-4 mb-6 text-lg"

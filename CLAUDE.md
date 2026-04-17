@@ -68,7 +68,8 @@ src/
 - RLS: anon can read published items; service_role for writes
 
 **appliance_items** — Appliance operations (THE CRITICAL TABLE)
-- Key fields: barcode, product_type, brand, status, condition (working/not_working/scrap/pending_scrap/repaired), location_status (at_shop/sent_to_jurf/at_jurf/delivered), problems[], shop (A–E), photo_url, date_received, date_sent_to_jurf, tested_by, repair_notes, repair_cost, destination_shop, created_by, approval_status (pending/approved/rejected)
+- Key fields: barcode, product_type, brand, status, condition (working/not_working/scrap/pending_scrap/repaired), location_status (at_shop/sent_to_jurf/at_jurf/in_repair/repaired/sent_to_shop/delivered/denied), problems[], shop (A–E), photo_url, date_received, date_sent_to_jurf, tested_by, repair_notes, repair_cost, destination_shop, created_by, approval_status (pending/approved/rejected)
+- Cleaning fields (added April 2026): cleaning_status (pending/in_cleaning/cleaned/legacy_skipped), cleaned_by, date_cleaning_claimed, date_cleaned, before_cleaning_photos[4 — inside/outside/front/back], after_cleaning_photos[4 — same angles], cleaning_flagged, cleaning_flag_note, cleaning_flagged_at
 - RLS: service_role only
 
 **appliance_workers** — Team roster (13 workers across SHOP/JURF/SECURITY/MANAGER tabs)
@@ -91,13 +92,22 @@ src/
 - `at_shop` — Currently at originating shop
 - `sent_to_jurf` — In transit to Jurf warehouse
 - `at_jurf` — Received at Jurf
-- `delivered` — Delivered to destination shop
+- `in_repair` — Claimed by a Jurf repair worker
+- `repaired` — Repair complete, item held for cleaning gate
+- `sent_to_shop` — Cleaning passed, in transit to destination shop
+- `delivered` / `at_shop` (post-security-accept) — Delivered to destination shop
+- `denied` — Security rejected at destination, sent to manager queue
+
+### Cleaning Gate (added April 2026)
+Between `repaired` and `sent_to_shop`, every item must pass through cleaning. Cleaners are workers with role=`cleaning` (they appear in the JURF tab of `/appliances/select` and route to `/appliances/cleaning`). Cleaning requires **4 before photos** and **4 after photos** — inside, outside, front, back. The Jurf SEND tab filters out any item whose `cleaning_status !== 'cleaned'`, so a repaired-but-not-yet-cleaned item cannot be shipped. Cleaners can also ALERT MANAGER (sets `cleaning_flagged=true` with a note) if they spot a defect during cleaning.
 
 ### Typical Flow
 1. Shop worker logs item IN → condition assessed → `at_shop`
 2. If not_working → manager approves → sent to Jurf → `sent_to_jurf`
-3. Jurf team receives → `at_jurf` → repairs → condition becomes `repaired`
-4. Delivery picks up → `delivered` to destination shop
+3. Jurf repair worker claims → `in_repair` → repairs → `condition=repaired`, `location_status=repaired`, `cleaning_status=pending`
+4. Cleaner claims → `cleaning_status=in_cleaning` → captures 4 before + 4 after photos → `cleaning_status=cleaned`
+5. Jurf repair worker SENDs → `sent_to_shop`, destination set
+6. Security at destination accepts → `at_shop` (delivered) or denies → `denied`
 
 ### Overdue Rule
 Items with location_status `sent_to_jurf` for >24 hours are flagged as overdue in the manager dashboard.
