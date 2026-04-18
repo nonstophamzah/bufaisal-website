@@ -176,6 +176,88 @@ export async function syncFillToSheet(row: SheetsFillRow, fillId?: string): Prom
 }
 
 /**
+ * One-time formatting pass on the configured Sheet. Freezes + bolds the header
+ * row, tints it yellow, sets column widths, and adds conditional formatting so
+ * rows where Flagged = "Y" get a red background.
+ * Safe to call multiple times; overwrites prior formatting.
+ */
+export async function initSheetFormat(): Promise<{ ok: true } | { ok: false; error: string }> {
+  const cfg = envConfig();
+  if (!cfg) return { ok: false, error: 'Sheets not configured' };
+  try {
+    const token = await getAuthToken(cfg);
+    // 1) Make sure the tab exists and has the header row
+    await ensureHeaderRow(token, cfg.sheetId, cfg.tabName);
+
+    // 2) Look up the sheetId (tab id, not spreadsheet id)
+    const meta = await sheetsFetch<{
+      sheets?: { properties?: { sheetId?: number; title?: string } }[];
+    }>(token, `${cfg.sheetId}?fields=sheets.properties`);
+    const target = meta.sheets?.find((s) => s.properties?.title === cfg.tabName);
+    const tabId = target?.properties?.sheetId ?? 0;
+
+    const requests: unknown[] = [
+      // Freeze header row
+      {
+        updateSheetProperties: {
+          properties: { sheetId: tabId, gridProperties: { frozenRowCount: 1 } },
+          fields: 'gridProperties.frozenRowCount',
+        },
+      },
+      // Bold, center, yellow background on header row
+      {
+        repeatCell: {
+          range: { sheetId: tabId, startRowIndex: 0, endRowIndex: 1 },
+          cell: {
+            userEnteredFormat: {
+              backgroundColor: { red: 0.98, green: 0.8, blue: 0.09 }, // yellow
+              horizontalAlignment: 'CENTER',
+              textFormat: { bold: true, foregroundColor: { red: 0, green: 0, blue: 0 }, fontSize: 10 },
+            },
+          },
+          fields:
+            'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)',
+        },
+      },
+      // Auto-resize all used columns
+      {
+        autoResizeDimensions: {
+          dimensions: { sheetId: tabId, dimension: 'COLUMNS', startIndex: 0, endIndex: HEADERS.length },
+        },
+      },
+      // Conditional formatting: Flagged = "Y" → red row background
+      {
+        addConditionalFormatRule: {
+          rule: {
+            ranges: [{ sheetId: tabId, startColumnIndex: 0, endColumnIndex: HEADERS.length }],
+            booleanRule: {
+              condition: {
+                type: 'CUSTOM_FORMULA',
+                values: [{ userEnteredValue: '=$L2="Y"' }],
+              },
+              format: {
+                backgroundColor: { red: 0.98, green: 0.88, blue: 0.88 },
+                textFormat: { foregroundColor: { red: 0.7, green: 0.05, blue: 0.05 } },
+              },
+            },
+          },
+          index: 0,
+        },
+      },
+    ];
+
+    await sheetsFetch(token, `${cfg.sheetId}:batchUpdate`, {
+      method: 'POST',
+      body: JSON.stringify({ requests }),
+    });
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
  * Helper: build a SheetsFillRow from insert-time values. Called by the API
  * right after the Supabase insert succeeds, before firing syncFillToSheet.
  */

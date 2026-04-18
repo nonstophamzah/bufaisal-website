@@ -10,14 +10,17 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   Loader2, Fuel, ArrowLeft, AlertTriangle, Check, Clock, Truck as TruckIcon,
   User, Flag, TrendingUp, List, Search, X, Edit2, GitMerge, RefreshCw, ExternalLink,
+  Download, Grid3X3, ChevronRight,
 } from 'lucide-react';
 import {
   checkManagerPin, dashboardSnapshot, fullLog, trendsData, report,
-  editTruck, editDriver, mergeTrucks, mergeDrivers,
-  type DashboardSnapshot, type FullLogRow, type TrendPoint, type ReportResult,
+  editTruck, editDriver, mergeTrucks, mergeDrivers, initSheetsFormat,
+  toCsv, downloadCsv,
+  type DashboardSnapshot, type DashboardWindow, type FullLogRow, type TrendPoint, type ReportResult,
   type TruckStatsRow, type DriverStatsRow, type NeedsReviewTruck, type NeedsReviewDriver,
 } from '@/lib/diesel-api';
 
@@ -116,16 +119,18 @@ export default function DashboardPage() {
 function Dashboard({ fallbackPin }: { fallbackPin: boolean }) {
   const router = useRouter();
   const [tab, setTab] = useState<TabKey>('today');
+  const [windowKey, setWindowKey] = useState<DashboardWindow>('month');
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string>('');
   const [toast, setToast] = useState<string>('');
+  const [formattingSheet, setFormattingSheet] = useState(false);
 
-  const load = async () => {
+  const load = async (win: DashboardWindow = windowKey) => {
     setLoading(true);
     setErr('');
     try {
-      const s = await dashboardSnapshot();
+      const s = await dashboardSnapshot(win);
       setSnapshot(s);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Failed to load');
@@ -133,32 +138,85 @@ function Dashboard({ fallbackPin }: { fallbackPin: boolean }) {
       setLoading(false);
     }
   };
-  useEffect(() => { load(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(windowKey); }, [windowKey]);
 
   const flash = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
+
+  const onFormatSheet = async () => {
+    setFormattingSheet(true);
+    const r = await initSheetsFormat();
+    setFormattingSheet(false);
+    flash(r.ok ? 'Sheet formatted' : `Sheet format failed: ${r.error}`);
+  };
 
   const needsReviewCount =
     (snapshot?.needs_review.trucks.length || 0) +
     (snapshot?.needs_review.drivers.length || 0);
 
+  const windowLabel: Record<DashboardWindow, string> = {
+    today: '24h', week: '7d', month: '30d', quarter: '90d', all: 'all time',
+  };
+
   return (
     <div className="min-h-screen bg-black text-white">
       {/* HEADER */}
-      <header className="sticky top-0 z-10 bg-black/90 backdrop-blur border-b border-gray-800 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Fuel size={20} className="text-yellow" />
-          <h1 className="font-heading text-xl">DIESEL DASHBOARD</h1>
+      <header className="sticky top-0 z-10 bg-black/95 backdrop-blur border-b border-gray-800 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Fuel size={18} className="text-yellow" />
+              <h1 className="font-heading text-lg text-yellow">DIESEL DASHBOARD</h1>
+            </div>
+            <p className="text-[10px] text-gray-500 mt-0.5">
+              {snapshot?.totals
+                ? <>{snapshot.totals.fills} fills &middot; {snapshot.totals.liters}L &middot; {snapshot.totals.cost_aed} AED {windowLabel[windowKey]}</>
+                : 'Loading…'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {snapshot?.sheets_configured && (
+              <button
+                onClick={onFormatSheet}
+                disabled={formattingSheet}
+                className="px-3 py-2 rounded-lg bg-yellow text-black font-bold text-xs flex items-center gap-1.5 active:scale-95 min-h-[36px] disabled:opacity-50"
+                title="Format the Google Sheet (one-time)"
+              >
+                {formattingSheet ? <Loader2 size={14} className="animate-spin" /> : <Grid3X3 size={14} />}
+                Sheet
+              </button>
+            )}
+            <button
+              onClick={() => load()}
+              className="p-2 rounded-lg bg-gray-800 text-gray-300 active:scale-95 min-h-[36px] min-w-[36px] flex items-center justify-center"
+              title="Refresh"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            </button>
+            <button
+              onClick={() => { sessionStorage.removeItem(SESSION_KEY); router.push('/diesel'); }}
+              className="text-xs text-gray-500 border border-gray-700 rounded-lg px-2 py-1.5 min-h-[36px]"
+            >
+              Exit
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={load} className="text-gray-400 hover:text-white" title="Refresh">
-            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-          </button>
-          <button
-            onClick={() => { sessionStorage.removeItem(SESSION_KEY); router.push('/diesel'); }}
-            className="text-xs text-gray-500 border border-gray-700 rounded-lg px-2 py-1"
-          >
-            Exit
-          </button>
+
+        {/* Window filter pills */}
+        <div className="flex gap-1.5 mt-3 overflow-x-auto">
+          {(['today','week','month','quarter','all'] as DashboardWindow[]).map((w) => (
+            <button
+              key={w}
+              onClick={() => setWindowKey(w)}
+              className={`whitespace-nowrap px-3 py-1 rounded-full text-[11px] font-heading tracking-wider ${
+                windowKey === w
+                  ? 'bg-yellow text-black'
+                  : 'bg-gray-900 border border-gray-800 text-gray-400'
+              }`}
+            >
+              {w === 'today' ? 'DAY' : w === 'week' ? 'WEEK' : w === 'month' ? 'MONTH' : w === 'quarter' ? 'QUARTER' : 'ALL TIME'}
+            </button>
+          ))}
         </div>
       </header>
 
@@ -225,9 +283,9 @@ function Dashboard({ fallbackPin }: { fallbackPin: boolean }) {
         {snapshot && (
           <>
             {tab === 'today'   && <TodayTab   snap={snapshot} />}
-            {tab === 'trucks'  && <TrucksTab  snap={snapshot} onChanged={load} flash={flash} />}
-            {tab === 'drivers' && <DriversTab snap={snapshot} onChanged={load} flash={flash} />}
-            {tab === 'flagged' && <FlaggedTab snap={snapshot} />}
+            {tab === 'trucks'  && <TrucksTab  snap={snapshot} windowKey={windowKey} onChanged={() => load()} flash={flash} />}
+            {tab === 'drivers' && <DriversTab snap={snapshot} windowKey={windowKey} onChanged={() => load()} flash={flash} />}
+            {tab === 'flagged' && <FlaggedTab snap={snapshot} windowKey={windowKey} />}
             {tab === 'trends'  && <TrendsTab />}
             {tab === 'log'     && <LogTab />}
           </>
@@ -277,9 +335,9 @@ function TodayTab({ snap }: { snap: DashboardSnapshot }) {
 // TAB: TRUCKS
 // ============================================================
 function TrucksTab({
-  snap, onChanged, flash,
+  snap, windowKey, onChanged, flash,
 }: {
-  snap: DashboardSnapshot; onChanged: () => Promise<void> | void; flash: (m: string) => void;
+  snap: DashboardSnapshot; windowKey: DashboardWindow; onChanged: () => Promise<void> | void; flash: (m: string) => void;
 }) {
   const [q, setQ] = useState('');
   const filtered = useMemo(() => {
@@ -294,23 +352,44 @@ function TrucksTab({
   const [editing, setEditing] = useState<TruckStatsRow | null>(null);
   const [merging, setMerging] = useState<TruckStatsRow | null>(null);
 
+  const exportCsv = () => {
+    const csv = toCsv(filtered as unknown as Record<string, unknown>[], [
+      { key: 'plate_display',    label: 'Plate' },
+      { key: 'nickname',         label: 'Nickname' },
+      { key: 'total_fills',      label: 'Fills' },
+      { key: 'total_liters',     label: 'Total Liters' },
+      { key: 'total_cost_aed',   label: 'Total Cost AED' },
+      { key: 'avg_l100_last10',  label: 'Avg L/100km' },
+      { key: 'flag_count',       label: 'Flags' },
+      { key: 'last_fill_at',     label: 'Last Fill' },
+      { key: 'needs_review',     label: 'Needs Review' },
+    ]);
+    downloadCsv(`bufaisal-trucks-${windowKey}-${todayStamp()}.csv`, csv);
+  };
+
   return (
     <>
-      <SearchBar value={q} onChange={setQ} placeholder="Search plate or nickname…" />
-      {filtered.length === 0 && <EmptyState text="No trucks match." />}
+      <div className="flex items-center gap-2 mb-2">
+        <div className="flex-1"><SearchBar value={q} onChange={setQ} placeholder="Search plate or nickname…" /></div>
+        <ExportButton onClick={exportCsv} disabled={filtered.length === 0} />
+      </div>
+      {filtered.length === 0 && <EmptyState text={snap.trucks.length === 0 ? 'No fills yet in this window.' : 'No trucks match.'} />}
       <div className="space-y-2">
         {filtered.map((t) => (
           <div
             key={t.truck_id}
-            className="bg-gray-950 border border-gray-800 rounded-xl p-3"
+            className="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden"
           >
-            <div className="flex justify-between items-start">
-              <div>
-                <div className="flex items-center gap-2">
+            <Link
+              href={`/diesel/dashboard/truck/${t.truck_id}?window=${windowKey}`}
+              className="flex justify-between items-start p-3 hover:bg-gray-900/60 transition-colors"
+            >
+              <div className="flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-heading text-lg">{t.plate_display}</span>
                   {t.needs_review && (
                     <span className="bg-blue-500/20 text-blue-300 text-[10px] uppercase tracking-wider rounded-full px-2 py-0.5">
-                      New — pending review
+                      New — pending
                     </span>
                   )}
                   {!t.active && (
@@ -320,15 +399,20 @@ function TrucksTab({
                 {t.nickname && <p className="text-xs text-gray-500">{t.nickname}</p>}
                 <p className="text-xs text-gray-400 mt-1">
                   {t.total_fills} fills
+                  {t.total_liters != null && ` · ${t.total_liters}L`}
+                  {t.total_cost_aed != null && ` · ${t.total_cost_aed} AED`}
                   {t.last_fill_at && ` · last ${relative(t.last_fill_at)}`}
                 </p>
               </div>
-              <div className="text-right">
-                <p className="text-sm font-semibold">{t.avg_l100_last10 ?? '—'}<span className="text-xs text-gray-500 ml-1">L/100km</span></p>
-                {t.flag_count > 0 && <p className="text-xs text-red-400">{t.flag_count} flagged</p>}
+              <div className="text-right flex items-center gap-2">
+                <div>
+                  <p className="text-sm font-semibold">{t.avg_l100_last10 ?? '—'}<span className="text-xs text-gray-500 ml-1">L/100km</span></p>
+                  {t.flag_count > 0 && <p className="text-xs text-red-400">{t.flag_count} flagged</p>}
+                </div>
+                <ChevronRight size={18} className="text-gray-600" />
               </div>
-            </div>
-            <div className="flex gap-2 mt-3">
+            </Link>
+            <div className="flex gap-2 px-3 pb-3">
               <button onClick={() => setEditing(t)} className="text-xs bg-gray-800 text-white rounded-lg px-2 py-1 flex items-center gap-1">
                 <Edit2 size={12} /> Edit
               </button>
@@ -364,9 +448,9 @@ function TrucksTab({
 // TAB: DRIVERS
 // ============================================================
 function DriversTab({
-  snap, onChanged, flash,
+  snap, windowKey, onChanged, flash,
 }: {
-  snap: DashboardSnapshot; onChanged: () => Promise<void> | void; flash: (m: string) => void;
+  snap: DashboardSnapshot; windowKey: DashboardWindow; onChanged: () => Promise<void> | void; flash: (m: string) => void;
 }) {
   const [q, setQ] = useState('');
   const filtered = useMemo(() => {
@@ -378,20 +462,41 @@ function DriversTab({
   const [editing, setEditing] = useState<DriverStatsRow | null>(null);
   const [merging, setMerging] = useState<DriverStatsRow | null>(null);
 
+  const exportCsv = () => {
+    const csv = toCsv(filtered as unknown as Record<string, unknown>[], [
+      { key: 'full_name',        label: 'Driver' },
+      { key: 'nickname',         label: 'Nickname' },
+      { key: 'total_fills',      label: 'Fills' },
+      { key: 'total_liters',     label: 'Total Liters' },
+      { key: 'total_cost_aed',   label: 'Total Cost AED' },
+      { key: 'avg_l100_last10',  label: 'Avg L/100km' },
+      { key: 'flag_count',       label: 'Flags' },
+      { key: 'last_fill_at',     label: 'Last Fill' },
+      { key: 'needs_review',     label: 'Needs Review' },
+    ]);
+    downloadCsv(`bufaisal-drivers-${windowKey}-${todayStamp()}.csv`, csv);
+  };
+
   return (
     <>
-      <SearchBar value={q} onChange={setQ} placeholder="Search driver name…" />
-      {filtered.length === 0 && <EmptyState text="No drivers match." />}
+      <div className="flex items-center gap-2 mb-2">
+        <div className="flex-1"><SearchBar value={q} onChange={setQ} placeholder="Search driver name…" /></div>
+        <ExportButton onClick={exportCsv} disabled={filtered.length === 0} />
+      </div>
+      {filtered.length === 0 && <EmptyState text={snap.drivers.length === 0 ? 'No fills yet in this window.' : 'No drivers match.'} />}
       <div className="space-y-2">
         {filtered.map((d) => (
-          <div key={d.driver_id} className="bg-gray-950 border border-gray-800 rounded-xl p-3">
-            <div className="flex justify-between items-start">
-              <div>
-                <div className="flex items-center gap-2">
+          <div key={d.driver_id} className="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden">
+            <Link
+              href={`/diesel/dashboard/driver/${d.driver_id}?window=${windowKey}`}
+              className="flex justify-between items-start p-3 hover:bg-gray-900/60 transition-colors"
+            >
+              <div className="flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-heading text-lg">{d.full_name}</span>
                   {d.needs_review && (
                     <span className="bg-blue-500/20 text-blue-300 text-[10px] uppercase tracking-wider rounded-full px-2 py-0.5">
-                      New — pending review
+                      New — pending
                     </span>
                   )}
                   {!d.active && <span className="bg-gray-700 text-gray-300 text-[10px] uppercase tracking-wider rounded-full px-2 py-0.5">inactive</span>}
@@ -399,15 +504,20 @@ function DriversTab({
                 {d.nickname && <p className="text-xs text-gray-500">{d.nickname}</p>}
                 <p className="text-xs text-gray-400 mt-1">
                   {d.total_fills} fills
+                  {d.total_liters != null && ` · ${d.total_liters}L`}
+                  {d.total_cost_aed != null && ` · ${d.total_cost_aed} AED`}
                   {d.last_fill_at && ` · last ${relative(d.last_fill_at)}`}
                 </p>
               </div>
-              <div className="text-right">
-                <p className="text-sm font-semibold">{d.avg_l100_last10 ?? '—'}<span className="text-xs text-gray-500 ml-1">L/100km</span></p>
-                {d.flag_count > 0 && <p className="text-xs text-red-400">{d.flag_count} flagged</p>}
+              <div className="text-right flex items-center gap-2">
+                <div>
+                  <p className="text-sm font-semibold">{d.avg_l100_last10 ?? '—'}<span className="text-xs text-gray-500 ml-1">L/100km</span></p>
+                  {d.flag_count > 0 && <p className="text-xs text-red-400">{d.flag_count} flagged</p>}
+                </div>
+                <ChevronRight size={18} className="text-gray-600" />
               </div>
-            </div>
-            <div className="flex gap-2 mt-3">
+            </Link>
+            <div className="flex gap-2 px-3 pb-3">
               <button onClick={() => setEditing(d)} className="text-xs bg-gray-800 text-white rounded-lg px-2 py-1 flex items-center gap-1">
                 <Edit2 size={12} /> Edit
               </button>
@@ -442,16 +552,41 @@ function DriversTab({
 // ============================================================
 // TAB: FLAGGED
 // ============================================================
-function FlaggedTab({ snap }: { snap: DashboardSnapshot }) {
+function FlaggedTab({ snap, windowKey }: { snap: DashboardSnapshot; windowKey: DashboardWindow }) {
   const fills = snap.flagged;
+  const exportCsv = () => {
+    const rows = fills.map((f) => ({
+      logged_at: f.logged_at,
+      plate: f.truck?.plate_display || '',
+      driver: f.driver?.full_name || '',
+      liters: f.liters_filled,
+      l100: f.liters_per_100km,
+      variance_pct: f.variance_percent,
+      reason: f.flag_reason,
+    }));
+    const csv = toCsv(rows as unknown as Record<string, unknown>[], [
+      { key: 'logged_at',     label: 'When' },
+      { key: 'plate',         label: 'Plate' },
+      { key: 'driver',        label: 'Driver' },
+      { key: 'liters',        label: 'Liters' },
+      { key: 'l100',          label: 'L/100km' },
+      { key: 'variance_pct',  label: 'Variance %' },
+      { key: 'reason',        label: 'Reason' },
+    ]);
+    downloadCsv(`bufaisal-flagged-${windowKey}-${todayStamp()}.csv`, csv);
+  };
+
   if (fills.length === 0) return <EmptyState text="No flagged fills. 👍" />;
   return (
     <>
-      <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-3 text-sm flex items-start gap-2">
-        <AlertTriangle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
-        <div>
-          {fills.length} flagged {fills.length === 1 ? 'fill' : 'fills'}. Check photos and either dispute with the driver or dismiss as OCR error.
+      <div className="flex items-start gap-2 mb-3">
+        <div className="flex-1 bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm flex items-start gap-2">
+          <AlertTriangle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
+          <div>
+            {fills.length} flagged {fills.length === 1 ? 'fill' : 'fills'}. Check photos and either dispute with the driver or dismiss as OCR error.
+          </div>
         </div>
+        <ExportButton onClick={exportCsv} />
       </div>
       {fills.map((f) => <FillCard key={f.id} f={f} />)}
     </>
@@ -590,6 +725,7 @@ function LogTab() {
   const [offset, setOffset] = useState(0);
   const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const pageSize = 50;
 
   const load = async () => {
@@ -605,6 +741,60 @@ function LogTab() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [offset, flaggedOnly]);
 
+  const exportAll = async () => {
+    setExporting(true);
+    try {
+      const r = await fullLog({ limit: 5000, offset: 0, flagged_only: flaggedOnly || undefined });
+      const rowsFlat = r.fills.map((f) => ({
+        logged_at: f.logged_at,
+        plate: f.truck?.plate_display || '',
+        driver: f.driver?.full_name || '',
+        odometer_km: f.odometer_km,
+        liters_filled: f.liters_filled,
+        km_since_last: f.km_since_last,
+        liters_per_100km: f.liters_per_100km,
+        cost_aed: f.cost_aed,
+        price_per_liter: f.price_per_liter_at_fill,
+        truck_avg_l100: f.truck_rolling_avg_l100,
+        driver_avg_l100: f.driver_rolling_avg_l100,
+        fleet_avg_l100: f.fleet_avg_l100_at_time,
+        variance_pct: f.variance_percent,
+        flagged: f.flagged ? 'Y' : 'N',
+        flag_reason: f.flag_reason,
+        corrected_by_human: f.corrected_by_human ? 'Y' : 'N',
+        photo_plate_url: f.photo_plate_url,
+        photo_license_url: f.photo_license_url,
+        photo_odometer_url: f.photo_odometer_url,
+        photo_pump_url: f.photo_pump_url,
+      }));
+      const csv = toCsv(rowsFlat as unknown as Record<string, unknown>[], [
+        { key: 'logged_at',          label: 'When' },
+        { key: 'plate',              label: 'Plate' },
+        { key: 'driver',             label: 'Driver' },
+        { key: 'odometer_km',        label: 'Odometer' },
+        { key: 'liters_filled',      label: 'Liters' },
+        { key: 'km_since_last',      label: 'KM Driven' },
+        { key: 'liters_per_100km',   label: 'L/100km' },
+        { key: 'cost_aed',           label: 'Cost AED' },
+        { key: 'price_per_liter',    label: 'Price/L' },
+        { key: 'truck_avg_l100',     label: 'Truck Avg' },
+        { key: 'driver_avg_l100',    label: 'Driver Avg' },
+        { key: 'fleet_avg_l100',     label: 'Fleet Avg' },
+        { key: 'variance_pct',       label: 'Variance %' },
+        { key: 'flagged',            label: 'Flagged' },
+        { key: 'flag_reason',        label: 'Reason' },
+        { key: 'corrected_by_human', label: 'Corrected' },
+        { key: 'photo_plate_url',    label: 'Plate Photo' },
+        { key: 'photo_license_url',  label: 'Licence Photo' },
+        { key: 'photo_odometer_url', label: 'Odometer Photo' },
+        { key: 'photo_pump_url',     label: 'Pump Photo' },
+      ]);
+      downloadCsv(`bufaisal-diesel-log-${todayStamp()}${flaggedOnly ? '-flagged' : ''}.csv`, csv);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <>
       <div className="flex gap-2 mb-3 items-center">
@@ -614,7 +804,15 @@ function LogTab() {
         >
           Flagged only
         </button>
-        <span className="text-xs text-gray-500">{total} total</span>
+        <span className="text-xs text-gray-500 flex-1">{total} total</span>
+        <button
+          onClick={exportAll}
+          disabled={exporting || total === 0}
+          className="text-xs bg-yellow text-black font-bold rounded-lg px-3 py-1.5 flex items-center gap-1 disabled:opacity-40"
+        >
+          {exporting ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+          Export CSV
+        </button>
       </div>
 
       {loading && rows.length === 0 && <div className="text-gray-500 py-4 text-sm">Loading…</div>}
@@ -904,6 +1102,23 @@ function SearchBar({ value, onChange, placeholder }: { value: string; onChange: 
 
 function EmptyState({ text }: { text: string }) {
   return <div className="text-sm text-gray-500 text-center py-10">{text}</div>;
+}
+
+function ExportButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="text-xs bg-yellow text-black font-bold rounded-lg px-3 py-2 flex items-center gap-1 disabled:opacity-40 min-h-[40px]"
+      title="Export to CSV"
+    >
+      <Download size={12} /> CSV
+    </button>
+  );
+}
+
+function todayStamp(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dubai' });
 }
 
 type FillLike = {

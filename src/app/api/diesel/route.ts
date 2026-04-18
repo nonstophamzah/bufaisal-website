@@ -27,7 +27,19 @@ import {
   type PreviousFill,
   type CalcConfig,
 } from '@/lib/diesel-calc';
-import { isSheetsConfigured, buildSheetRow, syncFillToSheet } from '@/lib/diesel-sheets';
+import { isSheetsConfigured, buildSheetRow, syncFillToSheet, initSheetFormat } from '@/lib/diesel-sheets';
+
+// Resolve a window keyword to an ISO since-date (null = "all time")
+function resolveWindowSince(window: string | undefined): string | null {
+  switch (window) {
+    case 'today':   return new Date(Date.now() - 1 * 86_400_000).toISOString();
+    case 'week':    return new Date(Date.now() - 7 * 86_400_000).toISOString();
+    case 'month':   return new Date(Date.now() - 30 * 86_400_000).toISOString();
+    case 'quarter': return new Date(Date.now() - 90 * 86_400_000).toISOString();
+    case 'all':
+    default:        return null;
+  }
+}
 
 // -------- types --------
 
@@ -737,12 +749,31 @@ export async function POST(request: NextRequest) {
     }
 
     // -----------------------------------------------------------------
-    // dashboard_snapshot — one call returns everything the dashboard
-    // needs for initial render (Today, Trucks, Drivers, Flagged, Needs
-    // Review counts). Log tab pages separately via full_log.
+    // dashboard_snapshot — returns everything the dashboard needs.
+    // Accepts optional window: today | week | month | quarter | all (default).
+    // The window affects Trucks / Drivers / Flagged aggregates and the fleet
+    // avg shown on the Today card. Today list is always last-24h.
     // -----------------------------------------------------------------
     if (action === 'dashboard_snapshot') {
-      const [todayRes, trucksRes, driversRes, flaggedRes, needsTrucksRes, needsDriversRes, fleetAvg] =
+      const win = String(body.window || 'all');
+      const since = resolveWindowSince(win);
+
+      // Build common fills query — used for both "recent/today" and window aggregates
+      let windowFillsQ = supabaseAdmin
+        .from('diesel_fills')
+        .select(`
+          id, truck_id, driver_id, logged_at, odometer_km, liters_filled,
+          km_since_last, liters_per_100km, cost_aed, variance_percent,
+          flagged, flag_reason,
+          photo_plate_url, photo_license_url, photo_odometer_url, photo_pump_url,
+          truck:diesel_trucks(id, plate_display, nickname),
+          driver:diesel_drivers(id, full_name, nickname)
+        `)
+        .order('logged_at', { ascending: false })
+        .limit(2000);
+      if (since) windowFillsQ = windowFillsQ.gte('logged_at', since);
+
+      const [recentRes, windowFillsRes, allTrucksRes, allDriversRes, needsTrucksRes, needsDriversRes] =
         await Promise.all([
           supabaseAdmin
             .from('diesel_fills')
@@ -755,26 +786,15 @@ export async function POST(request: NextRequest) {
             .gte('logged_at', new Date(Date.now() - 24 * 3600_000).toISOString())
             .order('logged_at', { ascending: false })
             .limit(200),
+          windowFillsQ,
           supabaseAdmin
-            .from('v_diesel_truck_stats')
-            .select('*')
-            .order('avg_l100_last10', { ascending: false, nullsFirst: false }),
+            .from('diesel_trucks')
+            .select('id, plate_number, plate_display, nickname, active, needs_review')
+            .eq('active', true),
           supabaseAdmin
-            .from('v_diesel_driver_stats')
-            .select('*')
-            .order('avg_l100_last10', { ascending: false, nullsFirst: false }),
-          supabaseAdmin
-            .from('diesel_fills')
-            .select(`
-              id, logged_at, odometer_km, liters_filled, liters_per_100km,
-              variance_percent, flag_reason, photo_plate_url, photo_license_url,
-              photo_odometer_url, photo_pump_url,
-              truck:diesel_trucks(id, plate_display, nickname),
-              driver:diesel_drivers(id, full_name, nickname)
-            `)
-            .eq('flagged', true)
-            .order('logged_at', { ascending: false })
-            .limit(100),
+            .from('diesel_drivers')
+            .select('id, full_name, name_normalized, nickname, active, needs_review')
+            .eq('active', true),
           supabaseAdmin
             .from('diesel_trucks')
             .select('id, plate_number, plate_display, nickname, created_at')
@@ -787,21 +807,285 @@ export async function POST(request: NextRequest) {
             .eq('needs_review', true)
             .eq('active', true)
             .order('created_at', { ascending: false }),
-          fleetAvgL100(),
         ]);
 
+      type WFill = {
+        id: string; truck_id: string | null; driver_id: string | null;
+        logged_at: string; liters_filled: number | null;
+        liters_per_100km: number | null; cost_aed: number | null;
+        variance_percent: number | null; flagged: boolean | null;
+        flag_reason: string | null;
+        photo_plate_url: string | null; photo_license_url: string | null;
+        photo_odometer_url: string | null; photo_pump_url: string | null;
+        odometer_km: number | null; km_since_last: number | null;
+        truck: { id: string; plate_display: string; nickname: string | null } | null;
+        driver: { id: string; full_name: string; nickname: string | null } | null;
+      };
+      const windowFills = ((windowFillsRes.data || []) as unknown as WFill[]);
+
+      // Fleet avg L/100km in window
+      const l100InWindow = windowFills.map((f) => f.liters_per_100km).filter((x): x is number => typeof x === 'number' && x > 0);
+      const fleetAvg = l100InWindow.length ? Math.round((l100InWindow.reduce((a, b) => a + b, 0) / l100InWindow.length) * 100) / 100 : null;
+
+      // Aggregate by truck
+      type Agg = { fills: number; liters: number; cost: number; l100_sum: number; l100_count: number; flagged: number; last_at: string | null };
+      const truckAgg = new Map<string, Agg>();
+      for (const f of windowFills) {
+        if (!f.truck_id) continue;
+        let a = truckAgg.get(f.truck_id);
+        if (!a) { a = { fills: 0, liters: 0, cost: 0, l100_sum: 0, l100_count: 0, flagged: 0, last_at: null }; truckAgg.set(f.truck_id, a); }
+        a.fills += 1;
+        if (typeof f.liters_filled === 'number') a.liters += f.liters_filled;
+        if (typeof f.cost_aed === 'number') a.cost += f.cost_aed;
+        if (typeof f.liters_per_100km === 'number') { a.l100_sum += f.liters_per_100km; a.l100_count += 1; }
+        if (f.flagged) a.flagged += 1;
+        if (!a.last_at || f.logged_at > a.last_at) a.last_at = f.logged_at;
+      }
+      const trucks = (allTrucksRes.data || []).map((t) => {
+        const a = truckAgg.get(t.id);
+        const avg = a && a.l100_count ? Math.round((a.l100_sum / a.l100_count) * 100) / 100 : null;
+        return {
+          truck_id: t.id,
+          plate_number: t.plate_number,
+          plate_display: t.plate_display,
+          nickname: t.nickname,
+          active: t.active,
+          needs_review: !!t.needs_review,
+          total_fills: a?.fills ?? 0,
+          total_liters: a ? Math.round(a.liters * 100) / 100 : 0,
+          total_cost_aed: a ? Math.round(a.cost * 100) / 100 : 0,
+          avg_l100_last10: avg,
+          avg_l100_alltime: avg,
+          flag_count: a?.flagged ?? 0,
+          last_fill_at: a?.last_at ?? null,
+        };
+      }).sort((a, b) => (b.avg_l100_last10 ?? -1) - (a.avg_l100_last10 ?? -1));
+
+      // Aggregate by driver
+      const driverAgg = new Map<string, Agg>();
+      for (const f of windowFills) {
+        if (!f.driver_id) continue;
+        let a = driverAgg.get(f.driver_id);
+        if (!a) { a = { fills: 0, liters: 0, cost: 0, l100_sum: 0, l100_count: 0, flagged: 0, last_at: null }; driverAgg.set(f.driver_id, a); }
+        a.fills += 1;
+        if (typeof f.liters_filled === 'number') a.liters += f.liters_filled;
+        if (typeof f.cost_aed === 'number') a.cost += f.cost_aed;
+        if (typeof f.liters_per_100km === 'number') { a.l100_sum += f.liters_per_100km; a.l100_count += 1; }
+        if (f.flagged) a.flagged += 1;
+        if (!a.last_at || f.logged_at > a.last_at) a.last_at = f.logged_at;
+      }
+      const drivers = (allDriversRes.data || []).map((d) => {
+        const a = driverAgg.get(d.id);
+        const avg = a && a.l100_count ? Math.round((a.l100_sum / a.l100_count) * 100) / 100 : null;
+        return {
+          driver_id: d.id,
+          full_name: d.full_name,
+          name_normalized: d.name_normalized,
+          nickname: d.nickname,
+          active: d.active,
+          needs_review: !!d.needs_review,
+          total_fills: a?.fills ?? 0,
+          total_liters: a ? Math.round(a.liters * 100) / 100 : 0,
+          total_cost_aed: a ? Math.round(a.cost * 100) / 100 : 0,
+          avg_l100_last10: avg,
+          avg_l100_alltime: avg,
+          flag_count: a?.flagged ?? 0,
+          last_fill_at: a?.last_at ?? null,
+        };
+      }).sort((a, b) => (b.avg_l100_last10 ?? -1) - (a.avg_l100_last10 ?? -1));
+
+      const flagged = windowFills.filter((f) => f.flagged);
+
       return NextResponse.json({
-        today: todayRes.data || [],
-        trucks: trucksRes.data || [],
-        drivers: driversRes.data || [],
-        flagged: flaggedRes.data || [],
+        window: win,
+        since,
+        today: recentRes.data || [],
+        trucks,
+        drivers,
+        flagged,
         needs_review: {
           trucks: needsTrucksRes.data || [],
           drivers: needsDriversRes.data || [],
         },
         fleet_avg_l100: fleetAvg,
+        totals: {
+          fills: windowFills.length,
+          liters: Math.round(windowFills.reduce((a, f) => a + (f.liters_filled || 0), 0) * 100) / 100,
+          cost_aed: Math.round(windowFills.reduce((a, f) => a + (f.cost_aed || 0), 0) * 100) / 100,
+          flagged: flagged.length,
+        },
         sheets_configured: isSheetsConfigured(),
       });
+    }
+
+    // -----------------------------------------------------------------
+    // truck_detail — per-truck drill-down. Returns truck metadata,
+    // aggregated stats in requested window, and full fill history.
+    // -----------------------------------------------------------------
+    if (action === 'truck_detail') {
+      const id = String(body.id || '').trim();
+      if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+      const win = String(body.window || 'all');
+      const since = resolveWindowSince(win);
+
+      const [truckRes, fillsRes] = await Promise.all([
+        supabaseAdmin
+          .from('diesel_trucks')
+          .select('id, plate_number, plate_display, nickname, active, needs_review, notes, created_at')
+          .eq('id', id)
+          .maybeSingle(),
+        (async () => {
+          let q = supabaseAdmin
+            .from('diesel_fills')
+            .select(`
+              id, logged_at, odometer_km, liters_filled, km_since_last, liters_per_100km,
+              cost_aed, price_per_liter_at_fill, variance_percent, flagged, flag_reason,
+              photo_plate_url, photo_license_url, photo_odometer_url, photo_pump_url,
+              driver:diesel_drivers(id, full_name, nickname)
+            `)
+            .eq('truck_id', id)
+            .order('logged_at', { ascending: false })
+            .limit(1000);
+          if (since) q = q.gte('logged_at', since);
+          return q;
+        })(),
+      ]);
+
+      if (truckRes.error) return NextResponse.json({ error: truckRes.error.message }, { status: 500 });
+      if (!truckRes.data) return NextResponse.json({ error: 'Truck not found' }, { status: 404 });
+
+      type F = { id: string; logged_at: string; liters_filled: number | null; cost_aed: number | null; liters_per_100km: number | null; flagged: boolean | null; driver: { id: string; full_name: string } | { id: string; full_name: string }[] | null };
+      const fills = ((fillsRes.data || []) as unknown as F[]);
+      const l100 = fills.map((f) => f.liters_per_100km).filter((x): x is number => typeof x === 'number');
+      const totalLiters = fills.reduce((a, f) => a + (f.liters_filled || 0), 0);
+      const totalCost = fills.reduce((a, f) => a + (f.cost_aed || 0), 0);
+      const avgL100 = l100.length ? Math.round((l100.reduce((a, b) => a + b, 0) / l100.length) * 100) / 100 : null;
+
+      // Per-driver split inside window
+      const byDriver = new Map<string, { name: string; fills: number; liters: number; l100_sum: number; l100_count: number }>();
+      for (const f of fills) {
+        const dr = Array.isArray(f.driver) ? f.driver[0] : f.driver;
+        if (!dr?.id) continue;
+        let a = byDriver.get(dr.id);
+        if (!a) { a = { name: dr.full_name, fills: 0, liters: 0, l100_sum: 0, l100_count: 0 }; byDriver.set(dr.id, a); }
+        a.fills += 1;
+        if (typeof f.liters_filled === 'number') a.liters += f.liters_filled;
+        if (typeof f.liters_per_100km === 'number') { a.l100_sum += f.liters_per_100km; a.l100_count += 1; }
+      }
+      const driverMix = Array.from(byDriver.entries()).map(([id, a]) => ({
+        driver_id: id,
+        name: a.name,
+        fills: a.fills,
+        liters: Math.round(a.liters * 100) / 100,
+        avg_l100: a.l100_count ? Math.round((a.l100_sum / a.l100_count) * 100) / 100 : null,
+      })).sort((a, b) => b.fills - a.fills);
+
+      return NextResponse.json({
+        window: win,
+        since,
+        truck: truckRes.data,
+        stats: {
+          total_fills: fills.length,
+          total_liters: Math.round(totalLiters * 100) / 100,
+          total_cost_aed: Math.round(totalCost * 100) / 100,
+          avg_l100: avgL100,
+          flag_count: fills.filter((f) => f.flagged).length,
+        },
+        driver_mix: driverMix,
+        fills,
+      });
+    }
+
+    // -----------------------------------------------------------------
+    // driver_detail — per-driver drill-down.
+    // -----------------------------------------------------------------
+    if (action === 'driver_detail') {
+      const id = String(body.id || '').trim();
+      if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+      const win = String(body.window || 'all');
+      const since = resolveWindowSince(win);
+
+      const [driverRes, fillsRes] = await Promise.all([
+        supabaseAdmin
+          .from('diesel_drivers')
+          .select('id, full_name, name_normalized, nickname, license_number, active, needs_review, notes, created_at')
+          .eq('id', id)
+          .maybeSingle(),
+        (async () => {
+          let q = supabaseAdmin
+            .from('diesel_fills')
+            .select(`
+              id, logged_at, odometer_km, liters_filled, km_since_last, liters_per_100km,
+              cost_aed, price_per_liter_at_fill, variance_percent, flagged, flag_reason,
+              photo_plate_url, photo_license_url, photo_odometer_url, photo_pump_url,
+              truck:diesel_trucks(id, plate_display, nickname)
+            `)
+            .eq('driver_id', id)
+            .order('logged_at', { ascending: false })
+            .limit(1000);
+          if (since) q = q.gte('logged_at', since);
+          return q;
+        })(),
+      ]);
+
+      if (driverRes.error) return NextResponse.json({ error: driverRes.error.message }, { status: 500 });
+      if (!driverRes.data) return NextResponse.json({ error: 'Driver not found' }, { status: 404 });
+
+      type F = { id: string; logged_at: string; liters_filled: number | null; cost_aed: number | null; liters_per_100km: number | null; flagged: boolean | null; truck: { id: string; plate_display: string } | { id: string; plate_display: string }[] | null };
+      const fills = ((fillsRes.data || []) as unknown as F[]);
+      const l100 = fills.map((f) => f.liters_per_100km).filter((x): x is number => typeof x === 'number');
+      const totalLiters = fills.reduce((a, f) => a + (f.liters_filled || 0), 0);
+      const totalCost = fills.reduce((a, f) => a + (f.cost_aed || 0), 0);
+      const avgL100 = l100.length ? Math.round((l100.reduce((a, b) => a + b, 0) / l100.length) * 100) / 100 : null;
+
+      // Per-truck split
+      const byTruck = new Map<string, { plate: string; fills: number; liters: number; l100_sum: number; l100_count: number }>();
+      for (const f of fills) {
+        const tr = Array.isArray(f.truck) ? f.truck[0] : f.truck;
+        if (!tr?.id) continue;
+        let a = byTruck.get(tr.id);
+        if (!a) { a = { plate: tr.plate_display, fills: 0, liters: 0, l100_sum: 0, l100_count: 0 }; byTruck.set(tr.id, a); }
+        a.fills += 1;
+        if (typeof f.liters_filled === 'number') a.liters += f.liters_filled;
+        if (typeof f.liters_per_100km === 'number') { a.l100_sum += f.liters_per_100km; a.l100_count += 1; }
+      }
+      const truckMix = Array.from(byTruck.entries()).map(([id, a]) => ({
+        truck_id: id,
+        plate: a.plate,
+        fills: a.fills,
+        liters: Math.round(a.liters * 100) / 100,
+        avg_l100: a.l100_count ? Math.round((a.l100_sum / a.l100_count) * 100) / 100 : null,
+      })).sort((a, b) => b.fills - a.fills);
+
+      return NextResponse.json({
+        window: win,
+        since,
+        driver: driverRes.data,
+        stats: {
+          total_fills: fills.length,
+          total_liters: Math.round(totalLiters * 100) / 100,
+          total_cost_aed: Math.round(totalCost * 100) / 100,
+          avg_l100: avgL100,
+          flag_count: fills.filter((f) => f.flagged).length,
+        },
+        truck_mix: truckMix,
+        fills,
+      });
+    }
+
+    // -----------------------------------------------------------------
+    // init_sheets_format — one-time formatting pass on the configured
+    // Google Sheet. Freezes + bolds header, tints it yellow, sets widths,
+    // adds conditional formatting for flagged rows.
+    // -----------------------------------------------------------------
+    if (action === 'init_sheets_format') {
+      if (!isSheetsConfigured()) {
+        return NextResponse.json({ error: 'Google Sheets not configured' }, { status: 400 });
+      }
+      const r = await initSheetFormat();
+      if (!r.ok) return NextResponse.json({ error: r.error }, { status: 500 });
+      await writeAudit({ action: 'init_sheets_format', ip_address: ip });
+      return NextResponse.json({ success: true });
     }
 
     // -----------------------------------------------------------------

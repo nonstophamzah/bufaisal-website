@@ -247,18 +247,135 @@ export type DashboardFillRow = {
   truck: { id: string; plate_display: string; nickname: string | null } | null;
   driver: { id: string; full_name: string; nickname: string | null } | null;
 };
+export type DashboardWindow = 'today' | 'week' | 'month' | 'quarter' | 'all';
+export type DashboardTotals = {
+  fills: number;
+  liters: number;
+  cost_aed: number;
+  flagged: number;
+};
 export type DashboardSnapshot = {
+  window: DashboardWindow;
+  since: string | null;
   today: DashboardFillRow[];
   trucks: TruckStatsRow[];
   drivers: DriverStatsRow[];
   flagged: DashboardFillRow[];
   needs_review: { trucks: NeedsReviewTruck[]; drivers: NeedsReviewDriver[] };
   fleet_avg_l100: number | null;
+  totals: DashboardTotals;
   sheets_configured: boolean;
 };
 
-export async function dashboardSnapshot(): Promise<DashboardSnapshot> {
-  return post<DashboardSnapshot>({ action: 'dashboard_snapshot' });
+export async function dashboardSnapshot(window: DashboardWindow = 'all'): Promise<DashboardSnapshot> {
+  return post<DashboardSnapshot>({ action: 'dashboard_snapshot', window });
+}
+
+// -------- Per-vehicle drill-down --------
+
+export type TruckDetail = {
+  window: DashboardWindow;
+  since: string | null;
+  truck: {
+    id: string;
+    plate_number: string;
+    plate_display: string;
+    nickname: string | null;
+    active: boolean;
+    needs_review: boolean;
+    notes: string | null;
+    created_at: string;
+  };
+  stats: {
+    total_fills: number;
+    total_liters: number;
+    total_cost_aed: number;
+    avg_l100: number | null;
+    flag_count: number;
+  };
+  driver_mix: Array<{ driver_id: string; name: string; fills: number; liters: number; avg_l100: number | null }>;
+  fills: Array<{
+    id: string;
+    logged_at: string;
+    odometer_km: number | null;
+    liters_filled: number | null;
+    km_since_last: number | null;
+    liters_per_100km: number | null;
+    cost_aed: number | null;
+    price_per_liter_at_fill: number | null;
+    variance_percent: number | null;
+    flagged: boolean;
+    flag_reason: string | null;
+    photo_plate_url: string | null;
+    photo_license_url: string | null;
+    photo_odometer_url: string | null;
+    photo_pump_url: string | null;
+    driver: { id: string; full_name: string; nickname: string | null } | null;
+  }>;
+};
+
+export async function truckDetail(id: string, window: DashboardWindow = 'all'): Promise<TruckDetail> {
+  return post<TruckDetail>({ action: 'truck_detail', id, window });
+}
+
+export type DriverDetail = {
+  window: DashboardWindow;
+  since: string | null;
+  driver: {
+    id: string;
+    full_name: string;
+    name_normalized: string;
+    nickname: string | null;
+    license_number: string | null;
+    active: boolean;
+    needs_review: boolean;
+    notes: string | null;
+    created_at: string;
+  };
+  stats: TruckDetail['stats'];
+  truck_mix: Array<{ truck_id: string; plate: string; fills: number; liters: number; avg_l100: number | null }>;
+  fills: Array<TruckDetail['fills'][number] & { truck: { id: string; plate_display: string; nickname: string | null } | null }>;
+};
+
+export async function driverDetail(id: string, window: DashboardWindow = 'all'): Promise<DriverDetail> {
+  return post<DriverDetail>({ action: 'driver_detail', id, window });
+}
+
+// -------- Sheets format init --------
+
+export async function initSheetsFormat(): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await post<{ success: true }>({ action: 'init_sheets_format' });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Failed' };
+  }
+}
+
+// -------- CSV generation (client-side from already-loaded data) --------
+
+export function toCsv(rows: Record<string, unknown>[], columns: { key: string; label: string }[]): string {
+  const esc = (v: unknown): string => {
+    if (v === null || v === undefined) return '';
+    const s = String(v);
+    if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+  const header = columns.map((c) => esc(c.label)).join(',');
+  const body = rows.map((r) => columns.map((c) => esc(r[c.key])).join(',')).join('\n');
+  return header + '\n' + body;
+}
+
+export function downloadCsv(filename: string, csv: string) {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 export type FullLogRow = RecentFillRow & {
