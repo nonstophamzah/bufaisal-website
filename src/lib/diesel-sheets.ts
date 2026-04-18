@@ -596,3 +596,100 @@ async function backfillIfEmpty(token: string, spreadsheetId: string, tab: string
   );
   return sheetRows.length;
 }
+
+// ============================================================
+// Diagnostic — runs each step of the Sheets pipeline individually so we
+// can pinpoint exactly which one fails (env, JWT auth, sheet read, write).
+// Returns a flat result object that's safe to return to the client (no
+// secrets — just non-secret presence flags + Google's own error message).
+// ============================================================
+export type SheetsDiagnostic = {
+  ok: boolean;
+  step: 'env' | 'jwt_auth' | 'sheet_metadata' | 'header_write' | 'value_read' | 'done';
+  error: string | null;
+  details: Record<string, unknown>;
+};
+
+export async function diagnoseSheets(): Promise<SheetsDiagnostic> {
+  const result: SheetsDiagnostic = {
+    ok: false,
+    step: 'env',
+    error: null,
+    details: {
+      env_present: {
+        DIESEL_SHEETS_CLIENT_EMAIL:   !!process.env.DIESEL_SHEETS_CLIENT_EMAIL,
+        GOOGLE_SERVICE_ACCOUNT_EMAIL: !!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+        DIESEL_SHEETS_PRIVATE_KEY:    !!process.env.DIESEL_SHEETS_PRIVATE_KEY,
+        GOOGLE_PRIVATE_KEY:           !!process.env.GOOGLE_PRIVATE_KEY,
+        DIESEL_SHEETS_SPREADSHEET_ID: !!process.env.DIESEL_SHEETS_SPREADSHEET_ID,
+        DIESEL_GOOGLE_SHEET_ID:       !!process.env.DIESEL_GOOGLE_SHEET_ID,
+      },
+    },
+  };
+
+  const cfg = envConfig();
+  if (!cfg) {
+    result.error = 'envConfig() returned null — required env vars are missing or empty after parsing';
+    return result;
+  }
+  // Non-secret introspection of what we actually parsed
+  result.details.parsed = {
+    client_email: cfg.clientEmail,
+    sheet_id: cfg.sheetId,
+    tab_name: cfg.tabName,
+    private_key_length: cfg.privateKey.length,
+    private_key_starts_with: cfg.privateKey.slice(0, 27),
+    private_key_ends_with: cfg.privateKey.slice(-25),
+    private_key_contains_real_newlines: cfg.privateKey.includes('\n'),
+  };
+
+  // Step 2: JWT auth
+  result.step = 'jwt_auth';
+  let token: string;
+  try {
+    token = await getAuthToken(cfg);
+    (result.details as Record<string, unknown>).access_token_length = token.length;
+  } catch (err) {
+    result.error = `JWT auth failed: ${err instanceof Error ? err.message : String(err)}`;
+    return result;
+  }
+
+  // Step 3: read sheet metadata (catches Sheets-API-not-enabled / 403 / 404)
+  result.step = 'sheet_metadata';
+  try {
+    const meta = await sheetsFetch<{
+      properties?: { title?: string };
+      sheets?: { properties?: { title?: string } }[];
+    }>(token, `${cfg.sheetId}?fields=properties.title,sheets.properties.title`);
+    (result.details as Record<string, unknown>).sheet_title = meta.properties?.title ?? null;
+    (result.details as Record<string, unknown>).existing_tabs =
+      meta.sheets?.map((s) => s.properties?.title).filter(Boolean) ?? [];
+  } catch (err) {
+    result.error = `Sheet metadata read failed: ${err instanceof Error ? err.message : String(err)}`;
+    return result;
+  }
+
+  // Step 4: write header row (catches missing Editor permission)
+  result.step = 'header_write';
+  try {
+    await ensureHeaderRow(token, cfg.sheetId, cfg.tabName);
+  } catch (err) {
+    result.error = `Header write failed: ${err instanceof Error ? err.message : String(err)}`;
+    return result;
+  }
+
+  // Step 5: read back the header to confirm round-trip
+  result.step = 'value_read';
+  try {
+    const range = encodeURIComponent(`${cfg.tabName}!A1:AF1`);
+    const got = await sheetsFetch<{ values?: string[][] }>(token, `${cfg.sheetId}/values/${range}`);
+    (result.details as Record<string, unknown>).header_round_trip_cols = got.values?.[0]?.length ?? 0;
+  } catch (err) {
+    result.error = `Header readback failed: ${err instanceof Error ? err.message : String(err)}`;
+    return result;
+  }
+
+  result.step = 'done';
+  result.ok = true;
+  return result;
+}

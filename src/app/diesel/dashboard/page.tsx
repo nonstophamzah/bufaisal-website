@@ -125,6 +125,8 @@ function Dashboard({ fallbackPin }: { fallbackPin: boolean }) {
   const [err, setErr] = useState<string>('');
   const [toast, setToast] = useState<string>('');
   const [formattingSheet, setFormattingSheet] = useState(false);
+  // Sticky banner for Sheet failures — toasts disappear too fast for long error text.
+  const [sheetError, setSheetError] = useState<string>('');
 
   const load = async (win: DashboardWindow = windowKey) => {
     setLoading(true);
@@ -145,9 +147,33 @@ function Dashboard({ fallbackPin }: { fallbackPin: boolean }) {
 
   const onFormatSheet = async () => {
     setFormattingSheet(true);
+    setSheetError('');
     const r = await initSheetsFormat();
     setFormattingSheet(false);
-    flash(r.ok ? 'Sheet formatted' : `Sheet format failed: ${r.error}`);
+    if (r.ok) {
+      flash('Sheet formatted');
+    } else {
+      // Persist the error — don't let a 3-second toast hide what Google said.
+      setSheetError(r.error || 'Unknown error');
+    }
+  };
+
+  const onDiagnoseSheet = async () => {
+    setFormattingSheet(true);
+    setSheetError('');
+    try {
+      const res = await fetch('/api/diesel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'sheets_diagnostic' }),
+      });
+      const data = await res.json();
+      // Dump the whole diagnostic object into the banner so every step's state is visible.
+      setSheetError(JSON.stringify(data, null, 2));
+    } catch (e) {
+      setSheetError(e instanceof Error ? e.message : 'Diagnostic failed');
+    }
+    setFormattingSheet(false);
   };
 
   const needsReviewCount =
@@ -176,15 +202,25 @@ function Dashboard({ fallbackPin }: { fallbackPin: boolean }) {
           </div>
           <div className="flex items-center gap-2">
             {snapshot?.sheets_configured && (
-              <button
-                onClick={onFormatSheet}
-                disabled={formattingSheet}
-                className="px-3 py-2 rounded-lg bg-yellow text-black font-bold text-xs flex items-center gap-1.5 active:scale-95 min-h-[36px] disabled:opacity-50"
-                title="Format the Google Sheet (one-time)"
-              >
-                {formattingSheet ? <Loader2 size={14} className="animate-spin" /> : <Grid3X3 size={14} />}
-                Sheet
-              </button>
+              <>
+                <button
+                  onClick={onFormatSheet}
+                  disabled={formattingSheet}
+                  className="px-3 py-2 rounded-lg bg-yellow text-black font-bold text-xs flex items-center gap-1.5 active:scale-95 min-h-[36px] disabled:opacity-50"
+                  title="Format the Google Sheet (one-time)"
+                >
+                  {formattingSheet ? <Loader2 size={14} className="animate-spin" /> : <Grid3X3 size={14} />}
+                  Sheet
+                </button>
+                <button
+                  onClick={onDiagnoseSheet}
+                  disabled={formattingSheet}
+                  className="px-3 py-2 rounded-lg bg-gray-800 text-yellow border border-yellow text-xs flex items-center gap-1.5 active:scale-95 min-h-[36px] disabled:opacity-50"
+                  title="Run Sheets diagnostic — pinpoints which step is failing"
+                >
+                  Diagnose
+                </button>
+              </>
             )}
             <button
               onClick={() => load()}
@@ -219,6 +255,24 @@ function Dashboard({ fallbackPin }: { fallbackPin: boolean }) {
           ))}
         </div>
       </header>
+
+      {/* STICKY SHEET ERROR BANNER — dismissible, holds full error text */}
+      {sheetError && (
+        <div className="bg-red-950 border-y border-red-700 px-4 py-3 text-red-200 text-xs">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="font-heading text-red-300 mb-1">SHEET ERROR</div>
+              <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">{sheetError}</pre>
+            </div>
+            <button
+              onClick={() => setSheetError('')}
+              className="text-red-300 border border-red-700 rounded px-2 py-0.5 text-[10px] shrink-0"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* FALLBACK PIN WARNING */}
       {fallbackPin && (

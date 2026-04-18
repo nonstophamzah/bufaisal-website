@@ -27,7 +27,7 @@ import {
   type PreviousFill,
   type CalcConfig,
 } from '@/lib/diesel-calc';
-import { isSheetsConfigured, buildSheetRow, syncFillToSheet, initSheetFormat } from '@/lib/diesel-sheets';
+import { isSheetsConfigured, buildSheetRow, syncFillToSheet, initSheetFormat, diagnoseSheets } from '@/lib/diesel-sheets';
 
 // Resolve a window keyword to an ISO since-date (null = "all time")
 function resolveWindowSince(window: string | undefined): string | null {
@@ -1063,16 +1063,89 @@ export async function POST(request: NextRequest) {
     // -----------------------------------------------------------------
     if (action === 'init_sheets_format') {
       if (!isSheetsConfigured()) {
+        await writeAudit({
+          action: 'init_sheets_format_failed',
+          ip_address: ip,
+          details: {
+            error: 'Google Sheets not configured (env vars missing)',
+            seen_env: {
+              DIESEL_SHEETS_CLIENT_EMAIL:   !!process.env.DIESEL_SHEETS_CLIENT_EMAIL,
+              GOOGLE_SERVICE_ACCOUNT_EMAIL: !!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+              DIESEL_SHEETS_PRIVATE_KEY:    !!process.env.DIESEL_SHEETS_PRIVATE_KEY,
+              GOOGLE_PRIVATE_KEY:           !!process.env.GOOGLE_PRIVATE_KEY,
+              DIESEL_SHEETS_SPREADSHEET_ID: !!process.env.DIESEL_SHEETS_SPREADSHEET_ID,
+              DIESEL_GOOGLE_SHEET_ID:       !!process.env.DIESEL_GOOGLE_SHEET_ID,
+            },
+          },
+        });
         return NextResponse.json({ error: 'Google Sheets not configured' }, { status: 400 });
       }
       const r = await initSheetFormat();
-      if (!r.ok) return NextResponse.json({ error: r.error }, { status: 500 });
+      if (!r.ok) {
+        // Previously we only logged success — now log failures too so we can
+        // diagnose without needing the user to screenshot a 3-second toast.
+        await writeAudit({
+          action: 'init_sheets_format_failed',
+          ip_address: ip,
+          details: { error: r.error },
+        });
+        return NextResponse.json({ error: r.error }, { status: 500 });
+      }
       await writeAudit({
         action: 'init_sheets_format',
         ip_address: ip,
         details: { backfilled: r.backfilled },
       });
       return NextResponse.json({ success: true, backfilled: r.backfilled });
+    }
+
+    // -----------------------------------------------------------------
+    // audit_errors — surface recent sheets/audit failures so the dashboard
+    // (or a curl) can diagnose a broken sync without opening Supabase Studio.
+    // -----------------------------------------------------------------
+    if (action === 'audit_errors') {
+      const limit = Math.min(Math.max(Number(body.limit) || 50, 1), 500);
+      const actions = [
+        'sheets_sync_failed',
+        'init_sheets_format_failed',
+        'submit_fill_rejected',
+        'pin_fail',
+        'manager_pin_fail',
+      ];
+      const { data, error } = await supabaseAdmin
+        .from('diesel_audit_log')
+        .select('id, action, created_at, target_id, details, ip_address')
+        .in('action', actions)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({
+        entries: data || [],
+        sheets_configured: isSheetsConfigured(),
+        // Non-secret presence booleans so we can confirm which env var names are live.
+        env_present: {
+          DIESEL_SHEETS_CLIENT_EMAIL:   !!process.env.DIESEL_SHEETS_CLIENT_EMAIL,
+          GOOGLE_SERVICE_ACCOUNT_EMAIL: !!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+          DIESEL_SHEETS_PRIVATE_KEY:    !!process.env.DIESEL_SHEETS_PRIVATE_KEY,
+          GOOGLE_PRIVATE_KEY:           !!process.env.GOOGLE_PRIVATE_KEY,
+          DIESEL_SHEETS_SPREADSHEET_ID: !!process.env.DIESEL_SHEETS_SPREADSHEET_ID,
+          DIESEL_GOOGLE_SHEET_ID:       !!process.env.DIESEL_GOOGLE_SHEET_ID,
+        },
+      });
+    }
+
+    // -----------------------------------------------------------------
+    // sheets_diagnostic — step-by-step smoke test of the Sheets path so
+    // we can pinpoint exactly where auth / API-enablement / permission fails.
+    // -----------------------------------------------------------------
+    if (action === 'sheets_diagnostic') {
+      const result = await diagnoseSheets();
+      await writeAudit({
+        action: result.ok ? 'sheets_diagnostic_ok' : 'sheets_diagnostic_failed',
+        ip_address: ip,
+        details: result,
+      });
+      return NextResponse.json(result);
     }
 
     // -----------------------------------------------------------------
