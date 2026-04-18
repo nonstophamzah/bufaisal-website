@@ -1,76 +1,60 @@
 'use client';
 
-// Diesel Tracker — PIN gate.
-// Mirrors the appliances entry-code pattern. Uses sessionStorage (clears on tab close).
+// /diesel — Portal selector. Two doors:
+//   LOG FILL → /diesel/submit  (diesel guy's PIN + 4-photo flow)
+//   MANAGER  → /diesel/dashboard (manager PIN + 6-tab dashboard)
+//
+// This page itself is not PIN-gated; both destinations gate independently.
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Loader2, Fuel } from 'lucide-react';
-import { checkPin } from '@/lib/diesel-api';
+import Link from 'next/link';
+import { Fuel, Camera, LayoutDashboard, ArrowRight } from 'lucide-react';
 
-const SESSION_KEY = 'diesel_pin_ok';
-
-export default function DieselGate() {
-  const router = useRouter();
-  const [pin, setPin] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (sessionStorage.getItem(SESSION_KEY) === '1') {
-      router.replace('/diesel/submit');
-    }
-  }, [router]);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (pin.length < 4) return;
-    setLoading(true);
-    setError('');
-    try {
-      const ok = await checkPin(pin);
-      if (!ok) {
-        setError('Wrong PIN');
-        setPin('');
-        return;
-      }
-      sessionStorage.setItem(SESSION_KEY, '1');
-      router.replace('/diesel/submit');
-    } catch {
-      setError('Server error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+export default function DieselPortal() {
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-6">
-      <div className="w-16 h-16 rounded-full bg-yellow flex items-center justify-center mb-4">
-        <Fuel size={32} className="text-black" />
+    <div className="min-h-screen bg-gradient-to-b from-black via-black to-gray-950 text-white flex flex-col items-center px-5 pt-14 pb-10">
+      {/* hero */}
+      <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-yellow to-yellow/70 flex items-center justify-center mb-5 shadow-[0_0_40px_-10px_rgba(250,204,21,0.45)]">
+        <Fuel size={40} className="text-black" strokeWidth={2.5} />
       </div>
-      <h1 className="font-heading text-4xl mb-2">DIESEL LOG</h1>
-      <p className="text-gray-400 text-sm mb-8">Enter PIN to log a fill</p>
+      <h1 className="font-heading text-5xl tracking-tight mb-1">
+        BU FAISAL <span className="text-yellow">DIESEL</span>
+      </h1>
+      <p className="text-gray-400 text-sm mb-10">Fleet fuel tracker</p>
 
-      <form onSubmit={submit} className="w-full max-w-xs">
-        <input
-          type="password"
-          inputMode="numeric"
-          autoFocus
-          value={pin}
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-          maxLength={10}
-          placeholder="PIN"
-          className="w-full text-center text-3xl tracking-[0.5em] font-heading py-5 rounded-2xl bg-gray-900 text-yellow placeholder-gray-700 border-2 border-gray-800 focus:border-yellow focus:outline-none"
-        />
-        {error && <p className="text-red-400 text-center text-sm mt-3">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading || pin.length < 4}
-          className="w-full mt-4 py-5 rounded-2xl bg-yellow text-black font-heading text-2xl active:scale-95 transition-transform disabled:opacity-40 flex items-center justify-center gap-2"
+      {/* tiles */}
+      <div className="w-full max-w-md space-y-3">
+        <Link
+          href="/diesel/submit"
+          className="group flex items-center gap-4 bg-gray-950/80 border border-gray-800 hover:border-yellow rounded-2xl p-5 transition-all active:scale-[0.98]"
         >
-          {loading ? <Loader2 size={24} className="animate-spin" /> : 'ENTER'}
-        </button>
-      </form>
+          <div className="w-14 h-14 bg-yellow/10 group-hover:bg-yellow/20 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors">
+            <Camera size={26} className="text-yellow" />
+          </div>
+          <div className="flex-1">
+            <h2 className="font-heading text-2xl">LOG A FILL</h2>
+            <p className="text-xs text-gray-500">4 photos · ~60 seconds</p>
+          </div>
+          <ArrowRight size={20} className="text-gray-600 group-hover:text-yellow transition-colors" />
+        </Link>
+
+        <Link
+          href="/diesel/dashboard"
+          className="group flex items-center gap-4 bg-gray-950/80 border border-gray-800 hover:border-yellow rounded-2xl p-5 transition-all active:scale-[0.98]"
+        >
+          <div className="w-14 h-14 bg-yellow/10 group-hover:bg-yellow/20 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors">
+            <LayoutDashboard size={26} className="text-yellow" />
+          </div>
+          <div className="flex-1">
+            <h2 className="font-heading text-2xl">MANAGER</h2>
+            <p className="text-xs text-gray-500">Fleet stats, flags, trends</p>
+          </div>
+          <ArrowRight size={20} className="text-gray-600 group-hover:text-yellow transition-colors" />
+        </Link>
+      </div>
+
+      <p className="text-[11px] text-gray-600 mt-10 text-center max-w-xs">
+        Each door has its own PIN. Diesel guy uses the LOG door only.
+      </p>
     </div>
   );
 }

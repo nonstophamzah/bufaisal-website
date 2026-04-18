@@ -1,10 +1,12 @@
 'use client';
 
-// Diesel Tracker — 3-screen submit flow (4 photos)
-// 1. CAPTURE: tap 4 tiles (plate / license / odo / pump), each opens camera,
-//             captures, compresses, uploads to Cloudinary, AND analyzes via Gemini
-// 2. REVIEW : shows OCR'd fields in editable UI + truck/driver dropdown with auto-match
-// 3. RESULT : confirmation + flag badge if flagged
+// Diesel Tracker — PIN gate + 4-photo submit flow
+//
+// Screens:
+//   gate    — PIN entry (diesel guy)
+//   capture — 4 tiles (plate / licence / odo / pump), each opens camera
+//   review  — editable OCR'd values + truck/driver dropdowns
+//   result  — confirmation + flags
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -17,9 +19,12 @@ import {
   AlertTriangle,
   Fuel,
   RotateCcw,
+  LayoutDashboard,
 } from 'lucide-react';
+import Link from 'next/link';
 import { uploadToCloudinary } from '../../appliances/lib/upload';
 import {
+  checkPin,
   listTrucks,
   listDrivers,
   resolvePlate,
@@ -37,12 +42,12 @@ import {
 
 const SESSION_KEY = 'diesel_pin_ok';
 
-type Screen = 'capture' | 'review' | 'result';
+type Screen = 'gate' | 'capture' | 'review' | 'result';
 type Slot = 'plate' | 'license' | 'odo' | 'pump';
 
 type SlotState = {
-  previewUrl: string | null;     // local object URL for preview
-  cloudinaryUrl: string | null;  // final uploaded URL (persisted)
+  previewUrl: string | null;
+  cloudinaryUrl: string | null;
   ocrLoading: boolean;
   ocrError: string | null;
   ocrResult: PlateResult | LicenseResult | OdoResult | PumpResult | null;
@@ -59,6 +64,13 @@ const emptySlot = (): SlotState => ({
   confidence: null,
   raw: null,
 });
+
+const SLOTS: { slot: Slot; label: string; hint: string; num: number }[] = [
+  { slot: 'plate',   label: 'Plate',     hint: 'Rear or front',             num: 1 },
+  { slot: 'license', label: 'Licence',   hint: 'Driver\u2019s UAE licence', num: 2 },
+  { slot: 'odo',     label: 'Odometer',  hint: 'Dashboard km reading',      num: 3 },
+  { slot: 'pump',    label: 'Pump',      hint: 'Liters dispensed',          num: 4 },
+];
 
 // ---- helpers ----
 function compressToBlobAndBase64(
@@ -105,18 +117,42 @@ function compressToBlobAndBase64(
 export default function DieselSubmitPage() {
   const router = useRouter();
 
-  // ----- gate -----
-  const [gated, setGated] = useState(true);
-  useEffect(() => {
-    if (sessionStorage.getItem(SESSION_KEY) !== '1') {
-      router.replace('/diesel');
-      return;
-    }
-    setGated(false);
-  }, [router]);
-
   // ----- screen state -----
-  const [screen, setScreen] = useState<Screen>('capture');
+  const [screen, setScreen] = useState<Screen>('gate');
+
+  // check PIN state on mount — if already authed, jump to capture
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (sessionStorage.getItem(SESSION_KEY) === '1') {
+      setScreen('capture');
+    }
+  }, []);
+
+  // ----- PIN state -----
+  const [pin, setPin] = useState('');
+  const [pinErr, setPinErr] = useState('');
+  const [pinSubmitting, setPinSubmitting] = useState(false);
+
+  const submitPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pin.length < 4) return;
+    setPinSubmitting(true);
+    setPinErr('');
+    try {
+      const ok = await checkPin(pin);
+      if (!ok) {
+        setPinErr('Wrong PIN');
+        setPin('');
+        return;
+      }
+      sessionStorage.setItem(SESSION_KEY, '1');
+      setScreen('capture');
+    } catch {
+      setPinErr('Server error');
+    } finally {
+      setPinSubmitting(false);
+    }
+  };
 
   // ----- per-photo slots -----
   const [plate, setPlate]     = useState<SlotState>(emptySlot());
@@ -142,9 +178,11 @@ export default function DieselSubmitPage() {
   const [trucks, setTrucks] = useState<TruckRow[]>([]);
   const [drivers, setDrivers] = useState<DriverRow[]>([]);
   useEffect(() => {
-    listTrucks().then(setTrucks).catch(() => setTrucks([]));
-    listDrivers().then(setDrivers).catch(() => setDrivers([]));
-  }, []);
+    if (screen === 'capture' || screen === 'review') {
+      listTrucks().then(setTrucks).catch(() => setTrucks([]));
+      listDrivers().then(setDrivers).catch(() => setDrivers([]));
+    }
+  }, [screen]);
 
   // ----- review screen state -----
   const [selectedTruckId, setSelectedTruckId] = useState<string>('');
@@ -190,7 +228,6 @@ export default function DieselSubmitPage() {
     try {
       const { blob, base64, mime } = await compressToBlobAndBase64(file);
 
-      // upload + OCR in parallel
       const geminiPromise =
         slot === 'plate'   ? callGemini<PlateResult>('diesel_plate', base64, mime)
         : slot === 'license' ? callGemini<LicenseResult>('diesel_license', base64, mime)
@@ -221,22 +258,21 @@ export default function DieselSubmitPage() {
 
   const openCapture = (slot: Slot) => {
     setActiveSlot(slot);
-    // small delay so activeSlot state is set before the input opens
     setTimeout(() => fileInputRef.current?.click(), 50);
   };
 
+  const capturedCount =
+    (plate.cloudinaryUrl ? 1 : 0) +
+    (license.cloudinaryUrl ? 1 : 0) +
+    (odo.cloudinaryUrl ? 1 : 0) +
+    (pump.cloudinaryUrl ? 1 : 0);
+
   const allCaptured =
-    !!plate.cloudinaryUrl &&
-    !!license.cloudinaryUrl &&
-    !!odo.cloudinaryUrl &&
-    !!pump.cloudinaryUrl &&
-    !plate.ocrLoading &&
-    !license.ocrLoading &&
-    !odo.ocrLoading &&
-    !pump.ocrLoading;
+    capturedCount === 4 &&
+    !plate.ocrLoading && !license.ocrLoading && !odo.ocrLoading && !pump.ocrLoading;
 
   // --------------------------------------------------
-  // Move to review: resolve plate + driver, prefill form
+  // Move to review
   // --------------------------------------------------
   const goToReview = async () => {
     if (!allCaptured) return;
@@ -246,7 +282,6 @@ export default function DieselSubmitPage() {
     const odoOcr     = odo.ocrResult     as OdoResult     | null;
     const pumpOcr    = pump.ocrResult    as PumpResult    | null;
 
-    // Resolve truck from plate OCR (no auto-create in resolver — that happens on submit)
     let matchedTruckId: string | null = null;
     if (plateOcr?.plate_number) {
       try {
@@ -264,7 +299,6 @@ export default function DieselSubmitPage() {
     setSelectedTruckId(matchedTruckId || '');
     setPlateWillAutoCreate(!matchedTruckId && !!(plateOcr?.plate_number || plateOcr?.plate_digits));
 
-    // Resolve driver from license OCR
     let matchedDriverId: string | null = null;
     if (licenseOcr?.full_name || licenseOcr?.license_number) {
       try {
@@ -297,7 +331,6 @@ export default function DieselSubmitPage() {
     const plateOcr   = plate.ocrResult   as PlateResult   | null;
     const licenseOcr = license.ocrResult as LicenseResult | null;
 
-    // At least plate OR truck_id must resolve
     if (!selectedTruckId && !plateOcr?.plate_number) {
       setSubmitError('Cannot identify truck — retake plate photo or pick manually.');
       return;
@@ -322,24 +355,18 @@ export default function DieselSubmitPage() {
     setSubmitting(true);
     try {
       const res = await submitFill({
-        // truck identification: prefer selected dropdown, fall back to plate OCR for auto-create
         truck_id: selectedTruckId || undefined,
         plate_raw: selectedTruckId ? undefined : (plateOcr?.plate_number || plateOcr?.plate_digits || undefined),
         plate_display: selectedTruckId ? undefined : (plateOcr?.plate_number || undefined),
-
-        // driver identification
         driver_id: selectedDriverId || undefined,
         driver_name: selectedDriverId ? undefined : (licenseOcr?.full_name || undefined),
         driver_license_number: selectedDriverId ? undefined : (licenseOcr?.license_number || undefined),
-
         odometer_km: odoNum,
         liters_filled: litNum,
-
         photo_plate_url: plate.cloudinaryUrl!,
         photo_license_url: license.cloudinaryUrl,
         photo_odometer_url: odo.cloudinaryUrl!,
         photo_pump_url: pump.cloudinaryUrl!,
-
         submitted_via: 'web_form',
         corrected_by_human: correctedByHuman,
         gemini_confidence_plate: plate.confidence,
@@ -382,7 +409,47 @@ export default function DieselSubmitPage() {
     setScreen('capture');
   };
 
-  if (gated) return null;
+  // ===================================================
+  // Screen: GATE (PIN)
+  // ===================================================
+  if (screen === 'gate') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-black via-black to-gray-950 text-white flex flex-col items-center justify-center px-6">
+        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-yellow to-yellow/70 flex items-center justify-center mb-5 shadow-[0_0_40px_-10px_rgba(250,204,21,0.45)]">
+          <Fuel size={40} className="text-black" strokeWidth={2.5} />
+        </div>
+        <h1 className="font-heading text-4xl mb-1">LOG A FILL</h1>
+        <p className="text-gray-500 text-sm mb-8">Enter PIN to continue</p>
+
+        <form onSubmit={submitPin} className="w-full max-w-xs">
+          <input
+            type="password"
+            inputMode="numeric"
+            autoFocus
+            value={pin}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+            maxLength={10}
+            placeholder="••••"
+            className="w-full text-center text-3xl tracking-[0.5em] font-heading py-5 rounded-2xl bg-gray-900 text-yellow placeholder-gray-700 border-2 border-gray-800 focus:border-yellow focus:outline-none"
+          />
+          {pinErr && <p className="text-red-400 text-center text-sm mt-3">{pinErr}</p>}
+          <button
+            type="submit"
+            disabled={pinSubmitting || pin.length < 4}
+            className="w-full mt-4 py-5 rounded-2xl bg-yellow text-black font-heading text-2xl active:scale-95 transition-transform disabled:opacity-40 flex items-center justify-center gap-2"
+          >
+            {pinSubmitting ? <Loader2 size={24} className="animate-spin" /> : 'ENTER'}
+          </button>
+          <Link
+            href="/diesel"
+            className="w-full mt-3 py-3 text-gray-500 text-sm flex items-center justify-center gap-1"
+          >
+            <ArrowLeft size={14} /> Back
+          </Link>
+        </form>
+      </div>
+    );
+  }
 
   // ===================================================
   // Screen: RESULT
@@ -390,16 +457,18 @@ export default function DieselSubmitPage() {
   if (screen === 'result' && result) {
     const flagged = result.computed.flagged;
     return (
-      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-6">
+      <div className="min-h-screen bg-gradient-to-b from-black via-black to-gray-950 text-white flex flex-col items-center justify-center px-6">
         <div
-          className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 ${
-            flagged ? 'bg-red-500' : 'bg-green-500'
+          className={`w-24 h-24 rounded-full flex items-center justify-center mb-5 shadow-[0_0_50px_-8px] ${
+            flagged
+              ? 'bg-red-500 shadow-red-500/50'
+              : 'bg-green-500 shadow-green-500/50'
           }`}
         >
-          {flagged ? <AlertTriangle size={40} /> : <Check size={48} strokeWidth={3} />}
+          {flagged ? <AlertTriangle size={44} /> : <Check size={52} strokeWidth={3} />}
         </div>
-        <h2 className="font-heading text-3xl mb-2">{flagged ? 'FLAGGED' : 'LOGGED'}</h2>
-        <p className="text-center text-lg mb-6 max-w-sm">{result.confirmation}</p>
+        <h2 className="font-heading text-4xl mb-2">{flagged ? 'FLAGGED' : 'LOGGED'}</h2>
+        <p className="text-center text-lg text-gray-200 mb-6 max-w-sm leading-snug">{result.confirmation}</p>
 
         {(result.reviewHints.truckNeedsReview || result.reviewHints.driverNeedsReview) && (
           <div className="w-full max-w-sm bg-blue-500/10 border border-blue-500/40 rounded-xl p-4 mb-4 text-sm">
@@ -424,12 +493,12 @@ export default function DieselSubmitPage() {
 
         {result.computed.cost_aed !== null && (
           <p className="text-xs text-gray-500 mb-4">
-            Cost recorded: <span className="text-white font-semibold">{result.computed.cost_aed} AED</span>
+            Cost: <span className="text-white font-semibold">{result.computed.cost_aed} AED</span>
             {result.computed.price_per_liter ? ` @ ${result.computed.price_per_liter}/L` : ''}
           </p>
         )}
 
-        <div className="flex gap-3 w-full max-w-sm mt-4">
+        <div className="flex gap-3 w-full max-w-sm mt-2">
           <button
             onClick={() => router.push('/diesel')}
             className="flex-1 py-4 rounded-2xl bg-gray-800 text-white font-bold text-lg"
@@ -454,7 +523,7 @@ export default function DieselSubmitPage() {
     const licenseOcr = license.ocrResult as LicenseResult | null;
     const plateOcr   = plate.ocrResult   as PlateResult   | null;
     return (
-      <div className="min-h-screen bg-black text-white px-4 pt-4 pb-24">
+      <div className="min-h-screen bg-gradient-to-b from-black via-black to-gray-950 text-white px-4 pt-4 pb-24">
         <button
           onClick={() => setScreen('capture')}
           className="flex items-center gap-1 text-gray-500 mb-4 min-h-[48px]"
@@ -469,29 +538,30 @@ export default function DieselSubmitPage() {
 
         {/* Photo thumbnails */}
         <div className="grid grid-cols-4 gap-2 mb-6">
-          {(['plate', 'license', 'odo', 'pump'] as Slot[]).map((s) => {
-            const st = slotState(s);
+          {SLOTS.map((s) => {
+            const st = slotState(s.slot);
             return (
-              <div key={s} className="aspect-square rounded-xl overflow-hidden bg-gray-900">
+              <div key={s.slot} className="relative aspect-square rounded-xl overflow-hidden bg-gray-900 border border-gray-800">
                 {st.previewUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={st.previewUrl} alt={s} className="w-full h-full object-cover" />
+                  <img src={st.previewUrl} alt={s.label} className="w-full h-full object-cover" />
                 )}
+                <span className="absolute top-1 left-1 bg-black/80 text-yellow font-heading text-[10px] rounded px-1">{s.num}</span>
               </div>
             );
           })}
         </div>
 
         {/* Truck */}
-        <label className="block text-xs text-gray-400 mb-1">TRUCK</label>
+        <label className="block text-xs text-gray-400 mb-1 font-heading tracking-wider">TRUCK</label>
         {plateAutoMatchedTruckId && (
           <p className="text-xs text-green-400 mb-1">
-            ✓ Auto-matched from plate photo. Change if wrong.
+            ✓ Auto-matched from plate photo.
           </p>
         )}
         {!plateAutoMatchedTruckId && plateWillAutoCreate && (
           <p className="text-xs text-blue-300 mb-1">
-            New plate &quot;{plateOcr?.plate_number || plateOcr?.plate_digits}&quot; — will be added on submit. Manager will confirm.
+            New plate &quot;{plateOcr?.plate_number || plateOcr?.plate_digits}&quot; — will be added on submit.
           </p>
         )}
         {!plateAutoMatchedTruckId && !plateWillAutoCreate && plate.ocrResult && (
@@ -502,7 +572,7 @@ export default function DieselSubmitPage() {
         <select
           value={selectedTruckId}
           onChange={(e) => setSelectedTruckId(e.target.value)}
-          className="w-full py-4 px-3 rounded-xl bg-gray-900 text-white border border-gray-700 mb-4"
+          className="w-full py-4 px-3 rounded-xl bg-gray-900 text-white border border-gray-700 mb-4 focus:border-yellow focus:outline-none"
         >
           <option value="">{plateWillAutoCreate ? '-- auto-create from photo --' : '-- select truck --'}</option>
           {trucks.map((t) => (
@@ -513,15 +583,15 @@ export default function DieselSubmitPage() {
         </select>
 
         {/* Driver */}
-        <label className="block text-xs text-gray-400 mb-1">DRIVER</label>
+        <label className="block text-xs text-gray-400 mb-1 font-heading tracking-wider">DRIVER</label>
         {driverAutoMatchedId && (
           <p className="text-xs text-green-400 mb-1">
-            ✓ Auto-matched from licence photo. Change if wrong.
+            ✓ Auto-matched from licence photo.
           </p>
         )}
         {!driverAutoMatchedId && driverWillAutoCreate && (
           <p className="text-xs text-blue-300 mb-1">
-            New driver &quot;{licenseOcr?.full_name || licenseOcr?.license_number}&quot; — will be added on submit. Manager will confirm.
+            New driver &quot;{licenseOcr?.full_name || licenseOcr?.license_number}&quot; — will be added on submit.
           </p>
         )}
         {!driverAutoMatchedId && !driverWillAutoCreate && (
@@ -532,7 +602,7 @@ export default function DieselSubmitPage() {
         <select
           value={selectedDriverId}
           onChange={(e) => setSelectedDriverId(e.target.value)}
-          className="w-full py-4 px-3 rounded-xl bg-gray-900 text-white border border-gray-700 mb-4"
+          className="w-full py-4 px-3 rounded-xl bg-gray-900 text-white border border-gray-700 mb-4 focus:border-yellow focus:outline-none"
         >
           <option value="">{driverWillAutoCreate ? '-- auto-create from licence --' : '-- no driver --'}</option>
           {drivers.map((d) => (
@@ -543,24 +613,24 @@ export default function DieselSubmitPage() {
         </select>
 
         {/* Odometer */}
-        <label className="block text-xs text-gray-400 mb-1">ODOMETER (KM)</label>
+        <label className="block text-xs text-gray-400 mb-1 font-heading tracking-wider">ODOMETER (KM)</label>
         <input
           type="number"
           inputMode="decimal"
           value={odometerKm}
           onChange={(e) => setOdometerKm(e.target.value)}
-          className="w-full py-4 px-3 rounded-xl bg-gray-900 text-white border border-gray-700 mb-4 text-lg"
+          className="w-full py-4 px-3 rounded-xl bg-gray-900 text-white border border-gray-700 mb-4 text-lg focus:border-yellow focus:outline-none"
           placeholder="e.g. 142560"
         />
 
         {/* Liters */}
-        <label className="block text-xs text-gray-400 mb-1">LITERS FILLED</label>
+        <label className="block text-xs text-gray-400 mb-1 font-heading tracking-wider">LITERS FILLED</label>
         <input
           type="number"
           inputMode="decimal"
           value={litersFilled}
           onChange={(e) => setLitersFilled(e.target.value)}
-          className="w-full py-4 px-3 rounded-xl bg-gray-900 text-white border border-gray-700 mb-6 text-lg"
+          className="w-full py-4 px-3 rounded-xl bg-gray-900 text-white border border-gray-700 mb-6 text-lg focus:border-yellow focus:outline-none"
           placeholder="e.g. 45.20"
         />
 
@@ -571,7 +641,7 @@ export default function DieselSubmitPage() {
         <button
           onClick={doSubmit}
           disabled={submitting || !odometerKm || !litersFilled}
-          className="w-full py-5 rounded-2xl bg-green-500 text-white font-heading text-2xl flex items-center justify-center gap-2 active:scale-95 transition-transform disabled:opacity-40"
+          className="w-full py-5 rounded-2xl bg-green-500 text-white font-heading text-2xl flex items-center justify-center gap-2 active:scale-95 transition-transform disabled:opacity-40 shadow-[0_0_30px_-10px_rgba(34,197,94,0.7)]"
         >
           {submitting ? (
             <Loader2 size={24} className="animate-spin" />
@@ -585,39 +655,51 @@ export default function DieselSubmitPage() {
   }
 
   // ===================================================
-  // Screen: CAPTURE (default)
+  // Screen: CAPTURE (default after PIN)
   // ===================================================
-  const Tile = ({ slot, label }: { slot: Slot; label: string }) => {
+  const Tile = ({ slot, label, hint, num }: { slot: Slot; label: string; hint: string; num: number }) => {
     const st = slotState(slot);
+    const done = !!st.cloudinaryUrl && !st.ocrLoading;
+    const error = !!st.ocrError;
     return (
       <button
         onClick={() => openCapture(slot)}
-        className="relative w-full aspect-square rounded-2xl overflow-hidden bg-gray-900 border-2 border-gray-800 active:scale-95 transition-transform"
+        className={`relative w-full aspect-square rounded-2xl overflow-hidden active:scale-[0.97] transition-all ${
+          done
+            ? 'border-2 border-green-500 shadow-[0_0_30px_-10px_rgba(34,197,94,0.5)]'
+            : error
+            ? 'border-2 border-red-500'
+            : 'border-2 border-gray-800 hover:border-yellow/60 bg-gray-950'
+        }`}
       >
+        {/* step number badge */}
+        <span className={`absolute top-2 left-2 z-10 w-7 h-7 rounded-full flex items-center justify-center font-heading text-sm ${
+          done ? 'bg-green-500 text-white' : 'bg-yellow/20 text-yellow border border-yellow/40'
+        }`}>
+          {done ? <Check size={14} strokeWidth={4} /> : num}
+        </span>
+
         {st.previewUrl ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={st.previewUrl} alt={label} className="w-full h-full object-cover" />
             {st.ocrLoading && (
-              <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center">
                 <Loader2 size={32} className="animate-spin text-yellow" />
+                <span className="text-[10px] text-yellow mt-2 tracking-wider">READING…</span>
               </div>
             )}
-            {!st.ocrLoading && st.cloudinaryUrl && (
-              <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1">
-                <Check size={14} strokeWidth={4} className="text-white" />
-              </div>
-            )}
-            {st.ocrError && (
-              <div className="absolute bottom-0 inset-x-0 bg-red-600/90 text-white text-xs p-1 text-center">
+            {error && (
+              <div className="absolute bottom-0 inset-x-0 bg-red-600/90 text-white text-[10px] p-1 text-center leading-tight">
                 {st.ocrError}
               </div>
             )}
           </>
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
-            <CameraIcon size={28} className="mb-2" />
-            <span className="font-bold text-xs uppercase">{label}</span>
+          <div className="w-full h-full flex flex-col items-center justify-center text-gray-500 gap-2">
+            <CameraIcon size={32} className="text-gray-600" />
+            <span className="font-heading text-sm tracking-wider text-gray-300">{label}</span>
+            <span className="text-[10px] text-gray-600 px-1 text-center leading-tight">{hint}</span>
           </div>
         )}
       </button>
@@ -625,34 +707,57 @@ export default function DieselSubmitPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white px-4 pt-4 pb-8">
-      <button
-        onClick={() => {
-          sessionStorage.removeItem(SESSION_KEY);
-          router.push('/diesel');
-        }}
-        className="flex items-center gap-1 text-gray-500 mb-4 min-h-[48px]"
-      >
-        <ArrowLeft size={20} /> Exit
-      </button>
+    <div className="min-h-screen bg-gradient-to-b from-black via-black to-gray-950 text-white px-4 pt-4 pb-8">
+      {/* header */}
+      <div className="flex items-center justify-between mb-5">
+        <button
+          onClick={() => {
+            sessionStorage.removeItem(SESSION_KEY);
+            router.push('/diesel');
+          }}
+          className="flex items-center gap-1 text-gray-500 min-h-[44px]"
+        >
+          <ArrowLeft size={20} /> Exit
+        </button>
+        <Link
+          href="/diesel/dashboard"
+          className="flex items-center gap-1 text-gray-400 text-xs border border-gray-800 rounded-full px-3 py-1.5"
+        >
+          <LayoutDashboard size={12} /> Manager
+        </Link>
+      </div>
 
-      <div className="flex items-center gap-2 mb-2">
-        <Fuel size={24} className="text-yellow" />
+      <div className="flex items-center gap-3 mb-1">
+        <div className="w-10 h-10 rounded-xl bg-yellow/20 flex items-center justify-center">
+          <Fuel size={22} className="text-yellow" />
+        </div>
         <h1 className="font-heading text-3xl">LOG FILL</h1>
       </div>
-      <p className="text-sm text-gray-400 mb-6">
-        Tap each tile. Take a clear photo. We&apos;ll read the numbers for you.
+      <p className="text-sm text-gray-400 mb-5">
+        Tap each tile. Snap a clear photo. We&apos;ll read the numbers.
       </p>
 
+      {/* progress bar */}
+      <div className="mb-5">
+        <div className="flex justify-between text-[11px] text-gray-400 mb-1.5">
+          <span className="font-heading tracking-wider">{capturedCount}/4 CAPTURED</span>
+          <span>{capturedCount === 4 ? 'Ready to review' : `${4 - capturedCount} to go`}</span>
+        </div>
+        <div className="h-1.5 bg-gray-900 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-yellow transition-all"
+            style={{ width: `${(capturedCount / 4) * 100}%` }}
+          />
+        </div>
+      </div>
+
+      {/* 2x2 tile grid */}
       <div className="grid grid-cols-2 gap-3 mb-6">
-        <Tile slot="plate"   label="Plate" />
-        <Tile slot="license" label="Licence" />
-        <Tile slot="odo"     label="Odometer" />
-        <Tile slot="pump"    label="Pump" />
+        {SLOTS.map((s) => <Tile key={s.slot} slot={s.slot} label={s.label} hint={s.hint} num={s.num} />)}
       </div>
 
       {/* retake option */}
-      {(plate.previewUrl || license.previewUrl || odo.previewUrl || pump.previewUrl) && (
+      {capturedCount > 0 && (
         <button
           onClick={() => {
             setPlate(emptySlot());
@@ -660,24 +765,28 @@ export default function DieselSubmitPage() {
             setOdo(emptySlot());
             setPump(emptySlot());
           }}
-          className="flex items-center gap-2 text-gray-500 mb-4 text-sm"
+          className="flex items-center gap-2 text-gray-500 mb-4 text-xs"
         >
-          <RotateCcw size={14} /> Clear all & retake
+          <RotateCcw size={12} /> Clear all & retake
         </button>
       )}
 
       <button
         onClick={goToReview}
         disabled={!allCaptured}
-        className="w-full py-5 rounded-2xl bg-yellow text-black font-heading text-2xl flex items-center justify-center gap-2 active:scale-95 transition-transform disabled:opacity-30"
+        className={`w-full py-5 rounded-2xl font-heading text-2xl flex items-center justify-center gap-2 active:scale-95 transition-all ${
+          allCaptured
+            ? 'bg-yellow text-black shadow-[0_0_30px_-10px_rgba(250,204,21,0.6)]'
+            : 'bg-gray-900 text-gray-600 border border-gray-800'
+        }`}
       >
         {allCaptured ? (
           <>
-            <ArrowRight size={24} />
             REVIEW
+            <ArrowRight size={24} />
           </>
         ) : (
-          'TAKE ALL 4 PHOTOS'
+          `TAKE ${4 - capturedCount} MORE`
         )}
       </button>
 
