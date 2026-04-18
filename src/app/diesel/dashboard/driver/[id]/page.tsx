@@ -48,9 +48,11 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
 
   const exportCsv = () => {
     if (!data) return;
-    const rows = data.fills.map((f) => ({
+    const rows = data.fills.map((f) => {
+      const tr = Array.isArray(f.truck) ? f.truck[0] : f.truck;
+      return ({
       logged_at: f.logged_at,
-      plate: f.truck?.plate_display || '',
+      plate: tr?.plate_display || '',
       odometer_km: f.odometer_km,
       liters_filled: f.liters_filled,
       km_since_last: f.km_since_last,
@@ -64,7 +66,8 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
       photo_license_url: f.photo_license_url,
       photo_odometer_url: f.photo_odometer_url,
       photo_pump_url: f.photo_pump_url,
-    }));
+    });
+    });
     const csv = toCsv(rows as unknown as Record<string, unknown>[], [
       { key: 'logged_at',          label: 'When' },
       { key: 'plate',              label: 'Truck' },
@@ -216,18 +219,26 @@ type FillLike = {
   photo_license_url: string | null;
   photo_odometer_url: string | null;
   photo_pump_url: string | null;
-  truck?: { id: string; plate_display: string } | null;
+  // See pickRelation comment in truck detail — Supabase embed can be array or object.
+  truck?: { id: string; plate_display: string } | Array<{ id: string; plate_display: string }> | null;
 };
+
+function pickRelation<T extends Record<string, unknown>>(rel: T | T[] | null | undefined): T | null {
+  if (rel == null) return null;
+  if (Array.isArray(rel)) return rel[0] ?? null;
+  return rel;
+}
 
 function FillCard({ f }: { f: FillLike }) {
   const when = relative(f.logged_at);
   const [showPhotos, setShowPhotos] = useState(false);
+  const truck = pickRelation(f.truck);
   return (
     <div className={`rounded-xl border ${f.flagged ? 'bg-red-500/5 border-red-500/40' : 'bg-gray-950 border-gray-800'}`}>
       <div className="p-3">
         <div className="flex justify-between items-start">
           <div>
-            <p className="font-heading text-sm">{f.truck?.plate_display || 'unknown truck'}</p>
+            <p className="font-heading text-sm">{truck?.plate_display || 'unknown truck'}</p>
             <p className="text-[11px] text-gray-500">{when}</p>
           </div>
           <div className="text-right">

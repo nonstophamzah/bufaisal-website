@@ -968,6 +968,15 @@ export async function POST(request: NextRequest) {
         avg_l100: a.l100_count ? Math.round((a.l100_sum / a.l100_count) * 100) / 100 : null,
       })).sort((a, b) => b.fills - a.fills);
 
+      // Supabase's embedded-relation syntax can return `driver` as either an
+      // object or a single-element array depending on FK inference. Normalize
+      // to object-or-null before returning so the client never sees an array
+      // — every consumer (current and future) can safely do `f.driver?.x`.
+      const normalizedFills = fills.map((f) => ({
+        ...f,
+        driver: Array.isArray(f.driver) ? (f.driver[0] ?? null) : f.driver,
+      }));
+
       return NextResponse.json({
         window: win,
         since,
@@ -980,7 +989,7 @@ export async function POST(request: NextRequest) {
           flag_count: fills.filter((f) => f.flagged).length,
         },
         driver_mix: driverMix,
-        fills,
+        fills: normalizedFills,
       });
     }
 
@@ -1045,6 +1054,13 @@ export async function POST(request: NextRequest) {
         avg_l100: a.l100_count ? Math.round((a.l100_sum / a.l100_count) * 100) / 100 : null,
       })).sort((a, b) => b.fills - a.fills);
 
+      // Same normalization as truck_detail — flatten potentially-array `truck`
+      // relation to object-or-null so the client never has to defend against it.
+      const normalizedFills = fills.map((f) => ({
+        ...f,
+        truck: Array.isArray(f.truck) ? (f.truck[0] ?? null) : f.truck,
+      }));
+
       return NextResponse.json({
         window: win,
         since,
@@ -1057,7 +1073,7 @@ export async function POST(request: NextRequest) {
           flag_count: fills.filter((f) => f.flagged).length,
         },
         truck_mix: truckMix,
-        fills,
+        fills: normalizedFills,
       });
     }
 
