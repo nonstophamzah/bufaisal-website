@@ -115,15 +115,15 @@ export default function TruckDetailPage({ params }: { params: Promise<{ id: stri
           <div>
             <div className="flex items-center gap-2">
               <TruckIcon size={18} className="text-yellow" />
-              <h1 className="font-heading text-xl text-yellow">{data.truck.plate_display}</h1>
-              {data.truck.needs_review && (
+              <h1 className="font-heading text-xl text-yellow">{safeText(data.truck?.plate_display, 'unknown plate')}</h1>
+              {data.truck?.needs_review === true && (
                 <span className="bg-blue-500/20 text-blue-300 text-[10px] uppercase tracking-wider rounded-full px-2 py-0.5">New — pending</span>
               )}
-              {!data.truck.active && (
+              {data.truck?.active === false && (
                 <span className="bg-gray-700 text-gray-300 text-[10px] uppercase tracking-wider rounded-full px-2 py-0.5">inactive</span>
               )}
             </div>
-            {data.truck.nickname && <p className="text-xs text-gray-500 mt-0.5">{data.truck.nickname}</p>}
+            {data.truck?.nickname && <p className="text-xs text-gray-500 mt-0.5">{safeText(data.truck.nickname)}</p>}
           </div>
         )}
         <div className="flex gap-1.5 mt-3 overflow-x-auto">
@@ -149,35 +149,48 @@ export default function TruckDetailPage({ params }: { params: Promise<{ id: stri
           </div>
         )}
 
+        {/* DEBUG PANEL — shows raw API response so we can spot shape issues */}
+        {data && (
+          <details className="bg-yellow/10 border border-yellow/40 rounded-xl p-2 mb-4 text-[10px]">
+            <summary className="text-yellow font-bold cursor-pointer">DEBUG: raw API response (remove after diagnosis)</summary>
+            <pre className="text-yellow/80 whitespace-pre-wrap break-words font-mono mt-2 max-h-64 overflow-auto">
+              {(() => {
+                try { return JSON.stringify(data, null, 2); }
+                catch (e) { return 'stringify failed: ' + (e instanceof Error ? e.message : String(e)); }
+              })()}
+            </pre>
+          </details>
+        )}
+
         {data && (
           <>
             {/* Stats grid */}
             <div className="grid grid-cols-2 gap-2 mb-4">
-              <Stat label="Fills" value={data.stats.total_fills} />
-              <Stat label="Liters" value={data.stats.total_liters} />
-              <Stat label="Cost AED" value={data.stats.total_cost_aed} />
-              <Stat label="Avg L/100km" value={data.stats.avg_l100 ?? '—'} />
+              <Stat label="Fills" value={safeText(data.stats?.total_fills, '0')} />
+              <Stat label="Liters" value={safeText(data.stats?.total_liters, '0')} />
+              <Stat label="Cost AED" value={safeText(data.stats?.total_cost_aed, '0')} />
+              <Stat label="Avg L/100km" value={safeText(data.stats?.avg_l100, '—')} />
             </div>
-            {data.stats.flag_count > 0 && (
+            {typeof data.stats?.flag_count === 'number' && data.stats.flag_count > 0 && (
               <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-4 text-sm text-red-200">
-                <AlertTriangle size={16} /> {data.stats.flag_count} flagged fill{data.stats.flag_count === 1 ? '' : 's'} in this window
+                <AlertTriangle size={16} /> {safeText(data.stats.flag_count)} flagged fill{data.stats.flag_count === 1 ? '' : 's'} in this window
               </div>
             )}
 
             {/* Driver mix */}
-            {data.driver_mix.length > 0 && (
+            {Array.isArray(data.driver_mix) && data.driver_mix.length > 0 && (
               <>
                 <h3 className="font-heading text-sm text-gray-400 tracking-wider mb-2">DRIVERS IN THIS TRUCK</h3>
                 <div className="bg-gray-950 border border-gray-800 rounded-xl divide-y divide-gray-800 mb-5">
-                  {data.driver_mix.map((d) => (
+                  {data.driver_mix.map((d, i) => (
                     <Link
-                      key={d.driver_id}
-                      href={`/diesel/dashboard/driver/${d.driver_id}?window=${win}`}
+                      key={safeText(d?.driver_id, `idx-${i}`) as string}
+                      href={`/diesel/dashboard/driver/${safeText(d?.driver_id, '')}?window=${win}`}
                       className="flex justify-between items-center px-3 py-2 text-sm hover:bg-gray-900/60"
                     >
-                      <span>{d.name}</span>
+                      <span>{safeText(d?.name, 'unknown')}</span>
                       <span className="text-gray-400 text-xs">
-                        {d.fills} fills · <span className="text-white font-semibold">{d.avg_l100 ?? '—'}</span> L/100km
+                        {safeText(d?.fills, '0')} fills · <span className="text-white font-semibold">{safeText(d?.avg_l100, '—')}</span> L/100km
                       </span>
                     </Link>
                   ))}
@@ -187,9 +200,9 @@ export default function TruckDetailPage({ params }: { params: Promise<{ id: stri
 
             {/* Fills list */}
             <h3 className="font-heading text-sm text-gray-400 tracking-wider mb-2">FILL HISTORY</h3>
-            {data.fills.length === 0 && <div className="text-sm text-gray-500 text-center py-8">No fills in this window.</div>}
+            {Array.isArray(data.fills) && data.fills.length === 0 && <div className="text-sm text-gray-500 text-center py-8">No fills in this window.</div>}
             <div className="space-y-2">
-              {data.fills.map((f) => <FillCard key={f.id} f={f} />)}
+              {Array.isArray(data.fills) && data.fills.map((f, i) => <FillCard key={safeText(f?.id, `fill-${i}`) as string} f={f} />)}
             </div>
           </>
         )}
@@ -198,11 +211,11 @@ export default function TruckDetailPage({ params }: { params: Promise<{ id: stri
   );
 }
 
-function Stat({ label, value }: { label: string; value: number | string }) {
+function Stat({ label, value }: { label: string; value: unknown }) {
   return (
     <div className="bg-gray-950 border border-gray-800 rounded-xl p-3">
-      <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">{label}</p>
-      <p className="font-heading text-2xl">{value}</p>
+      <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">{safeText(label)}</p>
+      <p className="font-heading text-2xl">{safeText(value, '—')}</p>
     </div>
   );
 }
@@ -238,37 +251,65 @@ function pickRelation<T extends Record<string, unknown>>(rel: T | T[] | null | u
   return rel;
 }
 
+/**
+ * Coerce ANYTHING into something React can safely render. Strings/numbers pass
+ * through. Booleans become 'true'/'false'. Null/undefined become the fallback.
+ * Objects/arrays get JSON-stringified AND a console.warn fires so we can find
+ * the source quickly. The whole point: never let a runtime shape mismatch
+ * throw "Objects are not valid as a React child" again.
+ */
+function safeText(v: unknown, fallback: string = ''): string | number {
+  if (v === null || v === undefined) return fallback;
+  if (typeof v === 'string' || typeof v === 'number') return v;
+  if (typeof v === 'boolean') return v ? 'true' : 'false';
+  // The interesting case: an object snuck through. Log + render visibly.
+  try {
+    // eslint-disable-next-line no-console
+    console.warn('[truck-detail] non-primitive value rendered:', v);
+  } catch {
+    /* ignore console failures */
+  }
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return '[unrenderable]';
+  }
+}
+
 function FillCard({ f }: { f: FillLike }) {
-  const when = relative(f.logged_at);
+  // Defensive: f might be malformed or missing fields. Guard everything.
+  const loggedAt = typeof f?.logged_at === 'string' ? f.logged_at : '';
+  const when = loggedAt ? relative(loggedAt) : '';
   const [showPhotos, setShowPhotos] = useState(false);
-  const driver = pickRelation(f.driver);
+  const driver = pickRelation(f?.driver);
+  const flagged = f?.flagged === true;
   return (
-    <div className={`rounded-xl border ${f.flagged ? 'bg-red-500/5 border-red-500/40' : 'bg-gray-950 border-gray-800'}`}>
+    <div className={`rounded-xl border ${flagged ? 'bg-red-500/5 border-red-500/40' : 'bg-gray-950 border-gray-800'}`}>
       <div className="p-3">
         <div className="flex justify-between items-start">
           <div>
             <p className="font-heading text-sm">
-              {driver?.full_name || 'unknown driver'}
+              {safeText(driver?.full_name, 'unknown driver')}
             </p>
-            <p className="text-[11px] text-gray-500">{when}</p>
+            <p className="text-[11px] text-gray-500">{safeText(when)}</p>
           </div>
           <div className="text-right">
             <p className="text-sm">
-              <span className="font-bold">{f.liters_filled ?? '—'}</span>
+              <span className="font-bold">{safeText(f?.liters_filled, '—')}</span>
               <span className="text-gray-500 text-xs">L</span>
               {' · '}
-              <span className="font-bold">{f.liters_per_100km ?? '—'}</span>
+              <span className="font-bold">{safeText(f?.liters_per_100km, '—')}</span>
               <span className="text-gray-500 text-xs">L/100km</span>
             </p>
             <p className="text-[11px] text-gray-500">
-              {f.km_since_last !== null ? `${f.km_since_last}km` : 'first fill'}
-              {typeof f.cost_aed === 'number' && ` · ${f.cost_aed} AED`}
+              {f?.km_since_last != null ? `${safeText(f.km_since_last)}km` : 'first fill'}
+              {f?.cost_aed != null && ` · ${safeText(f.cost_aed)} AED`}
             </p>
           </div>
         </div>
-        {f.flagged && f.flag_reason && (
+        {flagged && f?.flag_reason && (
           <div className="mt-2 text-xs text-red-300 flex items-start gap-1">
-            <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" /> {f.flag_reason}
+            <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" /> {safeText(f.flag_reason)}
           </div>
         )}
         <button onClick={() => setShowPhotos((v) => !v)} className="mt-2 text-[11px] text-gray-400 underline underline-offset-2">
@@ -277,10 +318,10 @@ function FillCard({ f }: { f: FillLike }) {
         {showPhotos && (
           <div className="mt-2 grid grid-cols-4 gap-1">
             {[
-              { url: f.photo_plate_url,    label: 'Plate' },
-              { url: f.photo_license_url,  label: 'Licence' },
-              { url: f.photo_odometer_url, label: 'Odo' },
-              { url: f.photo_pump_url,     label: 'Pump' },
+              { url: typeof f?.photo_plate_url    === 'string' ? f.photo_plate_url    : null, label: 'Plate'   },
+              { url: typeof f?.photo_license_url  === 'string' ? f.photo_license_url  : null, label: 'Licence' },
+              { url: typeof f?.photo_odometer_url === 'string' ? f.photo_odometer_url : null, label: 'Odo'     },
+              { url: typeof f?.photo_pump_url     === 'string' ? f.photo_pump_url     : null, label: 'Pump'    },
             ].map((p) => p.url ? (
               <a key={p.label} href={p.url} target="_blank" rel="noreferrer" className="relative aspect-square rounded-md overflow-hidden bg-gray-900">
                 {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -37,9 +37,9 @@ export default function DriverDetailError({
           <p className="text-red-400 text-[11px] mt-2 font-mono">digest: {error.digest}</p>
         )}
         {error.stack && (
-          <details className="mt-3">
-            <summary className="text-red-300 text-xs cursor-pointer">stack trace</summary>
-            <pre className="mt-2 text-[11px] text-red-200/80 whitespace-pre-wrap break-words font-mono leading-relaxed">
+          <details open className="mt-3">
+            <summary className="text-red-300 text-xs cursor-pointer">stack trace (click to collapse)</summary>
+            <pre className="mt-2 text-[11px] text-red-200/80 whitespace-pre-wrap break-words font-mono leading-relaxed max-h-96 overflow-auto">
               {error.stack}
             </pre>
           </details>
