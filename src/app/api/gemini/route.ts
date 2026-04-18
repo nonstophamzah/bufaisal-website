@@ -73,6 +73,68 @@ Return ONLY the JSON object, no other text.`,
 - problems: array of visible problems from: "No power", "Not cooling", "Leaking", "Part missing", "Other" — empty array if none visible
 
 Return ONLY the JSON object, no other text.`,
+
+      diesel_plate: `This is a photo of a UAE vehicle licence plate. Extract the plate number.
+
+UAE plates typically show:
+- An emirate code (e.g. "AD" Abu Dhabi, "DXB" Dubai, "SHJ" Sharjah, "AJM" Ajman) or Arabic text
+- A category letter or number (e.g. "A", "B", "C", "1", "2")
+- A plate number (1-5 digits)
+
+Return JSON only:
+{"plate_number": "the full plate as displayed (emirate + category + number, e.g. AJM-A-12345)", "plate_digits": "just the numeric portion", "confidence": 0.0-1.0, "readable": true/false}
+
+If the plate is unreadable, return: {"plate_number": null, "plate_digits": null, "confidence": 0, "readable": false}
+Return ONLY the JSON object, no other text.`,
+
+      diesel_odometer: `This is a photo of a vehicle odometer reading (dashboard). Extract the total kilometers shown.
+
+Rules:
+- Read the "TOTAL" or main odometer (NOT the trip meter if both are visible)
+- Return only whole kilometers (ignore tenths if separated by decimal)
+- If you cannot clearly read all digits, mark unreadable — do NOT guess
+
+Return JSON only:
+{"odometer_km": number_or_null, "confidence": 0.0-1.0, "readable": true/false, "notes": "optional short note if ambiguous"}
+
+If unreadable: {"odometer_km": null, "confidence": 0, "readable": false, "notes": "why"}
+Return ONLY the JSON object, no other text.`,
+
+      diesel_pump: `This is a photo of a diesel fuel pump display at a station. Extract the liters dispensed for the current fill.
+
+Rules:
+- "Liters" or "Quantity" or volume field — NOT price or rate
+- Return liters as a decimal number (e.g. 45.20)
+- If multiple numbers visible, return the one labelled liters/volume/quantity
+- Do NOT guess — if unsure which number is liters, mark unreadable
+
+Return JSON only:
+{"liters": number_or_null, "amount_aed": number_or_null, "confidence": 0.0-1.0, "readable": true/false, "notes": "optional"}
+
+If unreadable: {"liters": null, "amount_aed": null, "confidence": 0, "readable": false, "notes": "why"}
+Return ONLY the JSON object, no other text.`,
+
+      diesel_license: `This is a photo of a UAE driving licence. Extract the driver identity fields.
+
+UAE driving licences typically show (both Arabic and English):
+- Full name (English side preferred, else transliterate from Arabic)
+- Licence number (8-10 digits, near "Licence No." / "Traffic Code No.")
+- Nationality
+- Date of birth
+- Expiry date
+
+Rules:
+- Return the NAME AS PRINTED in English. Do not guess spelling.
+- If only Arabic is visible, return the Arabic text as-is in "full_name_arabic" and leave "full_name" null.
+- "license_number" is the primary licence / traffic file number.
+- If the image is not a UAE driving licence (wrong document, blurry), return readable=false.
+- Do NOT invent fields. Prefer null over guessing.
+
+Return JSON only:
+{"full_name": "string_or_null", "full_name_arabic": "string_or_null", "license_number": "string_or_null", "nationality": "string_or_null", "expiry_date": "YYYY-MM-DD_or_null", "confidence": 0.0-1.0, "readable": true/false, "notes": "optional"}
+
+If unreadable: {"full_name": null, "full_name_arabic": null, "license_number": null, "nationality": null, "expiry_date": null, "confidence": 0, "readable": false, "notes": "why"}
+Return ONLY the JSON object, no other text.`,
     };
 
     const prompt = PROMPTS[action || 'item_analysis'] || PROMPTS.item_analysis;
