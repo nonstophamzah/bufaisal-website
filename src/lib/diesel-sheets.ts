@@ -5,12 +5,16 @@
 // If the required env vars aren't present, syncFill() is a no-op and
 // submit_fill proceeds normally.
 //
-// Env vars required (all three):
-//   DIESEL_SHEETS_CLIENT_EMAIL     — service account email
-//   DIESEL_SHEETS_PRIVATE_KEY      — service account private key (PEM with \n sequences)
-//   DIESEL_SHEETS_SPREADSHEET_ID   — target spreadsheet ID (from its URL)
+// Env vars required (all three). We accept two naming conventions — the
+// DIESEL_SHEETS_* names from the original deploy doc, or the shorter
+// GOOGLE_* / DIESEL_GOOGLE_SHEET_ID names used on Vercel. Either set works;
+// DIESEL_SHEETS_* wins if both are set.
+//
+//   DIESEL_SHEETS_CLIENT_EMAIL    OR  GOOGLE_SERVICE_ACCOUNT_EMAIL
+//   DIESEL_SHEETS_PRIVATE_KEY     OR  GOOGLE_PRIVATE_KEY
+//   DIESEL_SHEETS_SPREADSHEET_ID  OR  DIESEL_GOOGLE_SHEET_ID
 // Optional:
-//   DIESEL_SHEETS_TAB_NAME         — defaults to "Fills"
+//   DIESEL_SHEETS_TAB_NAME        — defaults to "Fills"
 //
 // Tabs built by initSheetFormat():
 //   1. Fills      — 32-column mirror of diesel_fills (auto-appended per submit)
@@ -138,10 +142,35 @@ export type SheetsFillRow = {
 };
 
 function envConfig() {
-  const clientEmail = process.env.DIESEL_SHEETS_CLIENT_EMAIL?.trim();
-  const privateKey  = process.env.DIESEL_SHEETS_PRIVATE_KEY?.replace(/\\n/g, '\n').trim();
-  const sheetId     = process.env.DIESEL_SHEETS_SPREADSHEET_ID?.trim();
-  const tabName     = (process.env.DIESEL_SHEETS_TAB_NAME || 'Fills').trim();
+  // Accept either env var name (DIESEL_SHEETS_* preferred, falls back to the
+  // shorter GOOGLE_* / DIESEL_GOOGLE_SHEET_ID names). This means existing
+  // deploys that used the alternate names work without renaming Vercel vars.
+  const rawKey =
+    process.env.DIESEL_SHEETS_PRIVATE_KEY ??
+    process.env.GOOGLE_PRIVATE_KEY ??
+    '';
+
+  const clientEmail = (
+    process.env.DIESEL_SHEETS_CLIENT_EMAIL ??
+    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ??
+    ''
+  ).trim();
+
+  const privateKey = rawKey
+    // Vercel often stores the key with literal "\n" sequences — convert to real newlines.
+    .replace(/\\n/g, '\n')
+    // Strip wrapping quotes that some users paste in by accident.
+    .replace(/^"+|"+$/g, '')
+    .trim();
+
+  const sheetId = (
+    process.env.DIESEL_SHEETS_SPREADSHEET_ID ??
+    process.env.DIESEL_GOOGLE_SHEET_ID ??
+    ''
+  ).trim();
+
+  const tabName = (process.env.DIESEL_SHEETS_TAB_NAME || 'Fills').trim();
+
   if (!clientEmail || !privateKey || !sheetId) return null;
   return { clientEmail, privateKey, sheetId, tabName };
 }
