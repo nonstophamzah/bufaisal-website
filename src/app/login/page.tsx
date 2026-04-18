@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Upload, Settings, Zap } from 'lucide-react';
+import { Upload, Settings, Zap, Fuel } from 'lucide-react';
 
 export default function LoginPage() {
   return (
@@ -53,6 +53,20 @@ export default function LoginPage() {
               <h2 className="font-heading text-2xl">APPLIANCES</h2>
               <p className="text-sm text-muted">
                 Appliance operations tracker
+              </p>
+            </div>
+          </Link>
+          <Link
+            href="/diesel"
+            className="group flex items-center gap-4 bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-yellow transition-colors"
+          >
+            <div className="w-14 h-14 bg-yellow/10 rounded-xl flex items-center justify-center group-hover:bg-yellow/20 transition-colors flex-shrink-0">
+              <Fuel size={28} className="text-yellow" />
+            </div>
+            <div>
+              <h2 className="font-heading text-2xl">DIESEL</h2>
+              <p className="text-sm text-muted">
+                Fuel tracker &amp; fleet dashboard
               </p>
             </div>
           </Link>
