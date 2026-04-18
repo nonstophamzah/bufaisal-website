@@ -15,6 +15,7 @@ import { PendingApprovals } from './components/PendingApprovals';
 import { EditModal } from './components/EditModal';
 import { RejectConfirmModal } from './components/RejectConfirmModal';
 import { CleaningActivity } from './components/CleaningActivity';
+import { PartsUsageSection } from './components/PartsUsageSection';
 
 interface Item {
   id: string;
@@ -451,6 +452,9 @@ export default function ManagerDashboard() {
         yesterdayCount={trends.yesterdayCount}
         intakeDelta={trends.intakeDelta}
       />
+
+      {/* Spare parts usage feed (all items, all techs) */}
+      <PartsUsageSection />
 
       {/* Items List */}
       <ItemsList

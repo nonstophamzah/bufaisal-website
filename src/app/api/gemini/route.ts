@@ -66,6 +66,22 @@ Return ONLY the JSON object, no other text.`,
 
       barcode_scan: `Read the barcode number from this label photo. Return JSON only: {"barcode": "the number or null"}`,
 
+      spare_part_analysis: `This is a photo of a spare appliance part label (harvested from a scrap appliance). Extract the identifying info printed on the label. Return a JSON object with these fields:
+- part_barcode: the barcode number printed on the label, or null if unreadable
+- part_label_text: the full descriptive text printed on the label, combined into a single short string (e.g. "Compressor LG LDA-204V 220V 50Hz"). Keep it under 120 characters. Null if nothing readable.
+- part_type: best guess of what kind of part this is, from this exact list: "compressor", "motor", "pcb", "thermostat", "drum", "door_seal", "heating_element", "fan", "pump", "control_board", "valve", "sensor", "wiring", "other". Use "other" if unsure.
+- part_brand: the manufacturer if visible (e.g. "LG", "Samsung", "Bosch", "Embraco"), else null
+- part_model: the model/part number if clearly visible, else null
+- confidence: 0.0-1.0 — how confident you are in the barcode and label text
+- readable: true if you could extract useful info, false otherwise
+
+Rules:
+- Do NOT guess the barcode — if digits are obscured, return null.
+- part_type must be one of the exact values above.
+- If the image is not a part label (wrong photo, blurry), return readable=false and null fields except part_type="other".
+
+Return ONLY the JSON object, no other text.`,
+
       appliance_analysis: `Analyze this image of a used appliance. Return a JSON object with these fields:
 - product_type: one of these exact values: "Refrigerator", "Washing Machine", "Dishwasher", "Freezer", "Microwave", "Gas Stove", "Electric Stove", "Clothes Dryer", "Water Cooler", "Oven", "Air Water Cooler", "Other"
 - brand: the brand if visible, or "Unknown"

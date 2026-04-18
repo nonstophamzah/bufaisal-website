@@ -1,15 +1,21 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Loader2, RefreshCw, Wrench, PackageCheck, Truck,
   Lock, ChevronDown, ChevronUp, Search, X,
+  Package, Plus, Camera as CameraIcon, Sparkles, Trash2,
 } from 'lucide-react';
-import { getItems, updateItem } from '@/lib/appliance-api';
+import {
+  getItems, updateItem,
+  getPartsForItem, logSparePartUsage,
+  type SparePartUsage,
+} from '@/lib/appliance-api';
 import { canonicalProductType, canonicalBrand } from '@/lib/appliance-catalog';
 import SuccessFlash from '../components/SuccessFlash';
 import ErrorFlash from '../components/ErrorFlash';
+import { uploadToCloudinary } from '../lib/upload';
 
 interface Item {
   id: string;
@@ -44,6 +50,64 @@ function timeAgo(dateStr: string | null): string {
 
 type Tab = 'queue' | 'repairs' | 'send';
 
+// Keep in sync with the Gemini prompt in /api/gemini and ALLOWED_PART_TYPES
+// in /api/appliances. UI labels are the presentable version.
+const PART_TYPES: { value: string; label: string }[] = [
+  { value: 'compressor', label: 'Compressor' },
+  { value: 'motor', label: 'Motor' },
+  { value: 'pcb', label: 'PCB' },
+  { value: 'control_board', label: 'Control Board' },
+  { value: 'thermostat', label: 'Thermostat' },
+  { value: 'heating_element', label: 'Heating Element' },
+  { value: 'fan', label: 'Fan' },
+  { value: 'pump', label: 'Pump' },
+  { value: 'drum', label: 'Drum' },
+  { value: 'door_seal', label: 'Door Seal' },
+  { value: 'valve', label: 'Valve' },
+  { value: 'sensor', label: 'Sensor' },
+  { value: 'wiring', label: 'Wiring' },
+  { value: 'other', label: 'Other' },
+];
+
+function partTypeLabel(value: string | null | undefined): string {
+  if (!value) return 'Other';
+  const match = PART_TYPES.find((t) => t.value === value);
+  return match ? match.label : 'Other';
+}
+
+// Compress image same as Camera.tsx / cleaning page
+function compressFile(file: File, maxW = 800, quality = 0.7): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      let w = img.width, h = img.height;
+      if (w > maxW) { h = (h * maxW) / w; w = maxW; }
+      c.width = w; c.height = h;
+      const ctx = c.getContext('2d');
+      if (!ctx) return reject(new Error('No canvas'));
+      ctx.drawImage(img, 0, 0, w, h);
+      c.toBlob(b => b ? resolve(b) : reject(new Error('Compress failed')), 'image/jpeg', quality);
+    };
+    img.onerror = () => reject(new Error('Load failed'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const s = reader.result as string;
+      // strip "data:...;base64," prefix
+      const comma = s.indexOf(',');
+      resolve(comma >= 0 ? s.slice(comma + 1) : s);
+    };
+    reader.onerror = () => reject(new Error('Read failed'));
+    reader.readAsDataURL(blob);
+  });
+}
+
 export default function JurfPage() {
   const router = useRouter();
   const [worker, setWorker] = useState('');
@@ -68,6 +132,23 @@ export default function JurfPage() {
   const [destShop, setDestShop] = useState<Record<string, string>>({});
   // Expanded item for details
   const [expanded, setExpanded] = useState<string | null>(null);
+
+  // ─── Spare parts state ────────────────────────────────────────
+  // Cached parts per item id (so we don't refetch on every render)
+  const [partsByItem, setPartsByItem] = useState<Record<string, SparePartUsage[]>>({});
+  // Which item has its "Log Part" form open (null = none)
+  const [partFormItem, setPartFormItem] = useState<string | null>(null);
+  // Form state while logging a part
+  const [partBarcode, setPartBarcode] = useState('');
+  const [partLabelText, setPartLabelText] = useState('');
+  const [partType, setPartType] = useState<string>('other');
+  const [partNotes, setPartNotes] = useState('');
+  const [partPhotoUrl, setPartPhotoUrl] = useState('');
+  const [partUploading, setPartUploading] = useState(false);
+  const [partAnalyzing, setPartAnalyzing] = useState(false);
+  const [partSubmitting, setPartSubmitting] = useState(false);
+  const [partFormError, setPartFormError] = useState('');
+  const partFileRef = useRef<HTMLInputElement>(null);
 
   const COLS = 'id, barcode, product_type, brand, condition, shop, photo_url, date_sent_to_jurf, date_received_jurf, date_claimed, claimed_by, repair_notes, problems, needs_jurf, cleaning_status';
 
@@ -101,11 +182,37 @@ export default function JurfPage() {
     setSendItems(data as Item[]);
   }, []);
 
+  // Fetch spare parts for a specific item id and cache them
+  const fetchPartsForItemId = useCallback(async (itemId: string) => {
+    try {
+      const parts = await getPartsForItem(itemId);
+      setPartsByItem((prev) => ({ ...prev, [itemId]: parts }));
+    } catch {
+      // Silent fail — parts section just shows empty. Error surfaces on submit.
+    }
+  }, []);
+
   const fetchAll = useCallback(async (name: string) => {
     setLoading(true);
     await Promise.all([fetchQueue(), fetchRepairs(name), fetchSend(name)]);
     setLoading(false);
   }, [fetchQueue, fetchRepairs, fetchSend]);
+
+  // Whenever repair items change, fetch parts for each of them in parallel.
+  // This keeps the expanded card ready without a loading flicker.
+  useEffect(() => {
+    if (repairItems.length === 0) return;
+    const ids = repairItems.map((i) => i.id);
+    Promise.all(ids.map((id) => getPartsForItem(id).then((parts) => [id, parts] as const)))
+      .then((results) => {
+        setPartsByItem((prev) => {
+          const next = { ...prev };
+          for (const [id, parts] of results) next[id] = parts;
+          return next;
+        });
+      })
+      .catch(() => { /* soft-fail */ });
+  }, [repairItems]);
 
   useEffect(() => {
     const w = sessionStorage.getItem('app_worker');
@@ -190,6 +297,136 @@ export default function JurfPage() {
     setShowSuccess(true);
     fetchAll(worker);
   }, [worker, destShop, fetchAll]);
+
+  // ═══════════════ Spare part form ═══════════════
+
+  const resetPartForm = useCallback(() => {
+    setPartBarcode('');
+    setPartLabelText('');
+    setPartType('other');
+    setPartNotes('');
+    setPartPhotoUrl('');
+    setPartFormError('');
+    setPartUploading(false);
+    setPartAnalyzing(false);
+    setPartSubmitting(false);
+  }, []);
+
+  const openPartForm = useCallback((itemId: string) => {
+    resetPartForm();
+    setPartFormItem(itemId);
+  }, [resetPartForm]);
+
+  const closePartForm = useCallback(() => {
+    setPartFormItem(null);
+    resetPartForm();
+  }, [resetPartForm]);
+
+  // Photo → compress → Cloudinary upload → Gemini analysis in parallel
+  const handlePartPhoto = useCallback(async (file: File) => {
+    if (!file) return;
+    if (file.size > 15 * 1024 * 1024) {
+      setPartFormError('Photo too large (max 15MB)');
+      return;
+    }
+
+    setPartFormError('');
+    setPartUploading(true);
+    setPartAnalyzing(true);
+
+    try {
+      const blob = await compressFile(file);
+      // Run upload and Gemini analysis in parallel — both use the same blob
+      const base64Promise = blobToBase64(blob);
+      const uploadPromise = uploadToCloudinary(blob);
+
+      // Gemini first (fast) — fill the form so the tech can review while upload finishes
+      const base64 = await base64Promise;
+      const analyzeRes = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: base64,
+          mimeType: 'image/jpeg',
+          action: 'spare_part_analysis',
+        }),
+      });
+      const analyzeData = await analyzeRes.json();
+
+      if (analyzeRes.ok && analyzeData.text) {
+        const match = analyzeData.text.match(/\{[\s\S]*\}/);
+        if (match) {
+          try {
+            const parsed = JSON.parse(match[0]);
+            if (parsed.readable !== false) {
+              if (parsed.part_barcode) setPartBarcode(String(parsed.part_barcode));
+              // Prefer combined label_text, fall back to brand+model if missing
+              let labelText = parsed.part_label_text;
+              if (!labelText && (parsed.part_brand || parsed.part_model)) {
+                labelText = [parsed.part_brand, parsed.part_model].filter(Boolean).join(' ');
+              }
+              if (labelText) setPartLabelText(String(labelText));
+              if (parsed.part_type && typeof parsed.part_type === 'string') {
+                const valid = PART_TYPES.some((t) => t.value === parsed.part_type);
+                if (valid) setPartType(parsed.part_type);
+              }
+            }
+          } catch {
+            // JSON parse failed — leave form empty, tech fills manually
+          }
+        }
+      }
+      setPartAnalyzing(false);
+
+      // Now wait for upload to finish
+      const url = await uploadPromise;
+      setPartPhotoUrl(url);
+    } catch (err) {
+      setPartFormError(err instanceof Error ? err.message : 'Photo upload failed');
+      setPartAnalyzing(false);
+    }
+    setPartUploading(false);
+  }, []);
+
+  const submitPart = useCallback(async () => {
+    if (!partFormItem) return;
+    if (!partPhotoUrl) {
+      setPartFormError('Photo is required');
+      return;
+    }
+    if (!partBarcode.trim()) {
+      setPartFormError('Part barcode is required');
+      return;
+    }
+
+    setPartFormError('');
+    setPartSubmitting(true);
+
+    const result = await logSparePartUsage({
+      part_barcode: partBarcode.trim(),
+      part_label_text: partLabelText.trim() || null,
+      part_type: partType,
+      installed_in_item_id: partFormItem,
+      installed_by: worker,
+      photo_url: partPhotoUrl,
+      notes: partNotes.trim() || null,
+    });
+
+    if (result.error) {
+      setPartFormError(result.error);
+      setPartSubmitting(false);
+      return;
+    }
+
+    // Refresh this item's parts list, close form
+    await fetchPartsForItemId(partFormItem);
+    closePartForm();
+    setSuccessMsg('Spare part logged');
+    setShowSuccess(true);
+  }, [
+    partFormItem, partPhotoUrl, partBarcode, partLabelText, partType,
+    partNotes, worker, fetchPartsForItemId, closePartForm,
+  ]);
 
   // ── Barcode search ──
   const handleBarcodeSearch = useCallback(() => {
@@ -450,6 +687,171 @@ export default function JurfPage() {
                           rows={3}
                           className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl text-base focus:outline-none focus:border-blue-400 resize-none mb-3"
                         />
+
+                        {/* ── Spare parts section ── */}
+                        <div className="mb-3 border-2 border-dashed border-gray-200 rounded-xl p-3 bg-gray-50">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="font-bold text-xs text-gray-500 flex items-center gap-1.5">
+                              <Package size={14} /> SPARE PARTS USED
+                            </p>
+                            {(partsByItem[item.id]?.length ?? 0) > 0 && (
+                              <span className="text-xs text-gray-500">{partsByItem[item.id]!.length}</span>
+                            )}
+                          </div>
+
+                          {/* List of parts already logged */}
+                          {partsByItem[item.id] && partsByItem[item.id]!.length > 0 && (
+                            <div className="space-y-2 mb-2">
+                              {partsByItem[item.id]!.map((p) => (
+                                <div key={p.id} className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg p-2">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={p.photo_url} alt="part" className="w-10 h-10 rounded object-cover bg-gray-100 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold truncate">
+                                      {partTypeLabel(p.part_type)}
+                                      {p.part_label_text ? <span className="text-gray-500 font-normal"> — {p.part_label_text}</span> : null}
+                                    </p>
+                                    <p className="text-[10px] text-gray-500 truncate">#{p.part_barcode} · {timeAgo(p.date_installed)}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Log new part button or inline form */}
+                          {partFormItem === item.id ? (
+                            <div className="bg-white border-2 border-blue-300 rounded-xl p-3 space-y-3">
+                              {/* Photo */}
+                              {partPhotoUrl ? (
+                                <div className="relative">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={partPhotoUrl} alt="part" className="w-full max-h-48 object-contain rounded-lg border border-gray-200 bg-gray-50" />
+                                  <button
+                                    onClick={() => { setPartPhotoUrl(''); }}
+                                    type="button"
+                                    className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center"
+                                    aria-label="Remove photo"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => partFileRef.current?.click()}
+                                  disabled={partUploading}
+                                  className="w-full py-4 rounded-xl bg-blue-500 text-white font-heading text-base flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                                >
+                                  {partUploading ? (
+                                    <>
+                                      <Loader2 size={18} className="animate-spin" />
+                                      {partAnalyzing ? 'Reading label…' : 'Uploading…'}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CameraIcon size={18} /> PHOTO OF PART LABEL
+                                    </>
+                                  )}
+                                </button>
+                              )}
+                              <input
+                                ref={partFileRef}
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                onChange={(e) => {
+                                  const f = e.target.files?.[0];
+                                  if (f) handlePartPhoto(f);
+                                  e.target.value = '';
+                                }}
+                                className="hidden"
+                              />
+
+                              {partAnalyzing && (
+                                <div className="flex items-center gap-1.5 text-xs text-blue-600 font-bold">
+                                  <Sparkles size={12} className="animate-pulse" /> Reading label with AI…
+                                </div>
+                              )}
+
+                              {/* Fields */}
+                              <div>
+                                <label className="text-[11px] font-bold text-gray-500 uppercase">Part barcode *</label>
+                                <input
+                                  type="text"
+                                  value={partBarcode}
+                                  onChange={(e) => setPartBarcode(e.target.value)}
+                                  placeholder="Scan or type the barcode"
+                                  className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl text-base focus:outline-none focus:border-blue-400 mt-1"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[11px] font-bold text-gray-500 uppercase">Label text</label>
+                                <input
+                                  type="text"
+                                  value={partLabelText}
+                                  onChange={(e) => setPartLabelText(e.target.value)}
+                                  placeholder="e.g. Compressor LG LDA-204V"
+                                  className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl text-base focus:outline-none focus:border-blue-400 mt-1"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[11px] font-bold text-gray-500 uppercase">Part type</label>
+                                <select
+                                  value={partType}
+                                  onChange={(e) => setPartType(e.target.value)}
+                                  className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl text-base focus:outline-none focus:border-blue-400 mt-1 bg-white"
+                                >
+                                  {PART_TYPES.map((t) => (
+                                    <option key={t.value} value={t.value}>{t.label}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="text-[11px] font-bold text-gray-500 uppercase">Notes (optional)</label>
+                                <textarea
+                                  value={partNotes}
+                                  onChange={(e) => setPartNotes(e.target.value)}
+                                  rows={2}
+                                  placeholder="Any notes about this part"
+                                  className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl text-base focus:outline-none focus:border-blue-400 resize-none mt-1"
+                                />
+                              </div>
+
+                              {partFormError && (
+                                <p className="text-red-500 text-xs font-bold">{partFormError}</p>
+                              )}
+
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={closePartForm}
+                                  disabled={partSubmitting}
+                                  className="flex-1 py-3 rounded-xl bg-gray-200 font-bold text-sm active:scale-95 disabled:opacity-50"
+                                >
+                                  CANCEL
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={submitPart}
+                                  disabled={partSubmitting || partUploading || !partPhotoUrl || !partBarcode.trim()}
+                                  className="flex-1 py-3 rounded-xl bg-blue-500 text-white font-bold text-sm active:scale-95 disabled:opacity-40 flex items-center justify-center gap-1"
+                                >
+                                  {partSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                                  SAVE PART
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openPartForm(item.id)}
+                              className="w-full py-3 rounded-xl bg-white border-2 border-blue-300 text-blue-600 font-heading text-sm flex items-center justify-center gap-1.5 active:scale-95"
+                            >
+                              <Plus size={16} /> LOG SPARE PART
+                            </button>
+                          )}
+                        </div>
+
                         <button
                           onClick={() => handleRepairDone(item.id)}
                           disabled={actionLoading === item.id}

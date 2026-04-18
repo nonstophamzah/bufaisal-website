@@ -3,6 +3,7 @@
 import { ChevronDown, ChevronUp } from 'lucide-react';
 // useState removed — not currently needed
 import { canonicalProductType, canonicalBrand } from '@/lib/appliance-catalog';
+import { SparePartsPanel } from './SparePartsPanel';
 
 interface Item {
   id: string;
@@ -152,6 +153,9 @@ export function ItemCard({
                 <span className="font-medium text-right max-w-[60%]">{val}</span>
               </div>
             ))}
+
+          {/* Spare parts installed into this item (lazy-loaded) */}
+          <SparePartsPanel itemId={item.id} />
         </div>
       )}
       {actions && <div className="border-t border-gray-100 p-3">{actions}</div>}

@@ -51,3 +51,56 @@ export async function updateItem(id: string, updates: Record<string, unknown>): 
 export async function bulkUpdateItems(ids: string[], updates: Record<string, unknown>): Promise<{ error?: string }> {
   return applianceApi({ action: 'bulk_update_items', ids, updates });
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// Spare parts usage — client wrappers
+// ═══════════════════════════════════════════════════════════════════
+
+export interface SparePartUsage {
+  id: string;
+  part_barcode: string;
+  part_label_text: string | null;
+  part_type: string | null;
+  installed_in_item_id: string;
+  installed_by: string;
+  date_installed: string;
+  photo_url: string;
+  notes: string | null;
+  created_at: string;
+}
+
+export async function logSparePartUsage(input: {
+  part_barcode: string;
+  part_label_text?: string | null;
+  part_type?: string | null;
+  installed_in_item_id: string;
+  installed_by: string;
+  photo_url: string;
+  notes?: string | null;
+}): Promise<{ success?: boolean; part?: SparePartUsage; error?: string }> {
+  return applianceApi({ action: 'log_spare_part_usage', ...input });
+}
+
+export async function getPartsForItem(item_id: string): Promise<SparePartUsage[]> {
+  const data = await applianceApi<{ parts: SparePartUsage[]; error?: string }>({
+    action: 'get_parts_for_item',
+    item_id,
+  });
+  return data.parts || [];
+}
+
+export async function getAllPartsUsage(opts?: {
+  limit?: number;
+  worker?: string;
+  since_days?: number;
+}): Promise<SparePartUsage[]> {
+  const data = await applianceApi<{ parts: SparePartUsage[]; error?: string }>({
+    action: 'get_all_parts_usage',
+    ...(opts || {}),
+  });
+  return data.parts || [];
+}
+
+export async function deletePartsUsage(id: string): Promise<{ error?: string }> {
+  return applianceApi({ action: 'delete_parts_usage', id });
+}

@@ -605,7 +605,7 @@ export async function POST(request: NextRequest) {
           photo_pump_url: photoPumpUrl,
           gemini_raw: geminiRaw,
         })
-        .select('id, logged_at')
+        .select('*')
         .single();
 
       if (insertErr) {
@@ -636,25 +636,9 @@ export async function POST(request: NextRequest) {
       });
 
       // ---- fire-and-forget Google Sheets sync (feature-flagged by env) ----
+      // We pass the full inserted row — buildSheetRow mirrors all 32 columns.
       if (isSheetsConfigured()) {
-        const sheetRow = buildSheetRow({
-          loggedAt: inserted.logged_at,
-          truckPlate: truck.plate_display,
-          driverName: driver?.full_name ?? null,
-          odometerKm,
-          litersFilled,
-          kmSinceLast: result.kmSinceLast,
-          litersPer100km: result.litersPer100km,
-          costAed: result.costAed,
-          fleetAvg: result.fleetAvg,
-          variancePct: result.variancePercent,
-          flagged: result.flagged,
-          flagReason: result.flagReason,
-          photoPlateUrl,
-          photoLicenseUrl,
-          photoOdoUrl,
-          photoPumpUrl,
-        });
+        const sheetRow = buildSheetRow(inserted as unknown as Record<string, unknown>);
         // Intentionally not awaited — syncFillToSheet swallows + logs errors.
         void syncFillToSheet(sheetRow, inserted.id);
       }
@@ -1074,9 +1058,8 @@ export async function POST(request: NextRequest) {
     }
 
     // -----------------------------------------------------------------
-    // init_sheets_format — one-time formatting pass on the configured
-    // Google Sheet. Freezes + bolds header, tints it yellow, sets widths,
-    // adds conditional formatting for flagged rows.
+    // init_sheets_format — builds the full 5-tab Sheets dashboard,
+    // auto-backfills Fills from Supabase if empty, applies all formatting.
     // -----------------------------------------------------------------
     if (action === 'init_sheets_format') {
       if (!isSheetsConfigured()) {
@@ -1084,8 +1067,12 @@ export async function POST(request: NextRequest) {
       }
       const r = await initSheetFormat();
       if (!r.ok) return NextResponse.json({ error: r.error }, { status: 500 });
-      await writeAudit({ action: 'init_sheets_format', ip_address: ip });
-      return NextResponse.json({ success: true });
+      await writeAudit({
+        action: 'init_sheets_format',
+        ip_address: ip,
+        details: { backfilled: r.backfilled },
+      });
+      return NextResponse.json({ success: true, backfilled: r.backfilled });
     }
 
     // -----------------------------------------------------------------
