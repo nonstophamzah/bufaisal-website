@@ -636,9 +636,13 @@ export async function POST(request: NextRequest) {
       });
 
       // ---- fire-and-forget Google Sheets sync (feature-flagged by env) ----
-      // We pass the full inserted row — buildSheetRow mirrors all 32 columns.
+      // Pass the full inserted row plus explicit truck/driver labels so the
+      // Sheet stores plate_display + full_name (not UUIDs) in columns B/C.
       if (isSheetsConfigured()) {
-        const sheetRow = buildSheetRow(inserted as unknown as Record<string, unknown>);
+        const sheetRow = buildSheetRow(inserted as unknown as Record<string, unknown>, {
+          truck_label: truck.plate_display,
+          driver_label: driver?.full_name ?? null,
+        });
         // Intentionally not awaited — syncFillToSheet swallows + logs errors.
         void syncFillToSheet(sheetRow, inserted.id);
       }

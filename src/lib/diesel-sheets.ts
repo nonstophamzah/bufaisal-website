@@ -33,10 +33,15 @@ const SHEETS_API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
 const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
 
 // 32 columns — same names + order as public.diesel_fills in Supabase.
+// NOTE: columns B and C used to be `truck_id` / `driver_id` (raw UUIDs).
+// They now hold the human-readable plate display + driver full name. The
+// values are denormalized at fill time — if a truck/driver is renamed in
+// the dashboard later, old rows keep the historical label. Run the "Sheet"
+// button to rebuild the Sheet from current Supabase state.
 const HEADERS: readonly string[] = [
   'id',
-  'truck_id',
-  'driver_id',
+  'truck',
+  'driver',
   'odometer_km',
   'liters_filled',
   'price_per_liter_at_fill',
@@ -68,12 +73,12 @@ const HEADERS: readonly string[] = [
   'created_at',
 ];
 
-// Column-letter map (A = id, B = truck_id, ... AF = created_at)
+// Column-letter map (A = id, B = truck label, C = driver label, ... AF = created_at)
 // Useful for Dashboard formulas.
 const COL = {
   id:                    'A',
-  truck_id:              'B',
-  driver_id:             'C',
+  truck:                 'B',
+  driver:                'C',
   odometer_km:           'D',
   liters_filled:         'E',
   price_per_liter:       'F',
@@ -105,11 +110,14 @@ const COL = {
   created_at:            'AF',
 };
 
-// SheetsFillRow = exactly a Supabase diesel_fills row (32 fields)
+// SheetsFillRow mirrors diesel_fills (32 fields) with two differences:
+//   - `truck_id` UUID is replaced by `truck` = plate_display string
+//   - `driver_id` UUID is replaced by `driver` = full_name string
+// All other columns 1:1 with Supabase.
 export type SheetsFillRow = {
   id: string;
-  truck_id: string | null;
-  driver_id: string | null;
+  truck: string | null;
+  driver: string | null;
   odometer_km: number | null;
   liters_filled: number | null;
   price_per_liter_at_fill: number | null;
@@ -230,23 +238,47 @@ async function ensureTabExists(token: string, sheetId: string, tab: string): Pro
   return created;
 }
 
-async function ensureHeaderRow(token: string, sheetId: string, tab: string) {
+/**
+ * Ensure the header row matches the current schema. Returns `{ changed: true }`
+ * when the existing header didn't match and was overwritten — callers (like
+ * initSheetFormat) use this to know whether to clear + re-backfill data.
+ */
+async function ensureHeaderRow(
+  token: string,
+  sheetId: string,
+  tab: string
+): Promise<{ changed: boolean }> {
   await ensureTabExists(token, sheetId, tab);
   const range = `${tab}!A1:AF1`;
   const encoded = encodeURIComponent(range);
   const got = await sheetsFetch<{ values?: string[][] }>(token, `${sheetId}/values/${encoded}`);
   const firstRow = got.values?.[0] ?? [];
-  // Always overwrite header row to keep it aligned with the latest schema
-  if (firstRow.length !== HEADERS.length || firstRow.some((v, i) => v !== HEADERS[i])) {
-    await sheetsFetch(
-      token,
-      `${sheetId}/values/${encoded}?valueInputOption=RAW`,
-      {
-        method: 'PUT',
-        body: JSON.stringify({ range, values: [HEADERS.slice()] }),
-      }
-    );
-  }
+  const matches =
+    firstRow.length === HEADERS.length &&
+    firstRow.every((v, i) => v === HEADERS[i]);
+  if (matches) return { changed: false };
+
+  await sheetsFetch(
+    token,
+    `${sheetId}/values/${encoded}?valueInputOption=RAW`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ range, values: [HEADERS.slice()] }),
+    }
+  );
+  return { changed: true };
+}
+
+/**
+ * Clear all data rows (everything except the header) from a tab.
+ * Used when schema drift is detected, so we can re-backfill cleanly.
+ */
+async function clearDataRows(token: string, sheetId: string, tab: string) {
+  const range = encodeURIComponent(`${tab}!A2:AF`);
+  await sheetsFetch(token, `${sheetId}/values/${range}:clear`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
 }
 
 function toRow(row: SheetsFillRow): (string | number | boolean)[] {
@@ -258,8 +290,8 @@ function toRow(row: SheetsFillRow): (string | number | boolean)[] {
   };
   return [
     nz(row.id),
-    nz(row.truck_id),
-    nz(row.driver_id),
+    nz(row.truck),
+    nz(row.driver),
     nz(row.odometer_km),
     nz(row.liters_filled),
     nz(row.price_per_liter_at_fill),
@@ -327,15 +359,41 @@ export async function syncFillToSheet(row: SheetsFillRow, fillId?: string): Prom
 }
 
 /**
- * Build a SheetsFillRow directly from a diesel_fills record (no joins needed —
- * UUIDs mirror Supabase exactly). Used by submit_fill and the backfill path.
+ * Build a SheetsFillRow from a diesel_fills record. The truck/driver UUIDs
+ * are replaced with human-readable labels — pass them in via `enrich`, or
+ * the function will look them up in the source row's joined relations
+ * (`source.truck.plate_display` / `source.driver.full_name`) if present.
  */
-export function buildSheetRow(source: Record<string, unknown>): SheetsFillRow {
+export function buildSheetRow(
+  source: Record<string, unknown>,
+  enrich?: { truck_label?: string | null; driver_label?: string | null }
+): SheetsFillRow {
   const g = (k: string): unknown => source[k];
+
+  // Resolve truck label: explicit override > joined relation > null.
+  let truckLabel: string | null = enrich?.truck_label ?? null;
+  if (truckLabel == null) {
+    const t = source.truck;
+    const tRow = Array.isArray(t) ? t[0] : t;
+    if (tRow && typeof tRow === 'object' && 'plate_display' in tRow) {
+      truckLabel = (tRow as { plate_display?: string }).plate_display ?? null;
+    }
+  }
+
+  // Resolve driver label same way.
+  let driverLabel: string | null = enrich?.driver_label ?? null;
+  if (driverLabel == null) {
+    const d = source.driver;
+    const dRow = Array.isArray(d) ? d[0] : d;
+    if (dRow && typeof dRow === 'object' && 'full_name' in dRow) {
+      driverLabel = (dRow as { full_name?: string }).full_name ?? null;
+    }
+  }
+
   return {
     id:                        (g('id') as string) ?? '',
-    truck_id:                  (g('truck_id') as string) ?? null,
-    driver_id:                 (g('driver_id') as string) ?? null,
+    truck:                     truckLabel,
+    driver:                    driverLabel,
     odometer_km:               (g('odometer_km') as number) ?? null,
     liters_filled:             (g('liters_filled') as number) ?? null,
     price_per_liter_at_fill:   (g('price_per_liter_at_fill') as number) ?? null,
@@ -424,9 +482,16 @@ export async function initSheetFormat(): Promise<{ ok: true; backfilled: number 
     const dashTabId  = await ensureTabExists(token, cfg.sheetId, DERIVED_TABS.dashboard);
 
     // 2) Fills tab headers (idempotent — overwrites if schema drifted)
-    await ensureHeaderRow(token, cfg.sheetId, fillsTab);
+    const headerRes = await ensureHeaderRow(token, cfg.sheetId, fillsTab);
 
-    // 3) Auto-backfill Fills from Supabase if empty
+    // 3) Backfill policy:
+    //   - If header schema changed (e.g. we just renamed truck_id → truck),
+    //     the existing data rows are now misaligned with the header — clear
+    //     them and rebuild from Supabase with the new column semantics.
+    //   - Otherwise, only backfill when the tab is empty (idempotent no-op).
+    if (headerRes.changed) {
+      await clearDataRows(token, cfg.sheetId, fillsTab);
+    }
     const backfilled = await backfillIfEmpty(token, cfg.sheetId, fillsTab);
 
     // 4) Build Dashboard tab with formulas
@@ -531,7 +596,7 @@ async function buildDashboardTab(token: string, sheetId: string, fillsTab: strin
   await clearRange(token, sheetId, `${DERIVED_TABS.dashboard}!A1:Z200`);
 
   const ft = fillsTab;
-  const latestQuery = `=IFERROR(QUERY(${ft}!A2:AF, "SELECT AD, B, C, E, G, J, N, O, P ORDER BY AD DESC LIMIT 10 LABEL AD 'Logged At', B 'Truck ID', C 'Driver ID', E 'Liters', G 'Cost AED', J 'L/100km', N 'Variance %', O 'Flagged', P 'Reason'"), "No fills yet.")`;
+  const latestQuery = `=IFERROR(QUERY(${ft}!A2:AF, "SELECT AD, B, C, E, G, J, N, O, P ORDER BY AD DESC LIMIT 10 LABEL AD 'Logged At', B 'Truck', C 'Driver', E 'Liters', G 'Cost AED', J 'L/100km', N 'Variance %', O 'Flagged', P 'Reason'"), "No fills yet.")`;
 
   const rows: (string | number | null)[][] = [
     ['BU FAISAL DIESEL — FLEET OVERVIEW', '', '', '', '', '', '', ''],
@@ -551,13 +616,13 @@ async function buildDashboardTab(token: string, sheetId: string, fillsTab: strin
     [],
     ['BY TRUCK', '', '', '', '', '', '', ''],
     [
-      `=IFERROR(QUERY(${ft}!A2:AF, "SELECT B, COUNT(A), SUM(E), SUM(G), AVG(J) WHERE B IS NOT NULL GROUP BY B ORDER BY AVG(J) DESC LABEL B 'Truck ID', COUNT(A) 'Fills', SUM(E) 'Liters', SUM(G) 'Cost AED', AVG(J) 'Avg L/100km'"), "")`,
+      `=IFERROR(QUERY(${ft}!A2:AF, "SELECT B, COUNT(A), SUM(E), SUM(G), AVG(J) WHERE B IS NOT NULL GROUP BY B ORDER BY AVG(J) DESC LABEL B 'Truck', COUNT(A) 'Fills', SUM(E) 'Liters', SUM(G) 'Cost AED', AVG(J) 'Avg L/100km'"), "")`,
       '', '', '', '', '', '', '',
     ],
     [],
     ['BY DRIVER', '', '', '', '', '', '', ''],
     [
-      `=IFERROR(QUERY(${ft}!A2:AF, "SELECT C, COUNT(A), SUM(E), SUM(G), AVG(J) WHERE C IS NOT NULL GROUP BY C ORDER BY AVG(J) DESC LABEL C 'Driver ID', COUNT(A) 'Fills', SUM(E) 'Liters', SUM(G) 'Cost AED', AVG(J) 'Avg L/100km'"), "")`,
+      `=IFERROR(QUERY(${ft}!A2:AF, "SELECT C, COUNT(A), SUM(E), SUM(G), AVG(J) WHERE C IS NOT NULL GROUP BY C ORDER BY AVG(J) DESC LABEL C 'Driver', COUNT(A) 'Fills', SUM(E) 'Liters', SUM(G) 'Cost AED', AVG(J) 'Avg L/100km'"), "")`,
       '', '', '', '', '', '', '',
     ],
   ];
@@ -573,16 +638,23 @@ async function backfillIfEmpty(token: string, spreadsheetId: string, tab: string
   const existing = (got.values || []).filter((r) => r[0]);
   if (existing.length > 0) return 0;
 
-  // Select * from diesel_fills (all 32 columns), oldest first
+  // Pull diesel_fills with joined truck.plate_display + driver.full_name so
+  // buildSheetRow can write the human-readable labels (instead of UUIDs)
+  // straight into columns B (truck) and C (driver). Oldest first.
   const { data, error } = await supabaseAdmin
     .from('diesel_fills')
-    .select('*')
+    .select(`
+      *,
+      truck:diesel_trucks(plate_display),
+      driver:diesel_drivers(full_name)
+    `)
     .order('logged_at', { ascending: true })
     .limit(10000);
   if (error) throw new Error(`Supabase fetch failed: ${error.message}`);
   const fills = (data || []) as Record<string, unknown>[];
   if (fills.length === 0) return 0;
 
+  // buildSheetRow reads the joined .truck/.driver objects automatically.
   const sheetRows = fills.map((f) => toRow(buildSheetRow(f)));
 
   const appendRange = encodeURIComponent(`${tab}!A1`);
