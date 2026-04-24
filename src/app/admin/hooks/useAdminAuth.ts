@@ -70,7 +70,6 @@ export function useAdminAuth() {
             SESSION_KEY,
             JSON.stringify({ name: data.name, token: data.token })
           );
-          console.log('admin session stored');
         } catch { /* ignore storage failure */ }
         setUser(data.name);
         setLastActivity(Date.now());
