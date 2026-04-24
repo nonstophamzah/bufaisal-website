@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 
 const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+const SESSION_KEY = 'admin_session';
 
 export interface AdminAuthState {
   user: string;
@@ -18,11 +19,27 @@ export function useAdminAuth() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [lastActivity, setLastActivity] = useState(Date.now());
 
+  // Restore session on mount so a refresh doesn't bounce the user back to login
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem(SESSION_KEY);
+      if (!stored) return;
+      const parsed = JSON.parse(stored);
+      if (parsed?.name && parsed?.token) {
+        setUser(parsed.name);
+        setLastActivity(Date.now());
+      }
+    } catch {
+      /* ignore malformed storage */
+    }
+  }, []);
+
   // Session expiry — auto-logout after 30 min inactive
   useEffect(() => {
     if (!user) return;
     const check = setInterval(() => {
       if (Date.now() - lastActivity > SESSION_TIMEOUT) {
+        try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
         setUser('');
         setPin('');
       }
@@ -47,7 +64,14 @@ export function useAdminAuth() {
         body: JSON.stringify({ pin }),
       });
       const data = await res.json();
-      if (res.ok && data.name) {
+      if (res.ok && data.name && data.token) {
+        try {
+          sessionStorage.setItem(
+            SESSION_KEY,
+            JSON.stringify({ name: data.name, token: data.token })
+          );
+          console.log('admin session stored');
+        } catch { /* ignore storage failure */ }
         setUser(data.name);
         setLastActivity(Date.now());
       } else {
@@ -60,6 +84,7 @@ export function useAdminAuth() {
   }, [pin]);
 
   const logout = useCallback(() => {
+    try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
     setUser('');
     setPin('');
     setLoginError('');
