@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { createShopSessionToken } from '@/lib/shop-session';
 import bcrypt from 'bcryptjs';
 
 export async function POST(request: NextRequest) {
@@ -38,7 +39,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
-    return NextResponse.json({ success: true });
+    const token = createShopSessionToken(shop_label);
+    return NextResponse.json({ success: true, token });
   } catch {
     return NextResponse.json({ error: 'Bad request' }, { status: 400 });
   }

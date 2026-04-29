@@ -5,7 +5,8 @@ import Image from 'next/image';
 import { Upload, Sparkles, Loader2, LogOut, Camera, ArrowLeft, Check, Home } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { CATEGORIES } from '@/lib/constants';
-import { insertItem } from '@/lib/admin-api';
+
+const SHOP_TOKEN_KEY = 'bufaisal_shop_token';
 
 const SHOP_LABELS = ['A', 'B', 'C', 'D', 'E'] as const;
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Brand New'] as const;
@@ -70,7 +71,9 @@ export default function TeamPage() {
         body: JSON.stringify({ shop_label: shopLabel, password }),
       });
 
-      if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.token) {
+        sessionStorage.setItem(SHOP_TOKEN_KEY, data.token);
         setStep('name');
         setPassword('');
       } else {
@@ -261,32 +264,61 @@ export default function TeamPage() {
     setError('');
     setUploading(true);
 
-    const result = await insertItem({
-      item_name: form.item_name,
-      brand: form.brand || null,
-      product_type: form.product_type || null,
-      description: form.description || null,
-      category: form.category,
-      condition: form.condition,
-      sale_price: price,
-      shop_source: `Shop ${shopLabel}`,
-      shop_label: shopLabel,
-      duty_manager: managerName,
-      barcode: form.barcode || null,
-      image_urls: urls,
-      thumbnail_url: urls[0] || null,
-      uploaded_by: managerName,
-      is_published: false,
-      is_sold: false,
-      condition_notes: form.condition_notes || null,
-      seo_title: form.seo_title || null,
-      seo_description: form.seo_description || null,
-    });
+    const token = sessionStorage.getItem(SHOP_TOKEN_KEY);
+    if (!token) {
+      setError('Session expired. Please sign in again.');
+      setUploading(false);
+      handleLogout();
+      return;
+    }
 
-    if (result.error) {
-      setError(result.error);
-    } else {
-      setSuccess(true);
+    try {
+      const res = await fetch('/api/team/items', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: 'insert_item',
+          item: {
+            item_name: form.item_name,
+            brand: form.brand || null,
+            product_type: form.product_type || null,
+            description: form.description || null,
+            category: form.category,
+            condition: form.condition,
+            sale_price: price,
+            shop_source: `Shop ${shopLabel}`,
+            shop_label: shopLabel,
+            duty_manager: managerName,
+            barcode: form.barcode || null,
+            image_urls: urls,
+            thumbnail_url: urls[0] || null,
+            uploaded_by: managerName,
+            condition_notes: form.condition_notes || null,
+            seo_title: form.seo_title || null,
+            seo_description: form.seo_description || null,
+          },
+        }),
+      });
+
+      if (res.status === 401) {
+        sessionStorage.removeItem(SHOP_TOKEN_KEY);
+        setError('Session expired. Please sign in again.');
+        setUploading(false);
+        handleLogout();
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || 'Upload failed');
+      } else {
+        setSuccess(true);
+      }
+    } catch {
+      setError('Network error — please try again');
     }
 
     setUploading(false);
@@ -312,6 +344,7 @@ export default function TeamPage() {
   };
 
   const handleLogout = () => {
+    sessionStorage.removeItem(SHOP_TOKEN_KEY);
     setStep('shop');
     setShopLabel('');
     setManagerName('');
