@@ -3,13 +3,20 @@ import { rateLimit } from '@/lib/rate-limit';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { createShopSessionToken } from '@/lib/shop-session';
 import bcrypt from 'bcryptjs';
+import { getClientIp, logSecurityEvent } from '@/lib/security-log';
 
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown';
+  const ip = getClientIp(request);
 
   // Rate limit: 5 attempts per minute per IP
   const { allowed } = rateLimit(`shop-auth-${ip}`, 5, 60_000);
   if (!allowed) {
+    void logSecurityEvent({
+      event_type: 'rate_limit_hit',
+      severity: 'warn',
+      ip,
+      route: '/api/shop-auth',
+    });
     return NextResponse.json(
       { error: 'Too many attempts. Try again in 1 minute.' },
       { status: 429 }
@@ -31,15 +38,36 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     if (error || !data?.password_hash) {
+      void logSecurityEvent({
+        event_type: 'failed_shop_login',
+        severity: 'warn',
+        ip,
+        route: '/api/shop-auth',
+        details: { shop_label, reason: 'no_record' },
+      });
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
     const match = await bcrypt.compare(password, data.password_hash);
     if (!match) {
+      void logSecurityEvent({
+        event_type: 'failed_shop_login',
+        severity: 'warn',
+        ip,
+        route: '/api/shop-auth',
+        details: { shop_label, reason: 'bad_password' },
+      });
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
     const token = createShopSessionToken(shop_label);
+    void logSecurityEvent({
+      event_type: 'shop_login_success',
+      severity: 'info',
+      ip,
+      user_name: `shop:${shop_label}`,
+      route: '/api/shop-auth',
+    });
     return NextResponse.json({ success: true, token });
   } catch {
     return NextResponse.json({ error: 'Bad request' }, { status: 400 });
