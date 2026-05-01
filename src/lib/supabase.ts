@@ -17,6 +17,8 @@ export const supabase = new Proxy({} as SupabaseClient, {
   },
 });
 
+export type ShopItemStatus = 'draft' | 'published' | 'sold' | 'archived';
+
 export interface ShopItem {
   id: string;
   barcode: string | null;
@@ -47,6 +49,10 @@ export interface ShopItem {
   duty_manager: string | null;
   shop_label: string | null;
   condition_notes: string | null;
+  // v2 migration foundation (017)
+  slug: string | null;
+  negotiable: boolean;
+  status: ShopItemStatus;
 }
 
 export interface WebsiteConfig {
