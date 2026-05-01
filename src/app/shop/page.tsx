@@ -107,35 +107,7 @@ export default async function ShopPage({ searchParams }: Props) {
   const { category, q } = await searchParams;
   const items = await getItems(category, q);
 
-  // Server-side JSON-LD schemas (rendered in initial HTML)
-  const localBusiness = {
-    '@context': 'https://schema.org',
-    '@type': 'LocalBusiness',
-    name: 'Bu Faisal General Trading',
-    description:
-      "UAE's biggest used goods souq. Quality second-hand furniture, appliances & home goods since 2009.",
-    url: 'https://bufaisal.ae',
-    telephone: '+971585932499',
-    address: {
-      '@type': 'PostalAddress',
-      addressLocality: 'Ajman',
-      addressCountry: 'AE',
-    },
-    geo: {
-      '@type': 'GeoCoordinates',
-      latitude: 25.4052,
-      longitude: 55.5136,
-    },
-    openingHours: 'Mo-Su 09:00-22:00',
-    priceRange: 'AED',
-    image: 'https://bufaisal.ae/og-image.png',
-    sameAs: [
-      'https://www.instagram.com/bufaisal.ae',
-      'https://www.tiktok.com/@bufaisal.ae',
-      'https://www.facebook.com/bufaisal.ae',
-    ],
-  };
-
+  // LocalBusiness schema is rendered sitewide in src/app/layout.tsx.
   const faqSchema = {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
@@ -152,10 +124,6 @@ export default async function ShopPage({ searchParams }: Props) {
   return (
     <>
       {/* Server-rendered JSON-LD */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusiness) }}
-      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}

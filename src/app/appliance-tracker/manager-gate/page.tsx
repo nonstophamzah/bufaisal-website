@@ -23,7 +23,7 @@ export default function ManagerGatePage() {
     if (match) {
       sessionStorage.setItem('app_worker', JSON.stringify({ name: 'Humaan', role: 'manager' }));
       setSuccess(true);
-      setTimeout(() => router.push('/appliances/manager'), 600);
+      setTimeout(() => router.push('/appliance-tracker/manager'), 600);
     } else {
       setError(true);
       setTimeout(() => { setError(false); setCode(''); }, 800);
@@ -105,7 +105,7 @@ export default function ManagerGatePage() {
           </button>
         ))}
         <button
-          onClick={() => router.push('/appliances')}
+          onClick={() => router.push('/appliance-tracker')}
           className="h-[72px] rounded-2xl text-gray-500 flex items-center justify-center active:scale-90 transition-all"
         >
           <ArrowLeft size={24} />

@@ -56,7 +56,7 @@ export default function AppliancesCodePage() {
         <h1 className="font-heading text-white text-3xl mb-6">SELECT PORTAL</h1>
 
         <button
-          onClick={() => router.push('/appliances/select')}
+          onClick={() => router.push('/appliance-tracker/select')}
           className="w-full max-w-sm py-8 rounded-2xl bg-yellow text-black flex flex-col items-center gap-2 active:scale-95 transition-transform"
         >
           <Users size={40} strokeWidth={2} />
@@ -65,7 +65,7 @@ export default function AppliancesCodePage() {
         </button>
 
         <button
-          onClick={() => router.push('/appliances/manager-gate')}
+          onClick={() => router.push('/appliance-tracker/manager-gate')}
           className="w-full max-w-sm py-8 rounded-2xl bg-[#1a1a1a] text-white border border-gray-700 flex flex-col items-center gap-2 active:scale-95 transition-transform"
         >
           <Settings size={40} strokeWidth={2} />

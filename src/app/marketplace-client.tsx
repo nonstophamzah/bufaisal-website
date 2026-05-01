@@ -83,13 +83,15 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Shop
       </section>
 
       {/* 0B. TRUST BAR */}
-      <div className="w-full py-3 px-4 flex items-center justify-center gap-3 md:gap-6 text-center flex-wrap" style={{ background: '#000', color: '#F9D923' }}>
+      <div className="w-full py-3 px-4 flex items-center justify-center gap-3 md:gap-x-5 md:gap-y-1 text-center flex-wrap" style={{ background: '#000', color: '#F9D923' }}>
         <span className="text-xs md:text-sm font-bold whitespace-nowrap">Since 2009</span>
-        <span className="text-xs opacity-40 text-white">|</span>
+        <span className="text-xs opacity-40 text-white">·</span>
         <span className="text-xs md:text-sm font-bold whitespace-nowrap">5 Showrooms in Ajman</span>
-        <span className="text-xs opacity-40 text-white">|</span>
+        <span className="text-xs opacity-40 text-white">·</span>
+        <span className="text-xs md:text-sm font-bold whitespace-nowrap">Delivery in All Emirates</span>
+        <span className="text-xs opacity-40 text-white">·</span>
         <span className="text-xs md:text-sm font-bold whitespace-nowrap">All Items Inspected</span>
-        <span className="text-xs opacity-40 text-white">|</span>
+        <span className="text-xs opacity-40 text-white">·</span>
         <span className="text-xs md:text-sm font-bold whitespace-nowrap">24-48hr Delivery</span>
       </div>
 

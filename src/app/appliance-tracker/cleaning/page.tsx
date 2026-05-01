@@ -132,7 +132,7 @@ export default function CleaningPage() {
 
   useEffect(() => {
     const w = sessionStorage.getItem('app_worker');
-    if (!w) { router.replace('/appliances'); return; }
+    if (!w) { router.replace('/appliance-tracker'); return; }
     const parsed = JSON.parse(w);
     setWorker(parsed.name);
     fetchAll(parsed.name);
@@ -293,7 +293,7 @@ export default function CleaningPage() {
     <div className="px-4 pt-4 pb-24 min-h-[calc(100vh-56px)] max-w-full overflow-x-hidden">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <button onClick={() => router.push('/appliances/select')} className="flex items-center gap-1 text-gray-500 min-h-[48px]">
+        <button onClick={() => router.push('/appliance-tracker/select')} className="flex items-center gap-1 text-gray-500 min-h-[48px]">
           <ArrowLeft size={20} /> Back
         </button>
         <button onClick={() => fetchAll(worker)} className="flex items-center gap-1 text-gray-500 active:opacity-50 min-h-[48px]">

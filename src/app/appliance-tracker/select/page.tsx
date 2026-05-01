@@ -10,12 +10,12 @@ interface Worker { id: string; name: string; role: string; tab: string; }
 const TABS = ['SHOP', 'JURF', 'SECURITY'] as const;
 
 const ROLE_ROUTES: Record<string, string> = {
-  shop: '/appliances/shop',
-  jurf: '/appliances/jurf',
-  cleaning: '/appliances/cleaning',
-  delivery: '/appliances/delivery',
-  security: '/appliances/security',
-  manager: '/appliances/manager',
+  shop: '/appliance-tracker/shop',
+  jurf: '/appliance-tracker/jurf',
+  cleaning: '/appliance-tracker/cleaning',
+  delivery: '/appliance-tracker/delivery',
+  security: '/appliance-tracker/security',
+  manager: '/appliance-tracker/manager',
 };
 
 export default function SelectWorkerPage() {
@@ -26,7 +26,7 @@ export default function SelectWorkerPage() {
   const [confirm, setConfirm] = useState<Worker | null>(null);
 
   useEffect(() => {
-    if (!sessionStorage.getItem('app_code')) { router.replace('/appliances'); return; }
+    if (!sessionStorage.getItem('app_code')) { router.replace('/appliance-tracker'); return; }
     (async () => {
       const data = await getWorkers();
       setWorkers(data as Worker[]);
@@ -36,7 +36,7 @@ export default function SelectWorkerPage() {
 
   const handleConfirm = (w: Worker) => {
     sessionStorage.setItem('app_worker', JSON.stringify({ name: w.name, role: w.role }));
-    router.push(ROLE_ROUTES[w.role] || '/appliances/shop');
+    router.push(ROLE_ROUTES[w.role] || '/appliance-tracker/shop');
   };
 
   const filtered = workers.filter((w) => w.tab === tab);
@@ -80,7 +80,7 @@ export default function SelectWorkerPage() {
         </div>
       )}
 
-      {/* Manager access is via /appliances → MANAGER button → manager-gate */}
+      {/* Manager access is via /appliance-tracker → MANAGER button → manager-gate */}
 
       {/* Confirm modal */}
       {confirm && (

@@ -10,9 +10,9 @@ import { supabase, ShopItem } from '@/lib/supabase';
 import { CATEGORIES, CATEGORY_SLUG_MAP } from '@/lib/constants';
 
 const CATEGORY_INTROS: Record<string, string> = {
-  'living-room-lounge':
+  'living-room':
     'Transform your home with quality pre-owned sofas, coffee tables, TV stands, and lounge furniture. Every piece is inspected for quality at our Ajman showrooms. Save up to 70% compared to buying new.',
-  'bedroom-sleep':
+  'bedroom':
     'Sleep better for less. Browse beds, mattresses, wardrobes, and bedroom furniture — all checked for quality and comfort. Delivery available across Dubai, Sharjah, and Ajman.',
   'kitchen-dining':
     'Equip your kitchen and dining area with affordable second-hand dining sets, tables, chairs, and cookware. Quality items from top brands at a fraction of the retail price.',

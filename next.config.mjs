@@ -10,7 +10,27 @@ const nextConfig = {
     ],
   },
   async redirects() {
-    return [];
+    return [
+      // Force non-www canonical (Google sees www and apex as separate properties otherwise)
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'www.bufaisal.ae' }],
+        destination: 'https://bufaisal.ae/:path*',
+        permanent: true,
+      },
+      // Old internal tracker path → new path. Keeps existing team bookmarks working.
+      // The bare /appliances slot is reserved for the public Appliances category page (Prompt 2B).
+      {
+        source: '/appliances',
+        destination: '/appliance-tracker',
+        permanent: true,
+      },
+      {
+        source: '/appliances/:path*',
+        destination: '/appliance-tracker/:path*',
+        permanent: true,
+      },
+    ];
   },
   async headers() {
     return [

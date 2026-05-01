@@ -9,7 +9,7 @@ export default function AppliancesLayout({ children }: { children: React.ReactNo
   const handleLogout = () => {
     sessionStorage.removeItem('app_worker');
     sessionStorage.removeItem('app_code');
-    router.replace('/appliances');
+    router.replace('/appliance-tracker');
   };
 
   return (

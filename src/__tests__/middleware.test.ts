@@ -12,8 +12,8 @@ describe('middleware', () => {
     expect(res.headers.get('X-Robots-Tag')).toBe('noindex, nofollow');
   });
 
-  it('adds noindex to /appliances routes', () => {
-    const res = middleware(makeRequest('/appliances'));
+  it('adds noindex to /appliance-tracker routes', () => {
+    const res = middleware(makeRequest('/appliance-tracker'));
     expect(res.headers.get('X-Robots-Tag')).toBe('noindex, nofollow');
   });
 

@@ -1,58 +1,59 @@
 import { Sofa, Bed, UtensilsCrossed, Zap, TreePine, Baby, Briefcase, ShoppingBag } from 'lucide-react';
+import { categoryToSlug, CATEGORY_SLUG_TO_NAME } from './categories';
 
 export const CATEGORIES = [
   {
     name: 'Living Room & Lounge',
-    slug: 'living-room-lounge',
+    slug: categoryToSlug('Living Room & Lounge'),
     description: 'Sofas, coffee tables, TV stands, shelves, mirrors, carpets, curtains, decor',
     icon: Sofa,
     image: 'https://images.unsplash.com/photo-1618220179428-22790b461013?w=600&h=400&fit=crop&q=80',
   },
   {
     name: 'Bedroom & Sleep',
-    slug: 'bedroom-sleep',
+    slug: categoryToSlug('Bedroom & Sleep'),
     description: 'Beds, mattresses, wardrobes, drawers, pillows, blankets',
     icon: Bed,
     image: 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600&h=400&fit=crop&q=80',
   },
   {
     name: 'Kitchen & Dining',
-    slug: 'kitchen-dining',
+    slug: categoryToSlug('Kitchen & Dining'),
     description: 'Dining sets, dining tables, chairs, pots, pans, kitchen items',
     icon: UtensilsCrossed,
     image: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600&h=400&fit=crop&q=80',
   },
   {
     name: 'Appliances',
-    slug: 'appliances',
+    slug: categoryToSlug('Appliances'),
     description: 'Fridges, washing machines, ACs, microwaves, stoves, blenders, water dispensers, fans, TVs',
     icon: Zap,
     image: 'https://images.unsplash.com/photo-1584568694244-14fbdf83bd30?w=600&h=400&fit=crop&q=80',
   },
   {
     name: 'Outdoor & Garden',
-    slug: 'outdoor-garden',
+    slug: categoryToSlug('Outdoor & Garden'),
     description: 'Garden sets, chairs, tables, BBQs, camping, pet houses, storage sheds',
     icon: TreePine,
     image: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&h=400&fit=crop&q=80',
   },
   {
     name: 'Kids & Baby',
-    slug: 'kids-baby',
+    slug: categoryToSlug('Kids & Baby'),
     description: 'Baby beds, trolleys, bunk beds, toys, car seats, bikes, study tables, cycles',
     icon: Baby,
     image: 'https://images.unsplash.com/photo-1540479859555-17af45c78602?w=600&h=400&fit=crop&q=80',
   },
   {
     name: 'Office, Study & Fitness',
-    slug: 'office-study-fitness',
+    slug: categoryToSlug('Office, Study & Fitness'),
     description: 'Office chairs & tables, laptops, exercise machines, treadmills, dumbbells',
     icon: Briefcase,
     image: 'https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?w=600&h=400&fit=crop&q=80',
   },
   {
     name: 'Everyday Essentials',
-    slug: 'everyday-essentials',
+    slug: categoryToSlug('Everyday Essentials'),
     description: 'Bags, clothes, shoes, books, baskets, small accessories, misc',
     icon: ShoppingBag,
     image: 'https://images.unsplash.com/photo-1558997519-83ea9252edf8?w=600&h=400&fit=crop&q=80',
@@ -91,6 +92,5 @@ export function getWhatsAppGeneralUrl() {
   return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Hi! I have a question about Bu Faisal.')}`;
 }
 
-export const CATEGORY_SLUG_MAP = Object.fromEntries(
-  CATEGORIES.map((c) => [c.slug, c.name])
-);
+// Single source of truth lives in lib/categories.ts; re-exported here for legacy callers.
+export const CATEGORY_SLUG_MAP = CATEGORY_SLUG_TO_NAME;

@@ -78,7 +78,7 @@ export default function ShopOutPage() {
 
   useEffect(() => {
     const w = sessionStorage.getItem('app_worker');
-    if (!w) { router.replace('/appliances'); return; }
+    if (!w) { router.replace('/appliance-tracker'); return; }
   }, [router]);
 
   const handleShopSelect = (shop: string) => {
@@ -213,7 +213,7 @@ export default function ShopOutPage() {
   if (!selectedShop) {
     return (
       <div className="px-4 pt-4 pb-24 min-h-[calc(100vh-56px)] max-w-full overflow-x-hidden">
-        <button onClick={() => router.push('/appliances/shop')} className="flex items-center gap-1 text-gray-500 mb-6 min-h-[48px]">
+        <button onClick={() => router.push('/appliance-tracker/shop')} className="flex items-center gap-1 text-gray-500 mb-6 min-h-[48px]">
           <ArrowLeft size={20} /> Back
         </button>
         <h1 className="font-heading text-3xl mb-2">LOG OUT — <span className="text-orange-500">SEND</span></h1>

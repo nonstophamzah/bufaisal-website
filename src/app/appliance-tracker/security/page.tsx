@@ -78,7 +78,7 @@ export default function SecurityPage() {
 
   useEffect(() => {
     const w = sessionStorage.getItem('app_worker');
-    if (!w) { router.replace('/appliances'); return; }
+    if (!w) { router.replace('/appliance-tracker'); return; }
     const parsed = JSON.parse(w);
     setWorker(parsed.name);
     const shop = parseShopFromName(parsed.name);
@@ -167,7 +167,7 @@ export default function SecurityPage() {
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-56px)] px-4">
         <p className="font-heading text-2xl text-red-500 mb-4">SHOP NOT DETECTED</p>
         <p className="text-gray-500 text-center mb-6">Your name must end with a shop letter (A-E).<br />Contact manager to fix your worker profile.</p>
-        <button onClick={() => router.push('/appliances/select')} className="flex items-center gap-2 text-gray-500 min-h-[48px]">
+        <button onClick={() => router.push('/appliance-tracker/select')} className="flex items-center gap-2 text-gray-500 min-h-[48px]">
           <ArrowLeft size={18} /> Back to selection
         </button>
       </div>
@@ -178,7 +178,7 @@ export default function SecurityPage() {
     <div className="px-4 pt-4 pb-24 min-h-[calc(100vh-56px)] max-w-full overflow-x-hidden">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <button onClick={() => router.push('/appliances/select')} className="flex items-center gap-1 text-gray-500 min-h-[48px]">
+        <button onClick={() => router.push('/appliance-tracker/select')} className="flex items-center gap-1 text-gray-500 min-h-[48px]">
           <ArrowLeft size={20} /> Back
         </button>
         <button onClick={() => fetchItems(myShop)} className="flex items-center gap-1 text-gray-500 active:opacity-50 min-h-[48px]">

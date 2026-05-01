@@ -22,7 +22,7 @@ export default function ApplianceError({
             TRY AGAIN
           </button>
           <button
-            onClick={() => window.location.href = '/appliances'}
+            onClick={() => window.location.href = '/appliance-tracker'}
             className="w-full bg-gray-200 text-black px-6 py-3 rounded-lg font-heading text-lg hover:bg-gray-300 transition-colors"
           >
             BACK TO TRACKER

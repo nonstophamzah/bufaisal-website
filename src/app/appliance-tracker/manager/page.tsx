@@ -143,12 +143,12 @@ export default function ManagerDashboard() {
   useEffect(() => {
     const w = sessionStorage.getItem('app_worker');
     if (!w) {
-      router.replace('/appliances');
+      router.replace('/appliance-tracker');
       return;
     }
     const parsed = JSON.parse(w);
     if (parsed.role !== 'manager') {
-      router.replace('/appliances/select');
+      router.replace('/appliance-tracker/select');
       return;
     }
     setWorker(parsed);

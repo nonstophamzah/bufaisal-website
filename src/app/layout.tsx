@@ -114,12 +114,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify({
             '@context': 'https://schema.org',
-            '@type': 'Organization',
-            name: 'Bu Faisal General Trading',
+            '@type': 'LocalBusiness',
+            name: 'Bufaisal General Trading',
+            alternateName: ['Bu Faisal', 'Bufaisal'],
             url: 'https://bufaisal.ae',
             logo: 'https://bufaisal.ae/og-image.png',
+            image: 'https://bufaisal.ae/og-image.png',
             foundingDate: '2009',
             description: "UAE's largest second-hand market since 2009. 5 showrooms in Ajman.",
+            telephone: '+971 58 593 2499',
+            priceRange: '$',
+            openingHours: 'Mo-Su 09:00-23:00',
             address: {
               '@type': 'PostalAddress',
               addressLocality: 'Ajman',
@@ -127,13 +132,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             },
             contactPoint: {
               '@type': 'ContactPoint',
-              telephone: '+971585932499',
+              telephone: '+971 58 593 2499',
               contactType: 'sales',
               availableLanguage: ['English', 'Arabic'],
             },
             sameAs: [
               'https://www.instagram.com/bufaisal.ae',
               'https://www.tiktok.com/@bufaisal.ae',
+              'https://www.facebook.com/bufaisal.ae',
             ],
           }).replace(/</g, '\\u003c') }}
         />

@@ -5,7 +5,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: '*',
       allow: '/',
-      disallow: ['/admin', '/appliances', '/api', '/team', '/login'],
+      disallow: ['/admin', '/appliance-tracker', '/api', '/team', '/login'],
     },
     sitemap: 'https://bufaisal.ae/sitemap.xml',
   };

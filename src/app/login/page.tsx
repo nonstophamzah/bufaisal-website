@@ -43,7 +43,7 @@ export default function LoginPage() {
             </div>
           </Link>
           <Link
-            href="/appliances"
+            href="/appliance-tracker"
             className="group flex items-center gap-4 bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-yellow transition-colors"
           >
             <div className="w-14 h-14 bg-yellow/10 rounded-xl flex items-center justify-center group-hover:bg-yellow/20 transition-colors flex-shrink-0">

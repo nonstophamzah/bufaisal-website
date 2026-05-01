@@ -43,7 +43,7 @@ export default function ShopInPage() {
 
   useEffect(() => {
     const w = sessionStorage.getItem('app_worker');
-    if (!w) { router.replace('/appliances'); return; }
+    if (!w) { router.replace('/appliance-tracker'); return; }
     setWorker(JSON.parse(w).name);
   }, [router]);
 
@@ -162,7 +162,7 @@ export default function ShopInPage() {
     return (
       <SuccessFlash
         message="Item logged!"
-        onDone={() => { reset(); router.push('/appliances/shop'); }}
+        onDone={() => { reset(); router.push('/appliance-tracker/shop'); }}
       />
     );
   }
@@ -229,7 +229,7 @@ export default function ShopInPage() {
   // ── SCREEN 1: Details ──
   return (
     <div className="px-4 pt-4 pb-24 min-h-[calc(100vh-56px)] max-w-full overflow-x-hidden">
-      <button onClick={() => router.push('/appliances/shop')} className="flex items-center gap-1 text-gray-500 mb-4 min-h-[48px]">
+      <button onClick={() => router.push('/appliance-tracker/shop')} className="flex items-center gap-1 text-gray-500 mb-4 min-h-[48px]">
         <ArrowLeft size={20} /> Back
       </button>
 

@@ -22,7 +22,7 @@ import {
   LayoutDashboard,
 } from 'lucide-react';
 import Link from 'next/link';
-import { uploadToCloudinary } from '../../appliances/lib/upload';
+import { uploadToCloudinary } from '../../appliance-tracker/lib/upload';
 import {
   checkPin,
   listTrucks,

@@ -5,17 +5,17 @@ const ADMIN_ROUTES = ['/admin'];
 
 // Routes that require appliance entry code
 const APPLIANCE_PROTECTED_ROUTES = [
-  '/appliances/select',
-  '/appliances/shop',
-  '/appliances/jurf',
-  '/appliances/cleaning',
-  '/appliances/security',
-  '/appliances/delivery',
-  '/appliances/manager',
+  '/appliance-tracker/select',
+  '/appliance-tracker/shop',
+  '/appliance-tracker/jurf',
+  '/appliance-tracker/cleaning',
+  '/appliance-tracker/security',
+  '/appliance-tracker/delivery',
+  '/appliance-tracker/manager',
 ];
 
 // Internal routes that should not be accessible to search engines
-const INTERNAL_ROUTES = ['/team', '/admin', '/appliances', '/login'];
+const INTERNAL_ROUTES = ['/team', '/admin', '/appliance-tracker', '/login'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -72,7 +72,7 @@ export const config = {
   matcher: [
     // Match admin, appliance, team, login, and API routes
     '/admin/:path*',
-    '/appliances/:path*',
+    '/appliance-tracker/:path*',
     '/team/:path*',
     '/login',
     '/api/:path*',
