@@ -3,6 +3,13 @@ import bcrypt from 'bcryptjs';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { rateLimit } from '@/lib/rate-limit';
 import { verifyOrigin } from '@/lib/verify-origin';
+import {
+  getClientIp,
+  logSecurityEvent,
+  logApiError,
+  recordAdminIp,
+  logOriginRejectionFor,
+} from '@/lib/security-log';
 
 // Allowed fields for appliance insert/update to prevent arbitrary column writes
 const ALLOWED_INSERT_FIELDS = [
@@ -51,14 +58,88 @@ const ALLOWED_PART_TYPES = new Set([
   'wiring', 'other',
 ]);
 
+/**
+ * Best-effort actor attribution for the security audit log.
+ *
+ * Why this is best-effort: the appliance API takes the actor's name embedded
+ * inside a domain object (e.g. `body.item.created_by`, `body.installed_by`,
+ * `body.updates.cleaned_by`) rather than as a uniform top-level field. This
+ * helper checks the known candidate fields per action shape and returns the
+ * first non-empty string, falling back to null.
+ *
+ * Returning null is fine and intentional. The IP, action name, and timestamp
+ * are still logged via logApplianceAction(), so a null actor + IP remains
+ * useful for forensic correlation — you can still see "an action of type X
+ * happened from IP Y at time T" even when the body didn't carry an actor.
+ *
+ * If a new mutating action is added, extend the candidates list below.
+ */
+function pickActor(action: string, body: Record<string, unknown>): string | null {
+  const u = body.updates as Record<string, unknown> | undefined;
+  const item = body.item as Record<string, unknown> | undefined;
+  const candidates: unknown[] = [
+    body.installed_by,
+    item?.created_by, item?.tested_by,
+    u?.cleaned_by, u?.tested_by, u?.claimed_by,
+    body.cleaned_by, body.tested_by, body.claimed_by,
+    body.actor,
+  ];
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.trim()) return c.trim();
+  }
+  return null;
+}
+
+/**
+ * Logs a successful mutating action to security_events and runs the
+ * (user_name, ip) novelty check. MUST be called only AFTER the DB write
+ * has resolved without error — otherwise we'd record actions that didn't
+ * actually happen.
+ */
+async function logApplianceAction(
+  action: string,
+  ip: string,
+  user_name: string | null,
+  details: Record<string, unknown>
+): Promise<void> {
+  void logSecurityEvent({
+    event_type: 'admin_action',
+    severity: 'info',
+    ip,
+    user_name,
+    route: '/api/appliances',
+    details: { action, ...details },
+  });
+  if (user_name) {
+    const novel = await recordAdminIp(user_name, ip);
+    if (novel) {
+      void logSecurityEvent({
+        event_type: 'new_admin_ip',
+        severity: 'warn',
+        ip,
+        user_name,
+        route: '/api/appliances',
+      });
+    }
+  }
+}
+
 export async function POST(request: NextRequest) {
+  const ip = getClientIp(request);
+
   if (!verifyOrigin(request)) {
+    logOriginRejectionFor(request, '/api/appliances');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown';
   const { allowed } = rateLimit(`appliance-${ip}`, 30, 60_000);
   if (!allowed) {
+    void logSecurityEvent({
+      event_type: 'rate_limit_hit',
+      severity: 'warn',
+      ip,
+      route: '/api/appliances',
+    });
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
   }
 
@@ -70,6 +151,13 @@ export async function POST(request: NextRequest) {
       // Tighter rate limit for code brute-force protection
       const { allowed: codeAllowed } = rateLimit(`code-check-${ip}`, 5, 60_000);
       if (!codeAllowed) {
+        void logSecurityEvent({
+          event_type: 'rate_limit_hit',
+          severity: 'warn',
+          ip,
+          route: '/api/appliances',
+          details: { sub: 'code-check' },
+        });
         return NextResponse.json({ error: 'Too many attempts. Try again in 1 minute.' }, { status: 429 });
       }
 
@@ -91,6 +179,15 @@ export async function POST(request: NextRequest) {
       } else {
         // Plain text fallback — log warning for migration
         match = data.value === body.code;
+      }
+      if (!match) {
+        void logSecurityEvent({
+          event_type: 'failed_code_check',
+          severity: 'warn',
+          ip,
+          route: '/api/appliances',
+          details: { which: configKey },
+        });
       }
       return NextResponse.json({ match });
     }
@@ -127,7 +224,10 @@ export async function POST(request: NextRequest) {
       const limit = Math.min(Number(body.limit) || 500, 1000);
       query = query.limit(limit);
       const { data, error } = await query;
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) {
+        void logApiError(request, 500, { route: '/api/appliances', error_message: error.message });
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
       return NextResponse.json({ items: data || [] });
     }
 
@@ -138,7 +238,15 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
       }
       const { error } = await supabaseAdmin.from('appliance_items').insert(safeItem);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) {
+        void logApiError(request, 500, { route: '/api/appliances', error_message: error.message });
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      // DB write succeeded — log AFTER success, never before
+      await logApplianceAction(action, ip, pickActor(action, body), {
+        product_type: safeItem.product_type,
+        shop: safeItem.shop,
+      });
       return NextResponse.json({ success: true });
     }
 
@@ -151,7 +259,14 @@ export async function POST(request: NextRequest) {
         .from('appliance_items')
         .update(safeUpdates)
         .eq('id', id);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) {
+        void logApiError(request, 500, { route: '/api/appliances', error_message: error.message });
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      await logApplianceAction(action, ip, pickActor(action, body), {
+        id,
+        fields: Object.keys(safeUpdates),
+      });
       return NextResponse.json({ success: true });
     }
 
@@ -164,7 +279,14 @@ export async function POST(request: NextRequest) {
         .from('appliance_items')
         .update(safeUpdates)
         .in('id', ids);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) {
+        void logApiError(request, 500, { route: '/api/appliances', error_message: error.message });
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      await logApplianceAction(action, ip, pickActor(action, body), {
+        count: ids.length,
+        fields: Object.keys(safeUpdates),
+      });
       return NextResponse.json({ success: true });
     }
 
@@ -207,6 +329,7 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
 
       if (itemError) {
+        void logApiError(request, 500, { route: '/api/appliances', error_message: itemError.message });
         return NextResponse.json({ error: itemError.message }, { status: 500 });
       }
       if (!item) {
@@ -240,8 +363,13 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (insertError) {
+        void logApiError(request, 500, { route: '/api/appliances', error_message: insertError.message });
         return NextResponse.json({ error: insertError.message }, { status: 500 });
       }
+      await logApplianceAction(action, ip, pickActor(action, body), {
+        part_type: safePartType,
+        item_id: installed_in_item_id,
+      });
       return NextResponse.json({ success: true, part: inserted });
     }
 
@@ -256,7 +384,10 @@ export async function POST(request: NextRequest) {
         .select('*')
         .eq('installed_in_item_id', item_id)
         .order('date_installed', { ascending: false });
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) {
+        void logApiError(request, 500, { route: '/api/appliances', error_message: error.message });
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
       return NextResponse.json({ parts: data || [] });
     }
 
@@ -279,7 +410,10 @@ export async function POST(request: NextRequest) {
       }
 
       const { data, error } = await query;
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) {
+        void logApiError(request, 500, { route: '/api/appliances', error_message: error.message });
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
       return NextResponse.json({ parts: data || [] });
     }
 
@@ -293,12 +427,20 @@ export async function POST(request: NextRequest) {
         .from('appliance_spare_parts_usage')
         .delete()
         .eq('id', id);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) {
+        void logApiError(request, 500, { route: '/api/appliances', error_message: error.message });
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      await logApplianceAction(action, ip, pickActor(action, body), { id });
       return NextResponse.json({ success: true });
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
-  } catch {
+  } catch (err) {
+    void logApiError(request, 500, {
+      route: '/api/appliances',
+      error_message: err instanceof Error ? err.message : 'unknown',
+    });
     return NextResponse.json({ error: 'Bad request' }, { status: 400 });
   }
 }

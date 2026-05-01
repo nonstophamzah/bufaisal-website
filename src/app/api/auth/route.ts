@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { rateLimit } from '@/lib/rate-limit';
 import { createSessionToken } from '@/lib/admin-session';
+import {
+  getClientIp,
+  logSecurityEvent,
+  recordAdminIp,
+} from '@/lib/security-log';
 
 // PIN-to-name mapping is stored as JSON in ADMIN_PIN_HASHES env var.
 // Format: [{"hash":"$2a$10$...","name":"Admin"},{"hash":"$2a$10$...","name":"Humaan"}]
@@ -16,11 +21,17 @@ function getAdminPinEntries(): { hash: string; name: string }[] {
 }
 
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown';
+  const ip = getClientIp(request);
 
   // Rate limit: 5 login attempts per minute per IP
   const { allowed } = rateLimit(`login-${ip}`, 5, 60_000);
   if (!allowed) {
+    void logSecurityEvent({
+      event_type: 'rate_limit_hit',
+      severity: 'warn',
+      ip,
+      route: '/api/auth',
+    });
     return NextResponse.json(
       { error: 'Too many attempts. Try again in 1 minute.' },
       { status: 429 }
@@ -43,10 +54,37 @@ export async function POST(request: NextRequest) {
     for (const entry of entries) {
       if (await bcrypt.compare(pin, entry.hash)) {
         const token = createSessionToken(entry.name);
+
+        // Log success + (user, ip) novelty check (fire-and-forget)
+        void logSecurityEvent({
+          event_type: 'admin_login_success',
+          severity: 'info',
+          ip,
+          user_name: entry.name,
+          route: '/api/auth',
+        });
+        recordAdminIp(entry.name, ip).then((novel) => {
+          if (novel) {
+            void logSecurityEvent({
+              event_type: 'new_admin_ip',
+              severity: 'warn',
+              ip,
+              user_name: entry.name,
+              route: '/api/auth',
+            });
+          }
+        });
+
         return NextResponse.json({ name: entry.name, token });
       }
     }
 
+    void logSecurityEvent({
+      event_type: 'failed_admin_login',
+      severity: 'warn',
+      ip,
+      route: '/api/auth',
+    });
     return NextResponse.json({ error: 'Wrong PIN' }, { status: 401 });
   } catch {
     return NextResponse.json({ error: 'Bad request' }, { status: 400 });
