@@ -47,9 +47,18 @@ const FAQS = [
   },
 ];
 
-export default function ShopClient({ initialItems, initialCategory }: { initialItems: ShopItem[]; initialCategory: string }) {
+export default function ShopClient({
+  initialItems,
+  initialCategory,
+  basePath = '/shop',
+}: {
+  initialItems: ShopItem[];
+  initialCategory: string;
+  basePath?: '/' | '/shop';
+}) {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const isHome = basePath === '/';
   const [items, setItems] = useState<ShopItem[]>(initialItems);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState(searchParams.get('q') || '');
@@ -101,21 +110,23 @@ export default function ShopClient({ initialItems, initialCategory }: { initialI
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchItems]);
 
+  const writeUrl = (cat: string, q: string) => {
+    const params = new URLSearchParams();
+    if (cat) params.set('category', cat);
+    if (q.trim()) params.set('q', q.trim());
+    const qs = params.toString();
+    router.replace(qs ? `${basePath}?${qs}` : basePath);
+  };
+
   const handleCategoryClick = (slug: string) => {
     const newCat = activeCategory === slug ? '' : slug;
     setActiveCategory(newCat);
-    const params = new URLSearchParams();
-    if (newCat) params.set('category', newCat);
-    if (search) params.set('q', search);
-    router.replace(`/shop?${params.toString()}`);
+    writeUrl(newCat, search);
   };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    const params = new URLSearchParams();
-    if (activeCategory) params.set('category', activeCategory);
-    if (search.trim()) params.set('q', search.trim());
-    router.replace(`/shop?${params.toString()}`);
+    writeUrl(activeCategory, search);
   };
 
   // JSON-LD is now rendered server-side, so we only need the dynamic ItemList here
@@ -160,30 +171,44 @@ export default function ShopClient({ initialItems, initialCategory }: { initialI
       )}
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Breadcrumbs */}
-        <nav
-          aria-label="Breadcrumb"
-          className="flex items-center gap-1.5 text-sm text-muted mb-4"
-        >
-          <Link href="/" className="hover:text-black transition-colors">
-            Home
-          </Link>
-          <ChevronRight size={14} />
-          <Link
-            href="/shop"
-            className={`hover:text-black transition-colors ${
-              !activeCategory ? 'text-black font-medium' : ''
-            }`}
+        {/* Breadcrumbs — hidden on /, visible on /shop and /shop?category=… */}
+        {!isHome && (
+          <nav
+            aria-label="Breadcrumb"
+            className="flex items-center gap-1.5 text-sm text-muted mb-4"
           >
-            Shop
-          </Link>
-          {catName && (
-            <>
-              <ChevronRight size={14} />
-              <span className="text-black font-medium">{catName}</span>
-            </>
-          )}
-        </nav>
+            <Link href="/" className="hover:text-black transition-colors">
+              Home
+            </Link>
+            <ChevronRight size={14} />
+            <Link
+              href="/shop"
+              className={`hover:text-black transition-colors ${
+                !activeCategory ? 'text-black font-medium' : ''
+              }`}
+            >
+              Shop
+            </Link>
+            {catName && (
+              <>
+                <ChevronRight size={14} />
+                <span className="text-black font-medium">{catName}</span>
+              </>
+            )}
+          </nav>
+        )}
+        {isHome && catName && (
+          <nav
+            aria-label="Breadcrumb"
+            className="flex items-center gap-1.5 text-sm text-muted mb-4"
+          >
+            <Link href="/" className="hover:text-black transition-colors">
+              Home
+            </Link>
+            <ChevronRight size={14} />
+            <span className="text-black font-medium">{catName}</span>
+          </nav>
+        )}
 
         {/* H1 — dynamic */}
         <div className="mb-6">
