@@ -73,17 +73,7 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Shop
 
   return (
     <div className="min-h-screen bg-white">
-      {/* 0A. HERO HEADLINE */}
-      <section className="w-full py-10 px-4 text-center" style={{ background: '#111' }}>
-        <h1 className="font-heading text-3xl md:text-5xl font-black tracking-tight leading-tight" style={{ color: '#F9D923' }}>
-          UAE&apos;S LARGEST USED GOODS MARKET
-        </h1>
-        <p className="mt-3 text-base md:text-lg font-semibold" style={{ color: '#F9D923', opacity: 0.85 }}>
-          Since 2009 &middot; Furniture, Appliances &amp; More &middot; New Arrivals Daily
-        </p>
-      </section>
-
-      {/* 0B. TRUST STRIP — Section 2.7 (5 items, reusable) */}
+      {/* TRUST STRIP — Section 2.7 (5 items, reusable) */}
       <TrustStrip />
 
       {/* 1. HEADER */}
