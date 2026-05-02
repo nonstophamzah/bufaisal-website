@@ -179,9 +179,16 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Shop
                     <Link href={`/item/${item.id}`}>
                       <p className="text-sm font-semibold line-clamp-2 leading-tight min-h-[2.5rem]">{item.item_name}</p>
                     </Link>
-                    <p className="font-heading text-lg mt-0.5">
-                      {hasPrice ? `AED ${item.sale_price}` : <span className="text-gray-400">Ask Price</span>}
-                    </p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <p className="font-heading text-lg">
+                        {hasPrice ? `AED ${item.sale_price}` : <span className="text-gray-400">Ask Price</span>}
+                      </p>
+                      {hasPrice && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-yellow text-black">
+                          Negotiable
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[10px] text-gray-400 mt-0.5">Only 1 &bull; First come first serve</p>
                     <button
                       onClick={(e) => handleWhatsApp(item, e)}

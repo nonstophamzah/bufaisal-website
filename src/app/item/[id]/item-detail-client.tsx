@@ -161,10 +161,10 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
 
             <div className="flex items-center gap-2 mb-4">
               <span className="font-heading text-2xl">
-                {item.sale_price ? `${item.sale_price} AED` : 'Ask for price'}
+                {item.sale_price ? `AED ${item.sale_price}` : 'Ask for price'}
               </span>
               {!!item.sale_price && (
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#F9D923', color: '#111' }}>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-yellow text-black">
                   Negotiable
                 </span>
               )}
