@@ -158,6 +158,7 @@ export function AdminItems({
 
                   {editingId === item.id && (
                     <EditPanel
+                      itemId={item.id}
                       editForm={editForm}
                       setEditForm={setEditForm}
                       onSave={onSaveEdit}

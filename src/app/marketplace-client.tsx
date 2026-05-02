@@ -152,7 +152,7 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Shop
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 px-3">
             {filtered.slice(0, visible).map((item, idx) => {
               const img = item.thumbnail_url || item.image_urls?.[0];
-              const hasPrice = item.sale_price && item.sale_price > 0;
+              const hasPrice = !!(item.sale_price && item.sale_price > 0);
               return (
                 <div key={item.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
                   <Link href={`/item/${item.id}`} className="block relative aspect-square bg-gray-100">

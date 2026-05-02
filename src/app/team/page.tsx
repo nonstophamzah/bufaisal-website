@@ -137,13 +137,15 @@ export default function TeamPage() {
     e.target.value = '';
   };
 
-  // --- Helper: compress image to max 800px, JPEG quality 0.7 ---
+  // Helper: compress image to max 1200px, JPEG quality 0.85.
+  // Sprint 3 / Fix 3: bumped from 800px / 0.7 so daylight photos retain
+  // enough detail for Gemini to read brand/model labels.
   const compressImage = (url: string): Promise<{ base64: string; mimeType: string }> =>
     new Promise((resolve, reject) => {
       const img = new window.Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
-        const MAX = 800;
+        const MAX = 1200;
         let { width, height } = img;
         if (width > MAX || height > MAX) {
           if (width > height) {
@@ -160,7 +162,7 @@ export default function TeamPage() {
         const ctx = canvas.getContext('2d');
         if (!ctx) { reject(new Error('Canvas context failed')); return; }
         ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
         const b64 = dataUrl.split(',')[1];
         if (b64) resolve({ base64: b64, mimeType: 'image/jpeg' });
         else reject(new Error('Compression failed'));
@@ -169,13 +171,16 @@ export default function TeamPage() {
       img.src = url;
     });
 
-  // --- Gemini AI: scan item photo + barcode label photo ---
+  // Gemini AI: send all uploaded photos + form context for item_analysis,
+  // run a separate barcode_scan on the barcode label slot if present.
+  // Sprint 3 / Fix 3: AI now only returns title + description.
+  // Brand / category / condition stay as the worker entered them.
   const handleGeminiAI = async () => {
-    const itemPhotoUrl = imageUrls[0];
+    const allPhotos = imageUrls.filter((u) => !!u);
     const barcodePhotoUrl = imageUrls[1];
 
-    if (!itemPhotoUrl && !barcodePhotoUrl) {
-      setError('Upload at least the Item Photo or Barcode Label first');
+    if (allPhotos.length === 0) {
+      setError('Upload at least one photo first');
       return;
     }
 
@@ -183,65 +188,97 @@ export default function TeamPage() {
     setError('');
 
     try {
-      // Scan item photo for name/brand/category/condition
-      let itemResult: Record<string, string> = {};
-      if (itemPhotoUrl) {
-        const img = await compressImage(itemPhotoUrl);
-        const res = await fetch('/api/gemini', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageBase64: img.base64,
-            mimeType: img.mimeType,
-            action: 'item_analysis',
-          }),
-        });
-        const data = await res.json();
-        if (res.ok && data.text) {
+      // Compress all uploaded photos in parallel for the listing-prompt call.
+      const compressed = await Promise.all(allPhotos.map((u) => compressImage(u)));
+
+      const listingReq = fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'item_analysis',
+          images: compressed,
+          context: {
+            brand: form.brand,
+            category: form.category,
+            condition: form.condition,
+            condition_notes: form.condition_notes,
+            shop: shopLabel ? `Shop ${shopLabel}, Ajman` : 'Ajman',
+            price: form.sale_price ? Number(form.sale_price) : null,
+          },
+        }),
+      });
+
+      // Run barcode_scan in parallel if the barcode label slot is filled.
+      const barcodeReq = barcodePhotoUrl
+        ? compressImage(barcodePhotoUrl).then((img) =>
+            fetch('/api/gemini', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'barcode_scan',
+                imageBase64: img.base64,
+                mimeType: img.mimeType,
+              }),
+            })
+          )
+        : null;
+
+      const [listingRes, barcodeRes] = await Promise.all([
+        listingReq,
+        barcodeReq ?? Promise.resolve(null),
+      ]);
+
+      let listingResult: { title?: string; description?: string } = {};
+      if (listingRes.ok) {
+        const data = await listingRes.json();
+        if (data.text) {
           const match = data.text.match(/\{[\s\S]*\}/);
-          if (match) itemResult = JSON.parse(match[0]);
+          if (match) {
+            try {
+              listingResult = JSON.parse(match[0]);
+            } catch {
+              /* ignore JSON parse error — fall through to error message below */
+            }
+          }
         }
       }
 
-      // Scan barcode label for barcode number + brand
-      let barcodeResult: Record<string, string> = {};
-      if (barcodePhotoUrl) {
-        const img = await compressImage(barcodePhotoUrl);
-        const res = await fetch('/api/gemini', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageBase64: img.base64,
-            mimeType: img.mimeType,
-            action: 'barcode_scan',
-          }),
-        });
-        const data = await res.json();
-        if (res.ok && data.text) {
+      let barcodeResult: { barcode?: string } = {};
+      if (barcodeRes && barcodeRes.ok) {
+        const data = await barcodeRes.json();
+        if (data.text) {
           const match = data.text.match(/\{[\s\S]*\}/);
-          if (match) barcodeResult = JSON.parse(match[0]);
+          if (match) {
+            try {
+              barcodeResult = JSON.parse(match[0]);
+            } catch {
+              /* ignore */
+            }
+          }
         }
       }
 
-      // Merge results: barcode scan fills barcode; item scan fills everything else
+      // Apply ONLY title + description (and optionally barcode).
+      // Worker-entered brand/category/condition are NOT overwritten.
       setForm((prev) => ({
         ...prev,
-        item_name: itemResult.item_name || barcodeResult.item_name || prev.item_name,
-        brand: itemResult.brand || barcodeResult.brand || prev.brand,
-        description: itemResult.description || prev.description,
-        category: itemResult.category || prev.category,
-        condition: itemResult.condition || prev.condition,
+        item_name: listingResult.title || prev.item_name,
+        description: listingResult.description || prev.description,
+        seo_title: listingResult.title || prev.seo_title,
+        seo_description: listingResult.description || prev.seo_description,
         barcode: barcodeResult.barcode || prev.barcode,
-        seo_title: itemResult.seo_title || prev.seo_title,
-        seo_description: itemResult.seo_description || prev.seo_description,
       }));
 
-      if (!itemResult.item_name && !barcodeResult.barcode) {
-        setError('AI could not read the photos clearly. Try clearer images.');
+      // Loosened validation: only error if BOTH title and description are
+      // missing. Workers can still submit manually — AI failure is non-blocking.
+      if (!listingResult.title && !listingResult.description) {
+        setError(
+          'AI could not generate a listing from the photos. Fill the title and description manually and tap SUBMIT.'
+        );
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
-      setError(`AI scan failed: ${msg}`);
+      setError(`AI scan failed: ${msg}. You can still fill the form manually and submit.`);
     }
 
     setAiLoading(false);

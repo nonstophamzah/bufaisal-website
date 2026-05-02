@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { verifyOrigin } from '@/lib/verify-origin';
+import {
+  buildItemListingPrompt,
+  callGeminiVision,
+  type ImageInput,
+  type ListingContext,
+} from '@/lib/gemini';
 
 const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-const MAX_BASE64_SIZE = 10 * 1024 * 1024; // ~10MB base64
+const MAX_BASE64_SIZE = 12 * 1024 * 1024; // ~12MB total across all images
+const MAX_IMAGES = 4;
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,47 +33,85 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { imageBase64, mimeType, action } = await request.json();
+    const body = await request.json();
+    const { action, imageBase64, mimeType, images, context } = body as {
+      action?: string;
+      imageBase64?: string;
+      mimeType?: string;
+      images?: ImageInput[];
+      context?: ListingContext;
+    };
 
-    if (!imageBase64 || !mimeType) {
+    // Accept either the legacy single-image shape or the new multi-image shape.
+    let parsedImages: ImageInput[] = [];
+    if (Array.isArray(images) && images.length > 0) {
+      parsedImages = images.filter((img) => !!img?.base64 && !!img?.mimeType);
+    } else if (imageBase64 && mimeType) {
+      parsedImages = [{ base64: imageBase64, mimeType }];
+    }
+
+    if (parsedImages.length === 0) {
       return NextResponse.json(
-        { error: 'Missing imageBase64 or mimeType' },
+        { error: 'Missing image data — provide images[] or imageBase64+mimeType' },
         { status: 400 }
       );
     }
 
-    // Validate MIME type
-    if (!ALLOWED_MIME.includes(mimeType)) {
+    if (parsedImages.length > MAX_IMAGES) {
       return NextResponse.json(
-        { error: 'Invalid image type. Use JPEG, PNG, or WebP.' },
+        { error: `Too many images. Max ${MAX_IMAGES}.` },
         { status: 400 }
       );
     }
 
-    // Validate size
-    if (imageBase64.length > MAX_BASE64_SIZE) {
+    let totalSize = 0;
+    for (const img of parsedImages) {
+      if (!ALLOWED_MIME.includes(img.mimeType)) {
+        return NextResponse.json(
+          { error: 'Invalid image type. Use JPEG, PNG, or WebP.' },
+          { status: 400 }
+        );
+      }
+      totalSize += img.base64.length;
+    }
+    if (totalSize > MAX_BASE64_SIZE) {
       return NextResponse.json(
-        { error: 'Image too large. Max 10MB.' },
+        { error: 'Images too large. Max 12MB total.' },
         { status: 400 }
       );
     }
 
-    // All prompts defined server-side — clients select by action name
-    const PROMPTS: Record<string, string> = {
-      item_analysis: `Analyze this image of a used item for sale in a second-hand store. Return a JSON object with these fields:
-- item_name: a clear, concise name for this item
-- brand: the brand if visible, or "Unknown"
-- description: a short 1-2 sentence description of the item's condition and features
-- category: one of these exact values: "Living Room & Lounge", "Bedroom & Sleep", "Kitchen & Dining", "Appliances", "Outdoor & Garden", "Kids & Baby", "Office, Study & Fitness", "Everyday Essentials"
-- condition: one of these exact values: "Excellent", "Good", "Fair"
-- seo_title: a short SEO-friendly title for this product listing (under 60 characters)
-- seo_description: a 1-2 sentence SEO meta description for this listing
+    const prompt = buildPrompt(action, context);
 
-Return ONLY the JSON object, no other text.`,
+    // DO NOT CHANGE MODEL — paid Tier 1 account, gemini-2.5-flash-lite only.
+    const result = await callGeminiVision({
+      apiKey,
+      prompt,
+      images: parsedImages,
+    });
 
-      barcode_scan: `Read the barcode number from this label photo. Return JSON only: {"barcode": "the number or null"}`,
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
+    return NextResponse.json({ text: result.text });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown server error';
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}
 
-      spare_part_analysis: `This is a photo of a spare appliance part label (harvested from a scrap appliance). Extract the identifying info printed on the label. Return a JSON object with these fields:
+function buildPrompt(action: string | undefined, ctx: ListingContext | undefined): string {
+  if (action === 'item_analysis' || !action) {
+    return buildItemListingPrompt(ctx ?? {});
+  }
+  return STATIC_PROMPTS[action] ?? buildItemListingPrompt(ctx ?? {});
+}
+
+// Other actions kept untouched — only item_analysis got the rewrite.
+const STATIC_PROMPTS: Record<string, string> = {
+  barcode_scan: `Read the barcode number from this label photo. Return JSON only: {"barcode": "the number or null"}`,
+
+  spare_part_analysis: `This is a photo of a spare appliance part label (harvested from a scrap appliance). Extract the identifying info printed on the label. Return a JSON object with these fields:
 - part_barcode: the barcode number printed on the label, or null if unreadable
 - part_label_text: the full descriptive text printed on the label, combined into a single short string (e.g. "Compressor LG LDA-204V 220V 50Hz"). Keep it under 120 characters. Null if nothing readable.
 - part_type: best guess of what kind of part this is, from this exact list: "compressor", "motor", "pcb", "thermostat", "drum", "door_seal", "heating_element", "fan", "pump", "control_board", "valve", "sensor", "wiring", "other". Use "other" if unsure.
@@ -82,7 +127,7 @@ Rules:
 
 Return ONLY the JSON object, no other text.`,
 
-      appliance_analysis: `Analyze this image of a used appliance. Return a JSON object with these fields:
+  appliance_analysis: `Analyze this image of a used appliance. Return a JSON object with these fields:
 - product_type: one of these exact values: "Refrigerator", "Washing Machine", "Dishwasher", "Freezer", "Microwave", "Gas Stove", "Electric Stove", "Clothes Dryer", "Water Cooler", "Oven", "Air Water Cooler", "Other"
 - brand: the brand if visible, or "Unknown"
 - condition: one of these exact values: "working", "not_working", "scrap"
@@ -90,7 +135,7 @@ Return ONLY the JSON object, no other text.`,
 
 Return ONLY the JSON object, no other text.`,
 
-      diesel_plate: `This is a photo of a UAE vehicle licence plate. Extract the plate number.
+  diesel_plate: `This is a photo of a UAE vehicle licence plate. Extract the plate number.
 
 UAE plates typically show:
 - An emirate code (e.g. "AD" Abu Dhabi, "DXB" Dubai, "SHJ" Sharjah, "AJM" Ajman) or Arabic text
@@ -103,7 +148,7 @@ Return JSON only:
 If the plate is unreadable, return: {"plate_number": null, "plate_digits": null, "confidence": 0, "readable": false}
 Return ONLY the JSON object, no other text.`,
 
-      diesel_odometer: `This is a photo of a vehicle odometer reading (dashboard). Extract the total kilometers shown.
+  diesel_odometer: `This is a photo of a vehicle odometer reading (dashboard). Extract the total kilometers shown.
 
 Rules:
 - Read the "TOTAL" or main odometer (NOT the trip meter if both are visible)
@@ -116,7 +161,7 @@ Return JSON only:
 If unreadable: {"odometer_km": null, "confidence": 0, "readable": false, "notes": "why"}
 Return ONLY the JSON object, no other text.`,
 
-      diesel_pump: `This is a photo of a diesel fuel pump display at a station. Extract the liters dispensed for the current fill.
+  diesel_pump: `This is a photo of a diesel fuel pump display at a station. Extract the liters dispensed for the current fill.
 
 Rules:
 - "Liters" or "Quantity" or volume field — NOT price or rate
@@ -130,7 +175,7 @@ Return JSON only:
 If unreadable: {"liters": null, "amount_aed": null, "confidence": 0, "readable": false, "notes": "why"}
 Return ONLY the JSON object, no other text.`,
 
-      diesel_license: `This is a photo of a UAE driving licence. Extract the driver identity fields.
+  diesel_license: `This is a photo of a UAE driving licence. Extract the driver identity fields.
 
 UAE driving licences typically show (both Arabic and English):
 - Full name (English side preferred, else transliterate from Arabic)
@@ -151,41 +196,4 @@ Return JSON only:
 
 If unreadable: {"full_name": null, "full_name_arabic": null, "license_number": null, "nationality": null, "expiry_date": null, "confidence": 0, "readable": false, "notes": "why"}
 Return ONLY the JSON object, no other text.`,
-    };
-
-    const prompt = PROMPTS[action || 'item_analysis'] || PROMPTS.item_analysis;
-
-    // DO NOT CHANGE THIS MODEL — paid Tier 1 account, gemini-2.5-flash-lite only
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { text: prompt },
-                { inline_data: { mime_type: mimeType, data: imageBase64 } },
-              ],
-            },
-          ],
-        }),
-      }
-    );
-
-    const data = await res.json();
-
-    if (!res.ok || data.error) {
-      const msg = data.error?.message || `Gemini API error (${res.status})`;
-      return NextResponse.json({ error: msg }, { status: res.status });
-    }
-
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-    return NextResponse.json({ text });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Unknown server error';
-    return NextResponse.json({ error: msg }, { status: 500 });
-  }
-}
+};
