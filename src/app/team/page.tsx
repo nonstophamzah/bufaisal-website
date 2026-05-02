@@ -38,6 +38,7 @@ export default function TeamPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [priceTouched, setPriceTouched] = useState(false);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const fileInputRefs = [
     useRef<HTMLInputElement>(null),
@@ -58,6 +59,11 @@ export default function TeamPage() {
     seo_description: '',
     sale_price: '',
   });
+
+  // Architecture Section 2.2: real prices required.
+  const priceNum = Number(form.sale_price);
+  const priceValid =
+    form.sale_price.trim() !== '' && !isNaN(priceNum) && priceNum >= 1;
 
   // --- STEP 2: password validation (server-side, never exposes hashes) ---
   const handlePasswordSubmit = async () => {
@@ -341,6 +347,7 @@ export default function TeamPage() {
     setImageUrls([]);
     setSuccess(false);
     setError('');
+    setPriceTouched(false);
   };
 
   const handleLogout = () => {
@@ -679,14 +686,27 @@ export default function TeamPage() {
                 type="number"
                 inputMode="numeric"
                 min="1"
+                step="1"
                 value={form.sale_price}
                 onChange={(e) =>
                   setForm({ ...form, sale_price: e.target.value })
                 }
-                placeholder="0"
-                className="w-full px-4 py-3.5 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow"
+                onBlur={() => setPriceTouched(true)}
+                placeholder="e.g. 250"
+                className={`w-full px-4 py-3.5 text-lg border-2 rounded-xl focus:outline-none ${
+                  priceTouched && !priceValid
+                    ? 'border-red-500 focus:border-red-500'
+                    : 'border-gray-200 focus:border-yellow'
+                }`}
                 required
+                aria-invalid={priceTouched && !priceValid}
+                aria-describedby="price-help"
               />
+              {priceTouched && !priceValid && (
+                <p id="price-help" className="text-red-500 text-sm font-bold mt-1.5">
+                  Price is required (must be at least 1 AED)
+                </p>
+              )}
             </div>
 
             <div>
@@ -794,8 +814,8 @@ export default function TeamPage() {
 
           <button
             type="submit"
-            disabled={uploading}
-            className="w-full flex items-center justify-center gap-2 bg-yellow text-black font-heading text-3xl py-5 rounded-2xl active:scale-95 transition-transform disabled:opacity-50"
+            disabled={uploading || !priceValid}
+            className="w-full flex items-center justify-center gap-2 bg-yellow text-black font-heading text-3xl py-5 rounded-2xl active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {uploading ? (
               <Loader2 size={26} className="animate-spin" />
