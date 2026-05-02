@@ -1,20 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { verifyOrigin } from '@/lib/verify-origin';
+import {
+  buildItemListingPrompt,
+  callGeminiVision,
+  type ImageInput,
+  type ListingContext,
+} from '@/lib/gemini';
 
 const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_BASE64_SIZE = 12 * 1024 * 1024; // ~12MB total across all images
 const MAX_IMAGES = 4;
-
-type ImageInput = { base64: string; mimeType: string };
-type ListingContext = {
-  brand?: string | null;
-  category?: string | null;
-  condition?: string | null;
-  condition_notes?: string | null;
-  shop?: string | null;
-  price?: number | string | null;
-};
 
 export async function POST(request: NextRequest) {
   try {
@@ -87,37 +83,17 @@ export async function POST(request: NextRequest) {
 
     const prompt = buildPrompt(action, context);
 
-    // DO NOT CHANGE THIS MODEL — paid Tier 1 account, gemini-2.5-flash-lite only
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { text: prompt },
-                ...parsedImages.map((img) => ({
-                  inline_data: { mime_type: img.mimeType, data: img.base64 },
-                })),
-              ],
-            },
-          ],
-        }),
-      }
-    );
+    // DO NOT CHANGE MODEL — paid Tier 1 account, gemini-2.5-flash-lite only.
+    const result = await callGeminiVision({
+      apiKey,
+      prompt,
+      images: parsedImages,
+    });
 
-    const data = await res.json();
-
-    if (!res.ok || data.error) {
-      const msg = data.error?.message || `Gemini API error (${res.status})`;
-      return NextResponse.json({ error: msg }, { status: res.status });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
     }
-
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-    return NextResponse.json({ text });
+    return NextResponse.json({ text: result.text });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown server error';
     return NextResponse.json({ error: msg }, { status: 500 });
@@ -126,68 +102,9 @@ export async function POST(request: NextRequest) {
 
 function buildPrompt(action: string | undefined, ctx: ListingContext | undefined): string {
   if (action === 'item_analysis' || !action) {
-    return ITEM_LISTING_PROMPT(ctx ?? {});
+    return buildItemListingPrompt(ctx ?? {});
   }
-  return STATIC_PROMPTS[action] ?? ITEM_LISTING_PROMPT(ctx ?? {});
-}
-
-// New title+description-only prompt for marketplace listings.
-// Spec: SEO-AGENT.md Section 5 — "Used [Brand] [Item Type] [Key Spec]" titles.
-function ITEM_LISTING_PROMPT(ctx: ListingContext): string {
-  const fmt = (v: unknown) => {
-    if (v === null || v === undefined) return '(not provided)';
-    const s = String(v).trim();
-    return s === '' ? '(not provided)' : s;
-  };
-  const brand = fmt(ctx.brand);
-  const category = fmt(ctx.category);
-  const condition = fmt(ctx.condition);
-  const conditionNotes = fmt(ctx.condition_notes);
-  const shop = fmt(ctx.shop);
-  const price = fmt(ctx.price);
-
-  return `You write product listings for Bufaisal, a UAE used-goods marketplace based in Ajman.
-
-Worker-provided form context — treat as authoritative, do not contradict:
-- Brand: ${brand}
-- Category: ${category}
-- Condition: ${condition}
-- Condition notes: ${conditionNotes}
-- Shop location: ${shop}
-- Price (AED): ${price}
-
-Photos: 1–4 images of the same item.
-
-Generate exactly two outputs.
-
-TITLE
-- Under 60 characters.
-- Format: "Used [Brand] [Item Type] [Key Spec]".
-- Brand and item type front-loaded. Key spec is the most identifying feature: capacity for appliances ("500L", "8kg"), size for furniture ("Queen", "180cm"), screen size for TVs ("55in"), etc.
-- If brand is "(not provided)", "Unknown", or not visible in photos, omit it: "Used [Item Type] [Key Spec]".
-- Always start with the word "Used".
-
-Examples:
-- "Used Bosch Side-by-Side Refrigerator 500L"
-- "Used Samsung 8kg Front-Load Washing Machine"
-- "Used IKEA MALM Queen Bed Frame White"
-
-DESCRIPTION
-- 30–50 words, plain factual English at an 8th-grade reading level.
-- Lead with what it is and the condition.
-- State whether it has been tested, working, or repaired (use the Condition value above).
-- If condition notes is non-empty, incorporate the flaws honestly.
-- Mention the Ajman shop location and delivery to Dubai and Sharjah.
-- End the description with the exact sentence: Click WhatsApp to negotiate.
-
-Voice rules — strictly enforced:
-- No marketing words: "amazing", "stunning", "premium", "luxurious", "perfect", "incredible", "must-have", "high-quality".
-- No exclamation marks.
-- No emojis in the description text.
-- Do not mention the price in the description (price renders separately on the card).
-
-Return strict JSON only, no other text, no markdown fences:
-{"title": "string", "description": "string"}`;
+  return STATIC_PROMPTS[action] ?? buildItemListingPrompt(ctx ?? {});
 }
 
 // Other actions kept untouched — only item_analysis got the rewrite.

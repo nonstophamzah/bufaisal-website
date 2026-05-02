@@ -1,11 +1,26 @@
 'use client';
 
-import { Loader2, Save } from 'lucide-react';
+import { useState } from 'react';
+import { Loader2, Save, Sparkles, Check, X } from 'lucide-react';
 import Image from 'next/image';
 import { ShopItem } from '@/lib/supabase';
 import { CATEGORIES } from '@/lib/constants';
 
 const CONDITIONS = ['Excellent', 'Good', 'Fair'];
+
+const ADMIN_SESSION_KEY = 'admin_session';
+
+function getAdminToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(ADMIN_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.token === 'string' ? parsed.token : null;
+  } catch {
+    return null;
+  }
+}
 
 export function fmtDate(d: string | null) {
   if (!d) return '—';
@@ -59,13 +74,144 @@ export function Spinner() {
   );
 }
 
+// Sprint 3 / Fix 4: "Regenerate Title & Description with AI" button.
+// Calls /api/admin/regenerate-listing with the current edit-form context, shows
+// the suggested title + description, and lets the admin Apply or Reject before
+// the values are written to the form. Apply only mutates title/description
+// (and SEO twins) — it never overwrites brand/category/condition.
+function RegenerateListing({
+  itemId,
+  editForm,
+  onApply,
+}: {
+  itemId: string;
+  editForm: Partial<ShopItem>;
+  onApply: (title: string, description: string) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [suggestion, setSuggestion] = useState<{ title: string; description: string } | null>(null);
+
+  const run = async () => {
+    setLoading(true);
+    setError('');
+    setSuggestion(null);
+
+    const token = getAdminToken();
+    if (!token) {
+      setError('Admin session expired. Refresh and sign back in.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/admin/regenerate-listing', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          id: itemId,
+          context: {
+            brand: editForm.brand,
+            category: editForm.category,
+            condition: editForm.condition,
+            condition_notes: editForm.condition_notes,
+            price: editForm.sale_price,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || `Request failed (${res.status})`);
+      } else if (!data.title && !data.description) {
+        setError('AI returned no usable title or description.');
+      } else {
+        setSuggestion({ title: data.title || '', description: data.description || '' });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg p-3">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={run}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-black text-white text-xs font-semibold rounded-lg hover:bg-gray-800 disabled:opacity-50"
+        >
+          {loading ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <Sparkles size={14} />
+          )}
+          {loading ? 'Generating…' : 'Regenerate Title & Description with AI'}
+        </button>
+        <p className="text-[11px] text-muted hidden sm:block">
+          Reads photos + edited brand/category/condition. Suggestion shown below for review.
+        </p>
+      </div>
+
+      {error && (
+        <p className="mt-2 text-xs font-semibold text-red-600">{error}</p>
+      )}
+
+      {suggestion && (
+        <div className="mt-3 border border-yellow rounded-lg p-3 bg-yellow/5 space-y-2">
+          <div>
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-0.5">
+              Suggested title
+            </p>
+            <p className="text-sm font-semibold">{suggestion.title || <span className="text-muted italic">(none)</span>}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-0.5">
+              Suggested description
+            </p>
+            <p className="text-sm leading-relaxed">{suggestion.description || <span className="text-muted italic">(none)</span>}</p>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                onApply(suggestion.title, suggestion.description);
+                setSuggestion(null);
+              }}
+              className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700"
+            >
+              <Check size={14} /> Apply
+            </button>
+            <button
+              type="button"
+              onClick={() => setSuggestion(null)}
+              className="flex items-center gap-1 px-3 py-1.5 bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-300"
+            >
+              <X size={14} /> Reject
+            </button>
+          </div>
+          <p className="text-[10px] text-muted">
+            Apply writes the suggestion into the form. You still need to tap <span className="font-semibold">Save</span> to persist it.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function EditPanel({
+  itemId,
   editForm,
   setEditForm,
   onSave,
   onCancel,
   showPrice,
 }: {
+  itemId?: string;
   editForm: Partial<ShopItem>;
   setEditForm: React.Dispatch<React.SetStateAction<Partial<ShopItem>>>;
   onSave: () => void;
@@ -77,6 +223,21 @@ export function EditPanel({
 
   return (
     <div className="bg-gray-50 border border-gray-200 border-t-0 rounded-b-xl p-4 space-y-3">
+      {itemId && (
+        <RegenerateListing
+          itemId={itemId}
+          editForm={editForm}
+          onApply={(title, description) =>
+            setEditForm((f) => ({
+              ...f,
+              item_name: title || f.item_name,
+              description: description || f.description,
+              seo_title: title || f.seo_title,
+              seo_description: description || f.seo_description,
+            }))
+          }
+        />
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field
           label="Item Name"
