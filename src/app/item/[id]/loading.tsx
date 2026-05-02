@@ -1,6 +1,6 @@
 export default function ItemLoading() {
   return (
-    <div className="pt-20 pb-16 max-w-4xl mx-auto px-4">
+    <div className="pt-24 pb-16 max-w-4xl mx-auto px-4">
       <div className="animate-pulse space-y-6">
         {/* Image skeleton */}
         <div className="bg-gray-100 rounded-2xl aspect-square max-w-lg mx-auto" />

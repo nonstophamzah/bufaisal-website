@@ -40,7 +40,7 @@ export default async function CategoriesPage() {
   const counts = await getCategoryCounts();
 
   return (
-    <div className="pt-20 pb-16">
+    <div className="pt-24 pb-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <h1 className="font-heading text-4xl md:text-5xl mb-2">
           ALL <span className="text-yellow">CATEGORIES</span>

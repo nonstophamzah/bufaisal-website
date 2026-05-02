@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { MapPin, Phone, Clock, Truck, MessageCircle, ExternalLink } from 'lucide-react';
 import { useLang } from '@/lib/lang';
 import { trackContactClick } from '@/lib/fbpixel';
+import TrustStrip from './TrustStrip';
 
 const MAPS_URL = 'https://maps.google.com/?q=Bu+Faisal+General+Trading+Ajman';
 
@@ -12,6 +13,8 @@ export default function Footer() {
 
   return (
     <footer className="bg-black text-white">
+      {/* Trust strip — Section 2.14 (repeated at top of footer) */}
+      <TrustStrip />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand */}

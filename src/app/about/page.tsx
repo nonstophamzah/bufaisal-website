@@ -36,7 +36,7 @@ export default async function AboutPage() {
   const aboutText = await getAboutText();
 
   return (
-    <div className="pt-20 pb-16">
+    <div className="pt-24 pb-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Hero */}
         <div className="bg-black text-white rounded-2xl p-8 md:p-16 mb-12">

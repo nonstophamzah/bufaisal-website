@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Search, Menu, X, Phone } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useLang } from '@/lib/lang';
+import TrustStrip from './TrustStrip';
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -110,6 +111,9 @@ export default function Navbar() {
           </form>
         )}
       </div>
+
+      {/* Trust strip — Section 2.7 (5-item, every page) */}
+      <TrustStrip />
 
       {/* Mobile menu */}
       {menuOpen && (
