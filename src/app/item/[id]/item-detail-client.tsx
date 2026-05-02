@@ -59,7 +59,7 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
         : [];
 
   return (
-    <div className="pt-20 pb-28 md:pb-16">
+    <div className="pt-24 pb-28 md:pb-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Back */}
         <Link

@@ -9,6 +9,7 @@ import { ShopItem } from '@/lib/supabase';
 import { buildWhatsAppUrl, CATEGORIES } from '@/lib/constants';
 import { trackWhatsAppClick, trackSearch } from '@/lib/fbpixel';
 import { useLang } from '@/lib/lang';
+import TrustStrip from '@/components/TrustStrip';
 
 const CAT_PILLS = ['All', ...CATEGORIES.map((c) => c.name)];
 const BATCH = 20;
@@ -82,16 +83,8 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Shop
         </p>
       </section>
 
-      {/* 0B. TRUST BAR */}
-      <div className="w-full py-3 px-4 flex items-center justify-center gap-3 md:gap-6 text-center flex-wrap" style={{ background: '#000', color: '#F9D923' }}>
-        <span className="text-xs md:text-sm font-bold whitespace-nowrap">Since 2009</span>
-        <span className="text-xs opacity-40 text-white">|</span>
-        <span className="text-xs md:text-sm font-bold whitespace-nowrap">5 Showrooms in Ajman</span>
-        <span className="text-xs opacity-40 text-white">|</span>
-        <span className="text-xs md:text-sm font-bold whitespace-nowrap">All Items Inspected</span>
-        <span className="text-xs opacity-40 text-white">|</span>
-        <span className="text-xs md:text-sm font-bold whitespace-nowrap">24-48hr Delivery</span>
-      </div>
+      {/* 0B. TRUST STRIP — Section 2.7 (5 items, reusable) */}
+      <TrustStrip />
 
       {/* 1. HEADER */}
       <div className="sticky top-0 z-50 bg-white border-b border-gray-100 flex items-center justify-between px-4" style={{ height: 50 }}>
