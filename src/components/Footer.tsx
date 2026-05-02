@@ -26,12 +26,6 @@ export default function Footer() {
                 'أكبر سوق للمستعمل في الإمارات. نخدم العائلات منذ 2009 — توصيل في دبي وعجمان والشارقة.'
               )}
             </p>
-            <p className="text-yellow text-sm font-medium mb-4">
-              {t(
-                'Quality You Can Trust. Prices You\'ll Love.',
-                'جودة تثق بها. أسعار تحبها.'
-              )}
-            </p>
             {/* Social icons */}
             <div className="flex items-center gap-3">
               <a
