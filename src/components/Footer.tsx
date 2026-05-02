@@ -127,15 +127,6 @@ export default function Footer() {
                 <span>{t('Delivery in 24-48 hours after payment', 'توصيل خلال 24-48 ساعة بعد الدفع')}</span>
               </div>
             </div>
-
-            {/* Call Now button */}
-            <a
-              href="tel:+971585932499"
-              className="inline-flex items-center gap-2 mt-4 bg-yellow text-black font-bold text-sm px-5 py-2.5 rounded-lg hover:bg-yellow/90 transition-colors"
-            >
-              <Phone size={16} />
-              {t('Call Now', 'اتصل الآن')}
-            </a>
           </div>
         </div>
 
