@@ -26,12 +26,6 @@ export default function Footer() {
                 'أكبر سوق للمستعمل في الإمارات. نخدم العائلات منذ 2009 — توصيل في دبي وعجمان والشارقة.'
               )}
             </p>
-            <p className="text-yellow text-sm font-medium mb-4">
-              {t(
-                'Quality You Can Trust. Prices You\'ll Love.',
-                'جودة تثق بها. أسعار تحبها.'
-              )}
-            </p>
             {/* Social icons */}
             <div className="flex items-center gap-3">
               <a
@@ -133,15 +127,6 @@ export default function Footer() {
                 <span>{t('Delivery in 24-48 hours after payment', 'توصيل خلال 24-48 ساعة بعد الدفع')}</span>
               </div>
             </div>
-
-            {/* Call Now button */}
-            <a
-              href="tel:+971585932499"
-              className="inline-flex items-center gap-2 mt-4 bg-yellow text-black font-bold text-sm px-5 py-2.5 rounded-lg hover:bg-yellow/90 transition-colors"
-            >
-              <Phone size={16} />
-              {t('Call Now', 'اتصل الآن')}
-            </a>
           </div>
         </div>
 

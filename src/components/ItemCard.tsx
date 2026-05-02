@@ -101,10 +101,10 @@ export default function ItemCard({ item, priority = false }: { item: ShopItem; p
         </div>
         <div className="flex items-center gap-1.5 mt-1.5">
           <span className="font-bold text-sm">
-            {item.sale_price ? `${item.sale_price} AED` : 'Ask for price'}
+            {item.sale_price ? `AED ${item.sale_price}` : 'Ask Price'}
           </span>
           {!!item.sale_price && (
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#F9D923', color: '#111' }}>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-yellow text-black">
               Negotiable
             </span>
           )}

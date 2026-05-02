@@ -73,17 +73,7 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Shop
 
   return (
     <div className="min-h-screen bg-white">
-      {/* 0A. HERO HEADLINE */}
-      <section className="w-full py-10 px-4 text-center" style={{ background: '#111' }}>
-        <h1 className="font-heading text-3xl md:text-5xl font-black tracking-tight leading-tight" style={{ color: '#F9D923' }}>
-          UAE&apos;S LARGEST USED GOODS MARKET
-        </h1>
-        <p className="mt-3 text-base md:text-lg font-semibold" style={{ color: '#F9D923', opacity: 0.85 }}>
-          Since 2009 &middot; Furniture, Appliances &amp; More &middot; New Arrivals Daily
-        </p>
-      </section>
-
-      {/* 0B. TRUST STRIP — Section 2.7 (5 items, reusable) */}
+      {/* TRUST STRIP — Section 2.7 (5 items, reusable) */}
       <TrustStrip />
 
       {/* 1. HEADER */}
@@ -179,10 +169,16 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Shop
                     <Link href={`/item/${item.id}`}>
                       <p className="text-sm font-semibold line-clamp-2 leading-tight min-h-[2.5rem]">{item.item_name}</p>
                     </Link>
-                    <p className="font-heading text-lg mt-0.5">
-                      {hasPrice ? `AED ${item.sale_price}` : <span className="text-gray-400">Ask Price</span>}
-                    </p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">Only 1 &bull; First come first serve</p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <p className="font-heading text-lg">
+                        {hasPrice ? `AED ${item.sale_price}` : <span className="text-gray-400">Ask Price</span>}
+                      </p>
+                      {hasPrice && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-yellow text-black">
+                          Negotiable
+                        </span>
+                      )}
+                    </div>
                     <button
                       onClick={(e) => handleWhatsApp(item, e)}
                       className="w-full mt-2 py-2.5 rounded-lg bg-green-500 text-white text-sm font-bold flex items-center justify-center gap-1.5 active:scale-95 transition-transform"
