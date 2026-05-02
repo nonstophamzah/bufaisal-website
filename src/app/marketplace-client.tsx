@@ -189,7 +189,6 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Shop
                         </span>
                       )}
                     </div>
-                    <p className="text-[10px] text-gray-400 mt-0.5">Only 1 &bull; First come first serve</p>
                     <button
                       onClick={(e) => handleWhatsApp(item, e)}
                       className="w-full mt-2 py-2.5 rounded-lg bg-green-500 text-white text-sm font-bold flex items-center justify-center gap-1.5 active:scale-95 transition-transform"

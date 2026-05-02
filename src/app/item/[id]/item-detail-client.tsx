@@ -161,7 +161,7 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
 
             <div className="flex items-center gap-2 mb-4">
               <span className="font-heading text-2xl">
-                {item.sale_price ? `AED ${item.sale_price}` : 'Ask for price'}
+                {item.sale_price ? `AED ${item.sale_price}` : 'Ask Price'}
               </span>
               {!!item.sale_price && (
                 <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-yellow text-black">
