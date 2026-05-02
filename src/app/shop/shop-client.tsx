@@ -150,7 +150,7 @@ export default function ShopClient({ initialItems, initialCategory }: { initialI
   }, [catName, items]);
 
   return (
-    <div className="pt-20 pb-16">
+    <div className="pt-24 pb-16">
       {/* Dynamic ItemList JSON-LD (depends on client-side filter state) */}
       {dynamicSchema && (
         <script

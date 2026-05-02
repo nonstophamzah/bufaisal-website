@@ -1,6 +1,6 @@
 export default function ShopLoading() {
   return (
-    <div className="pt-20 pb-16 max-w-7xl mx-auto px-4">
+    <div className="pt-24 pb-16 max-w-7xl mx-auto px-4">
       <div className="animate-pulse space-y-6">
         {/* Search bar skeleton */}
         <div className="h-12 bg-gray-100 rounded-xl w-full max-w-md" />

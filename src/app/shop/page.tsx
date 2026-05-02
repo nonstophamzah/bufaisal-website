@@ -163,7 +163,7 @@ export default async function ShopPage({ searchParams }: Props) {
 
       <Suspense
         fallback={
-          <div className="pt-20 pb-16 max-w-7xl mx-auto px-4">
+          <div className="pt-24 pb-16 max-w-7xl mx-auto px-4">
             <div className="animate-pulse space-y-4">
               <div className="h-12 bg-gray-100 rounded w-64" />
               <div className="h-12 bg-gray-100 rounded w-96" />
