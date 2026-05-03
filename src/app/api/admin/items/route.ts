@@ -49,12 +49,19 @@ export async function POST(request: NextRequest) {
     }
 
     // ── APPROVE: Publish an item ──
+    // Sprint 4: also clears status (agent_drafting/pending_review) so the
+    // status column only describes items currently inside the agent pipeline.
     if (action === 'approve') {
       const { id } = body;
       if (!id) return NextResponse.json({ error: 'Missing item id' }, { status: 400 });
       const { error } = await supabaseAdmin
         .from('shop_items')
-        .update({ is_published: true, approved_by: admin, approved_at: new Date().toISOString() })
+        .update({
+          is_published: true,
+          approved_by: admin,
+          approved_at: new Date().toISOString(),
+          status: null,
+        })
         .eq('id', id);
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json({ success: true });
@@ -66,7 +73,12 @@ export async function POST(request: NextRequest) {
       if (!ids?.length) return NextResponse.json({ error: 'No items selected' }, { status: 400 });
       const { error } = await supabaseAdmin
         .from('shop_items')
-        .update({ is_published: true, approved_by: admin, approved_at: new Date().toISOString() })
+        .update({
+          is_published: true,
+          approved_by: admin,
+          approved_at: new Date().toISOString(),
+          status: null,
+        })
         .in('id', ids);
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json({ success: true });

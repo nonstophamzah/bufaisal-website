@@ -69,10 +69,45 @@ export async function POST(request: NextRequest) {
   safe.shop_label = tokenShop;
   safe.is_published = false;
   safe.is_sold = false;
+  // Sprint 4: kick off the agent pipeline. Background job will flip this to
+  // 'pending_review' (success or failure) so admins always see the item.
+  safe.status = 'agent_drafting';
 
-  const { error } = await supabaseAdmin.from('shop_items').insert(safe);
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const { data: inserted, error } = await supabaseAdmin
+    .from('shop_items')
+    .insert(safe)
+    .select('id')
+    .single();
+  if (error || !inserted) {
+    return NextResponse.json({ error: error?.message ?? 'Insert failed' }, { status: 500 });
   }
-  return NextResponse.json({ success: true });
+
+  // Fire-and-forget: kick the AI job. The worker's response does not depend
+  // on it. If JOBS_SECRET isn't configured the item just sits in
+  // agent_drafting and the admin can fill it manually — that's documented.
+  kickoffListingJob(request, inserted.id as string);
+
+  return NextResponse.json({ success: true, id: inserted.id });
+}
+
+function kickoffListingJob(request: NextRequest, itemId: string): void {
+  const secret = process.env.JOBS_SECRET;
+  if (!secret) {
+    console.warn('[team-items] JOBS_SECRET missing — agent pipeline disabled');
+    return;
+  }
+  const origin = new URL(request.url).origin;
+  // Unawaited on purpose. Vercel keeps the function alive briefly after the
+  // response, which is enough to flush the request to the network. The job
+  // route is idempotent on status, so any duplicate fires are no-ops.
+  fetch(`${origin}/api/jobs/generate-listing`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-jobs-secret': secret,
+    },
+    body: JSON.stringify({ item_id: itemId }),
+  }).catch((err) => {
+    console.error('[team-items] kickoff failed', itemId, err);
+  });
 }

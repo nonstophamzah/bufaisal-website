@@ -47,6 +47,8 @@ export interface ShopItem {
   duty_manager: string | null;
   shop_label: string | null;
   condition_notes: string | null;
+  // Sprint 4: agent-workflow status. NULL on legacy items and after approval.
+  status: 'agent_drafting' | 'pending_review' | 'sent_back' | null;
 }
 
 export interface WebsiteConfig {

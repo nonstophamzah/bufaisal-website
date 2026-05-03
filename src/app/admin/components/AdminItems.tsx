@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, X, Eye, EyeOff, Pencil, Star, Trash2, Undo2, MousePointerClick } from 'lucide-react';
+import { Check, X, Eye, EyeOff, Pencil, Star, Trash2, Undo2, MousePointerClick, Sparkles } from 'lucide-react';
 import { ShopItem } from '@/lib/supabase';
 import {
   Thumb,
@@ -110,9 +110,20 @@ export function AdminItems({
                     />
                     <Thumb item={item} />
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-sm truncate">
-                        {item.item_name}
-                      </h3>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <h3 className="font-semibold text-sm truncate">
+                          {item.item_name}
+                        </h3>
+                        {item.status === 'agent_drafting' && (
+                          <span
+                            title="Background AI job is generating the title and description. Refresh in ~30s."
+                            className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-yellow/20 text-yellow-700 border border-yellow/40 flex-shrink-0"
+                          >
+                            <Sparkles size={10} className="animate-pulse" />
+                            AI generating…
+                          </span>
+                        )}
+                      </div>
                       <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                         <span className="text-xs text-muted">{item.category}</span>
                         <ConditionBadge condition={item.condition} />

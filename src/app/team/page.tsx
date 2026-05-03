@@ -560,15 +560,16 @@ export default function TeamPage() {
   // =========================================================
   if (success) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center px-4">
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center px-4 text-center">
         <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mb-6">
           <Check size={44} className="text-white" />
         </div>
-        <h1 className="font-heading text-4xl text-white text-center mb-2">
-          UPLOADED!
-        </h1>
-        <p className="text-gray-400 text-lg text-center mb-10">
-          Item sent for admin approval
+        <h1 className="font-heading text-4xl text-white mb-3">SUBMITTED!</h1>
+        <p className="text-gray-300 text-lg max-w-md mb-2">
+          AI is preparing the listing.
+        </p>
+        <p className="text-gray-500 text-base max-w-md mb-10">
+          Admin will review shortly. You can upload another item now.
         </p>
         <button
           onClick={resetForm}
