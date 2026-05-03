@@ -3,10 +3,10 @@ import { rateLimit } from '@/lib/rate-limit';
 import { verifyOrigin } from '@/lib/verify-origin';
 import {
   buildItemListingPrompt,
-  callGeminiVision,
+  callAIVision,
   type ImageInput,
   type ListingContext,
-} from '@/lib/gemini';
+} from '@/lib/ai';
 
 const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_BASE64_SIZE = 12 * 1024 * 1024; // ~12MB total across all images
@@ -25,10 +25,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Too many requests. Wait a minute.' }, { status: 429 });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'Gemini API key not configured on server' },
+        { error: 'AI API key not configured on server' },
         { status: 500 }
       );
     }
@@ -83,8 +83,7 @@ export async function POST(request: NextRequest) {
 
     const prompt = buildPrompt(action, context);
 
-    // DO NOT CHANGE MODEL — paid Tier 1 account, gemini-2.5-flash-lite only.
-    const result = await callGeminiVision({
+    const result = await callAIVision({
       apiKey,
       prompt,
       images: parsedImages,

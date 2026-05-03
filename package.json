@@ -12,6 +12,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.92.0",
     "@supabase/supabase-js": "^2.100.1",
     "bcryptjs": "^3.0.3",
     "google-auth-library": "^10.6.2",
