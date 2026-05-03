@@ -69,20 +69,42 @@ export const SHOPS = [
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '971585932499';
 
+// PR #12: prefill format depends on item.negotiable.
+// - true (default): "and want to negotiate" — keeps the existing tone
+// - false: neutral "saw this on bufaisal.ae" opener
+// Then both versions append the same emoji block (item / price / shop /
+// barcode), with each line skipped if the underlying value is missing.
+// `category` is accepted for backwards compatibility with older callers
+// but is no longer included in the message body.
 export function buildWhatsAppUrl(item: {
   id?: string;
   item_name: string;
   category?: string;
   shop_source?: string | null;
+  sale_price?: number | null;
+  barcode?: string | null;
+  negotiable?: boolean | null;
 }) {
-  const shopText = item.shop_source ? ` at ${item.shop_source}` : '';
-  const catText = item.category ? ` (${item.category})` : '';
-  const lines = [
-    `Hi, I'm interested in *${item.item_name}*${catText}${shopText}. Is this still available?`,
-  ];
-  if (item.id) {
-    lines.push(`View: https://bufaisal.ae/item/${item.id}`);
+  const isNegotiable = item.negotiable !== false;
+  const opener = isNegotiable
+    ? 'Hi! I saw this on bufaisal.ae and want to negotiate. Is it still available?'
+    : 'Hi! I saw this on bufaisal.ae. Is it still available?';
+
+  const lines: string[] = [opener, ''];
+  lines.push(`📦 ${item.item_name}`);
+  if (item.sale_price && item.sale_price > 0) {
+    lines.push(`💰 ${item.sale_price} AED`);
   }
+  if (item.shop_source) {
+    lines.push(`📍 ${item.shop_source}`);
+  }
+  if (item.barcode) {
+    lines.push(`🔖 ${item.barcode}`);
+  }
+  if (item.id) {
+    lines.push('', `https://bufaisal.ae/item/${item.id}`);
+  }
+
   const message = lines.join('\n');
   return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
 }

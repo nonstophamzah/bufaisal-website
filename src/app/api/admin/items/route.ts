@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
       const allowed = [
         'item_name', 'brand', 'category', 'condition', 'description',
         'sale_price', 'barcode', 'product_type', 'seo_title',
-        'seo_description', 'is_featured',
+        'seo_description', 'is_featured', 'negotiable',
       ];
       const safeUpdates: Record<string, unknown> = {};
       for (const key of allowed) {

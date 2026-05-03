@@ -66,16 +66,26 @@ export default async function ItemDetailPage({ params }: Props) {
   // Increment views server-side (fire-and-forget)
   getSupabase().rpc('increment_views', { item_id: id }).then(() => {});
 
-  // Product JSON-LD structured data for Google Shopping / rich results
+  // Product JSON-LD structured data for Google Shopping / rich results.
+  // PR #12: append a short note to the schema description (NOT the
+  // page description) so search results can hint at negotiability.
+  // Schema.org has no official negotiable signal; this is the
+  // simplest approach Google reliably surfaces.
   const image = item.thumbnail_url || item.image_urls?.[0];
+  const baseDescription =
+    item.seo_description ||
+    item.description ||
+    `${item.item_name} available at Bu Faisal second-hand store.`;
+  const isNegotiable = item.negotiable !== false;
+  const schemaDescription = isNegotiable
+    ? `${baseDescription} Price is negotiable.`
+    : baseDescription;
+
   const productSchema = {
     '@context': 'https://schema.org',
     '@type': 'Product',
     name: item.item_name,
-    description:
-      item.seo_description ||
-      item.description ||
-      `${item.item_name} available at Bu Faisal second-hand store.`,
+    description: schemaDescription,
     ...(image && { image: [image] }),
     ...(item.brand && item.brand !== 'Other' && {
       brand: { '@type': 'Brand', name: item.brand },

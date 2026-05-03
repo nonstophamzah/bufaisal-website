@@ -127,6 +127,14 @@ export function AdminItems({
                       <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                         <span className="text-xs text-muted">{item.category}</span>
                         <ConditionBadge condition={item.condition} />
+                        {item.negotiable === false && (
+                          <span
+                            title="Price is at the floor — customer sees a Starting Price pill, not Negotiable."
+                            className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-200 text-gray-700"
+                          >
+                            Starting Price
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-muted mt-0.5">
                         {item.shop_source || item.shop_label || '—'} &bull;{' '}
@@ -225,6 +233,14 @@ export function AdminItems({
                         <MousePointerClick size={12} /> {item.whatsapp_clicks}
                       </span>
                       <ConditionBadge condition={item.condition} />
+                      {item.negotiable === false && (
+                        <span
+                          title="Price is at the floor — customer sees a Starting Price pill, not Negotiable."
+                          className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-200 text-gray-700"
+                        >
+                          Starting Price
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-1.5 flex-shrink-0">

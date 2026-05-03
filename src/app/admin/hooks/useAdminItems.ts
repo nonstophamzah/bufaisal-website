@@ -141,6 +141,9 @@ export function useAdminItems(
       seo_title: item.seo_title || '',
       seo_description: item.seo_description || '',
       is_featured: item.is_featured,
+      // Pre-PR-#12 rows may come back without the column; treat undefined
+      // as negotiable so the toggle starts in the safe default state.
+      negotiable: item.negotiable !== false,
     });
   }, []);
 
@@ -162,6 +165,7 @@ export function useAdminItems(
       seo_title: editForm.seo_title || null,
       seo_description: editForm.seo_description || null,
       is_featured: editForm.is_featured ?? false,
+      negotiable: editForm.negotiable ?? true,
     });
     if (result.error) {
       onToast('err', result.error);

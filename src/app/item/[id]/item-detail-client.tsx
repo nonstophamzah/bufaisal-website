@@ -164,9 +164,15 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
                 {item.sale_price ? `AED ${item.sale_price}` : 'Ask Price'}
               </span>
               {!!item.sale_price && (
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-yellow text-black">
-                  Negotiable
-                </span>
+                item.negotiable === false ? (
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-700">
+                    Starting Price
+                  </span>
+                ) : (
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-yellow text-black">
+                    Negotiable
+                  </span>
+                )
               )}
             </div>
 
@@ -241,9 +247,7 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
       {/* Sticky WhatsApp circle button — bottom right */}
       {!item.is_sold && (
         <a
-          href={`https://wa.me/971585932499?text=${encodeURIComponent(
-            `Hi, I'm interested in *${item.item_name}*${item.barcode ? ` (Barcode: ${item.barcode})` : ''}. Is this still available?\nhttps://bufaisal.ae/item/${item.id}`
-          )}`}
+          href={buildWhatsAppUrl(item)}
           target="_blank"
           rel="noopener noreferrer"
           onClick={() => {
