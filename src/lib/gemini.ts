@@ -1,7 +1,14 @@
-// Shared Gemini helpers used by /api/gemini (worker /team flow) and
-// /api/admin/regenerate-listing (admin "regenerate" button on existing items).
+// Shared Gemini helpers used by /api/gemini (worker /team flow),
+// /api/admin/regenerate-listing (admin "regenerate" button), and
+// /api/jobs/generate-listing (background AI job from Sprint 4).
+//
 // The new item_analysis prompt follows SEO-AGENT.md §5: title format
 // "Used [Brand] [Item Type] [Key Spec]", description 30-50 words, no fluff.
+//
+// Sprint 4 hotfix: every function in this file is defensive — no path
+// throws to the caller. callGeminiVision returns a discriminated result;
+// the parsers return null on any failure and console.error a preview of
+// the raw response so future failures are debuggable from Vercel logs.
 
 export type ImageInput = { base64: string; mimeType: string };
 
@@ -12,6 +19,11 @@ export type ListingContext = {
   condition_notes?: string | null;
   shop?: string | null;
   price?: number | string | null;
+};
+
+export type ListingOutput = {
+  title: string | null;
+  description: string | null;
 };
 
 export const GEMINI_MODEL = 'gemini-2.5-flash-lite';
@@ -70,57 +82,179 @@ Voice rules — strictly enforced:
 - No emojis in the description text.
 - Do not mention the price in the description (price renders separately on the card).
 
-Return strict JSON only, no other text, no markdown fences:
-{"title": "string", "description": "string"}`;
+Output format — strictly enforced:
+Return ONLY valid JSON with no markdown code fences, no preamble, no explanation, no trailing prose. Use this exact shape:
+{"title": "...", "description": "..."}
+
+If you cannot generate a usable listing from the photos (image is unreadable, content is not a sellable item, etc.), return:
+{"title": null, "description": null}`;
 }
 
-// Calls Gemini with a prompt + multiple inline images. Returns the raw text
-// response (caller is responsible for JSON parsing). Throws on transport error.
+// Calls Gemini with a prompt + multiple inline images. Never throws —
+// transport / parse / Gemini-error failures are all converted into
+// { ok: false, error, status }.
+//
+// Sprint 4 hotfix: also requests responseMimeType=application/json so
+// Gemini emits raw JSON instead of markdown-fenced text.
 export async function callGeminiVision(opts: {
   apiKey: string;
   prompt: string;
   images: ImageInput[];
 }): Promise<{ ok: boolean; text: string; status: number; error?: string }> {
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${opts.apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: opts.prompt },
-              ...opts.images.map((img) => ({
-                inline_data: { mime_type: img.mimeType, data: img.base64 },
-              })),
-            ],
+  let res: Response;
+  try {
+    res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${opts.apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { text: opts.prompt },
+                ...opts.images.map((img) => ({
+                  inline_data: { mime_type: img.mimeType, data: img.base64 },
+                })),
+              ],
+            },
+          ],
+          generationConfig: {
+            responseMimeType: 'application/json',
           },
-        ],
-      }),
-    }
-  );
+        }),
+      }
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Gemini transport error';
+    console.error('[gemini] fetch threw', err);
+    return { ok: false, text: '', status: 0, error: msg };
+  }
 
-  const data = await res.json();
-  if (!res.ok || data.error) {
+  // Read body as text first so we can log it on parse failure.
+  const rawBody = await res.text().catch(() => '');
+
+  let data: unknown;
+  try {
+    data = JSON.parse(rawBody);
+  } catch {
+    console.error('[gemini] non-JSON response body', {
+      status: res.status,
+      preview: rawBody.slice(0, 800),
+    });
     return {
       ok: false,
       text: '',
       status: res.status,
-      error: data.error?.message || `Gemini API error (${res.status})`,
+      error: `Gemini returned non-JSON (HTTP ${res.status})`,
     };
   }
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+  const obj = (data ?? {}) as Record<string, unknown>;
+  const errObj = obj.error as { message?: string } | undefined;
+  if (!res.ok || errObj) {
+    const msg = errObj?.message || `Gemini API error (${res.status})`;
+    console.error('[gemini] api error', { status: res.status, error: msg });
+    return { ok: false, text: '', status: res.status, error: msg };
+  }
+
+  const candidates = obj.candidates as Array<{
+    content?: { parts?: Array<{ text?: string }> };
+    finishReason?: string;
+  }> | undefined;
+  const text = candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  const finishReason = candidates?.[0]?.finishReason;
+
+  if (!text) {
+    // 200 with empty candidates — typically a safety filter rejection.
+    console.error('[gemini] empty candidate text', {
+      finishReason,
+      preview: rawBody.slice(0, 800),
+    });
+    return {
+      ok: false,
+      text: '',
+      status: res.status,
+      error: `Gemini returned no text (finishReason: ${finishReason ?? 'unknown'})`,
+    };
+  }
+
   return { ok: true, text, status: 200 };
 }
 
-// Pull `{...}` out of a Gemini response that may have stray prose around it.
+// Strip markdown code fences and surrounding whitespace if present.
+function stripMarkdownFences(text: string): string {
+  let s = text.trim();
+  // Leading ```json or ```
+  s = s.replace(/^```(?:json)?\s*\n?/i, '');
+  // Trailing ```
+  s = s.replace(/\n?\s*```\s*$/i, '');
+  return s.trim();
+}
+
+// Multi-strategy JSON object extractor. Returns null on any failure and
+// logs a preview of the raw text so future failures are debuggable.
 export function extractJsonObject(text: string): unknown | null {
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) return null;
+  if (!text || typeof text !== 'string') return null;
+
+  const stripped = stripMarkdownFences(text);
+
+  // Strategy 1: direct parse on the stripped text.
   try {
-    return JSON.parse(match[0]);
+    return JSON.parse(stripped);
   } catch {
-    return null;
+    /* fallthrough */
   }
+
+  // Strategy 2: regex-extract the first {...} block (greedy, last brace).
+  const match = stripped.match(/\{[\s\S]*\}/);
+  if (match) {
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      /* fallthrough */
+    }
+  }
+
+  console.error('[gemini] extractJsonObject failed', { preview: text.slice(0, 500) });
+  return null;
+}
+
+// Parse a {title, description} listing response from Gemini, with multiple
+// fallbacks. Returns { title: null, description: null } if every strategy
+// fails, never throws.
+//
+// 1. JSON.parse on the stripped text (covers JSON-mode happy path)
+// 2. Regex {...} block + JSON.parse (covers prose around JSON)
+// 3. "Title:" / "Description:" plain-text labels (covers prose-only output)
+export function parseListingResponse(text: string): ListingOutput {
+  const out: ListingOutput = { title: null, description: null };
+  if (!text || typeof text !== 'string') return out;
+
+  const obj = extractJsonObject(text);
+  if (obj && typeof obj === 'object') {
+    const o = obj as Record<string, unknown>;
+    if (typeof o.title === 'string' && o.title.trim()) out.title = o.title.trim();
+    if (typeof o.description === 'string' && o.description.trim()) {
+      out.description = o.description.trim();
+    }
+    if (out.title || out.description) return out;
+  }
+
+  // Plain-text fallback. Captures lines like:
+  //   Title: Used Bosch Refrigerator 500L
+  //   Description: Working condition. ...
+  const titleMatch = text.match(/^\s*(?:title|TITLE)\s*[:\-]\s*(.+?)\s*$/im);
+  const descMatch = text.match(
+    /(?:^|\n)\s*(?:description|DESCRIPTION)\s*[:\-]\s*([\s\S]+?)(?=\n\s*[A-Z][a-z]+\s*[:\-]|$)/i
+  );
+  if (titleMatch) out.title = titleMatch[1].trim() || null;
+  if (descMatch) out.description = descMatch[1].trim() || null;
+
+  if (!out.title && !out.description) {
+    console.error('[gemini] parseListingResponse: no usable output', {
+      preview: text.slice(0, 500),
+    });
+  }
+  return out;
 }
