@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import {
   buildItemListingPrompt,
   callGeminiVision,
-  extractJsonObject,
+  parseListingResponse,
   type ImageInput,
   type ListingContext,
 } from '@/lib/gemini';
@@ -85,44 +85,62 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, applied: false, reason: 'no_photos' });
   }
 
-  // Fetch images. If any single image fails we still try the rest.
-  const fetched = await Promise.allSettled(urls.map(fetchImageAsBase64));
-  const images: ImageInput[] = [];
-  for (const r of fetched) {
-    if (r.status === 'fulfilled') images.push(r.value);
+  // Sprint 4 hotfix: wrap everything from here in try/catch. The contract
+  // is: if we set status=agent_drafting on insert, this job MUST flip it
+  // to pending_review or items get stuck in the queue forever. Any thrown
+  // error is caught, logged, and falls through to a pending_review write
+  // so the admin can fill the listing manually.
+  try {
+    const fetched = await Promise.allSettled(urls.map(fetchImageAsBase64));
+    const images: ImageInput[] = [];
+    for (const r of fetched) {
+      if (r.status === 'fulfilled') images.push(r.value);
+      else console.error('[generate-listing] image fetch rejected', itemId, r.reason);
+    }
+    if (images.length === 0) {
+      await markPendingReview(itemId, null, null, 'image_fetch_failed');
+      return NextResponse.json({ ok: true, applied: false, reason: 'image_fetch_failed' });
+    }
+
+    const context: ListingContext = {
+      brand: item.brand,
+      category: item.category,
+      condition: item.condition,
+      condition_notes: item.condition_notes,
+      shop: item.shop_source ?? 'Ajman',
+      price: item.sale_price,
+    };
+
+    const prompt = buildItemListingPrompt(context);
+    const result = await callGeminiVision({ apiKey, prompt, images });
+
+    if (!result.ok) {
+      console.error('[generate-listing] gemini error', itemId, result.error);
+      await markPendingReview(itemId, null, null, `gemini_error:${result.status}`);
+      return NextResponse.json({ ok: true, applied: false, reason: 'gemini_error' });
+    }
+
+    const parsed = parseListingResponse(result.text);
+    if (!parsed.title && !parsed.description) {
+      console.error('[generate-listing] no usable output for', itemId, {
+        preview: result.text.slice(0, 500),
+      });
+      await markPendingReview(itemId, null, null, 'no_usable_output');
+      return NextResponse.json({ ok: true, applied: false, reason: 'no_usable_output' });
+    }
+
+    await markPendingReview(itemId, parsed.title, parsed.description, null);
+    return NextResponse.json({ ok: true, applied: true });
+  } catch (err) {
+    console.error('[generate-listing] unexpected error', itemId, err);
+    // Best-effort: still flip to pending_review so the item isn't stuck.
+    try {
+      await markPendingReview(itemId, null, null, 'unexpected_error');
+    } catch (markErr) {
+      console.error('[generate-listing] markPendingReview also failed', itemId, markErr);
+    }
+    return NextResponse.json({ ok: true, applied: false, reason: 'unexpected_error' });
   }
-  if (images.length === 0) {
-    await markPendingReview(itemId, null, null, 'image_fetch_failed');
-    return NextResponse.json({ ok: true, applied: false, reason: 'image_fetch_failed' });
-  }
-
-  const context: ListingContext = {
-    brand: item.brand,
-    category: item.category,
-    condition: item.condition,
-    condition_notes: item.condition_notes,
-    shop: item.shop_source ?? 'Ajman',
-    price: item.sale_price,
-  };
-
-  const prompt = buildItemListingPrompt(context);
-  const result = await callGeminiVision({ apiKey, prompt, images });
-
-  if (!result.ok) {
-    console.error('[generate-listing] gemini error', itemId, result.error);
-    await markPendingReview(itemId, null, null, `gemini_error:${result.status}`);
-    return NextResponse.json({ ok: true, applied: false, reason: 'gemini_error' });
-  }
-
-  const parsed = extractJsonObject(result.text) as { title?: string; description?: string } | null;
-  if (!parsed?.title && !parsed?.description) {
-    console.error('[generate-listing] no usable output for', itemId);
-    await markPendingReview(itemId, null, null, 'no_usable_output');
-    return NextResponse.json({ ok: true, applied: false, reason: 'no_usable_output' });
-  }
-
-  await markPendingReview(itemId, parsed.title ?? null, parsed.description ?? null, null);
-  return NextResponse.json({ ok: true, applied: true });
 }
 
 async function markPendingReview(

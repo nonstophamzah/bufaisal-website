@@ -74,6 +74,23 @@ export function Spinner() {
   );
 }
 
+// Sprint 4 hotfix: map structured failure reasons from /api/admin/regenerate-listing
+// into actionable admin-facing messages.
+function reasonToMessage(reason: string | undefined, detail?: string): string {
+  switch (reason) {
+    case 'no_photos':
+      return 'This item has no photos to regenerate from. Add at least one photo first.';
+    case 'image_fetch_failed':
+      return 'Could not download the photos from Cloudinary. Try again, or fill the title and description manually.';
+    case 'gemini_error':
+      return `AI service error${detail ? `: ${detail}` : ''}. Try again, or fill the title and description manually.`;
+    case 'ai_parse_failed':
+      return 'AI could not produce a usable listing from the photos. Fill the title and description manually.';
+    default:
+      return detail || 'AI failed. Fill the title and description manually.';
+  }
+}
+
 // Sprint 3 / Fix 4: "Regenerate Title & Description with AI" button.
 // Calls /api/admin/regenerate-listing with the current edit-form context, shows
 // the suggested title + description, and lets the admin Apply or Reject before
@@ -123,8 +140,13 @@ function RegenerateListing({
         }),
       });
       const data = await res.json();
+      // Sprint 4 hotfix: route returns 200 with { success, reason } envelope
+      // for AI/parse failures so the admin always gets a structured error
+      // instead of a generic 502.
       if (!res.ok) {
         setError(data.error || `Request failed (${res.status})`);
+      } else if (data.success === false) {
+        setError(reasonToMessage(data.reason, data.detail));
       } else if (!data.title && !data.description) {
         setError('AI returned no usable title or description.');
       } else {
