@@ -22,6 +22,7 @@ const ALLOWED_FIELDS = [
   'condition_notes',
   'seo_title',
   'seo_description',
+  'negotiable',
 ] as const;
 
 export async function POST(request: NextRequest) {
@@ -69,6 +70,10 @@ export async function POST(request: NextRequest) {
   safe.shop_label = tokenShop;
   safe.is_published = false;
   safe.is_sold = false;
+  // PR #12: server-side default. If the client omits negotiable, treat
+  // the item as negotiable (matches the database default and keeps
+  // legacy /team clients working unchanged).
+  if (typeof safe.negotiable !== 'boolean') safe.negotiable = true;
   // Sprint 4: kick off the agent pipeline. Background job will flip this to
   // 'pending_review' (success or failure) so admins always see the item.
   safe.status = 'agent_drafting';

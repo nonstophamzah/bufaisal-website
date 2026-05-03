@@ -104,9 +104,15 @@ export default function ItemCard({ item, priority = false }: { item: ShopItem; p
             {item.sale_price ? `AED ${item.sale_price}` : 'Ask Price'}
           </span>
           {!!item.sale_price && (
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-yellow text-black">
-              Negotiable
-            </span>
+            item.negotiable === false ? (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-700">
+                Starting Price
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-yellow text-black">
+                Negotiable
+              </span>
+            )
           )}
         </div>
         <button

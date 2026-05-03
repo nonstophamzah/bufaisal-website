@@ -49,6 +49,9 @@ export interface ShopItem {
   condition_notes: string | null;
   // Sprint 4: agent-workflow status. NULL on legacy items and after approval.
   status: 'agent_drafting' | 'pending_review' | 'sent_back' | null;
+  // PR #12: per-item negotiable flag. true = "Negotiable" pill (default),
+  // false = "Starting Price" pill (price is at the floor).
+  negotiable: boolean;
 }
 
 export interface WebsiteConfig {

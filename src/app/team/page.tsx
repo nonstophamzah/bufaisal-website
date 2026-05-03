@@ -58,6 +58,9 @@ export default function TeamPage() {
     seo_title: '',
     seo_description: '',
     sale_price: '',
+    // PR #12: default ON. Worker flips to OFF only when price is at the
+    // floor (item shows a "Starting Price" pill instead of "Negotiable").
+    negotiable: true,
   });
 
   // Architecture Section 2.2: real prices required.
@@ -342,6 +345,7 @@ export default function TeamPage() {
             condition_notes: form.condition_notes || null,
             seo_title: form.seo_title || null,
             seo_description: form.seo_description || null,
+            negotiable: form.negotiable,
           },
         }),
       });
@@ -380,6 +384,7 @@ export default function TeamPage() {
       seo_title: '',
       seo_description: '',
       sale_price: '',
+      negotiable: true,
     });
     setImageUrls([]);
     setSuccess(false);
@@ -745,6 +750,41 @@ export default function TeamPage() {
                   Price is required (must be at least 1 AED)
                 </p>
               )}
+            </div>
+
+            {/* PR #12: Negotiable toggle. Default ON. */}
+            <div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={form.negotiable}
+                aria-label="Price is negotiable"
+                onClick={() => setForm({ ...form, negotiable: !form.negotiable })}
+                className={`w-full flex items-center justify-between gap-3 px-4 py-3.5 rounded-xl border-2 transition-colors ${
+                  form.negotiable
+                    ? 'bg-yellow/10 border-yellow'
+                    : 'bg-gray-100 border-gray-300'
+                }`}
+              >
+                <span className="text-left">
+                  <span className="block font-bold text-base">Price is negotiable</span>
+                  <span className="block text-xs text-gray-500 mt-0.5">
+                    Off = customer sees &quot;Starting Price&quot; instead
+                  </span>
+                </span>
+                <span
+                  aria-hidden
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors flex-shrink-0 ${
+                    form.negotiable ? 'bg-yellow' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                      form.negotiable ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </span>
+              </button>
             </div>
 
             <div>

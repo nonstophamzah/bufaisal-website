@@ -174,9 +174,15 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Shop
                         {hasPrice ? `AED ${item.sale_price}` : <span className="text-gray-400">Ask Price</span>}
                       </p>
                       {hasPrice && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-yellow text-black">
-                          Negotiable
-                        </span>
+                        item.negotiable === false ? (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-700">
+                            Starting Price
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-yellow text-black">
+                            Negotiable
+                          </span>
+                        )
                       )}
                     </div>
                     <button

@@ -333,6 +333,21 @@ export function EditPanel({
           />
           Featured (pinned to top)
         </label>
+        {/* PR #12: negotiable toggle. Default true on legacy items. */}
+        <label className="flex items-start gap-2 text-sm font-medium cursor-pointer sm:col-span-2">
+          <input
+            type="checkbox"
+            checked={editForm.negotiable !== false}
+            onChange={(e) => set('negotiable', e.target.checked)}
+            className="w-4 h-4 accent-yellow mt-0.5"
+          />
+          <span>
+            <span className="block">Price is negotiable</span>
+            <span className="block text-[11px] text-muted font-normal">
+              Off = customer sees a grey &quot;Starting Price&quot; pill instead of yellow &quot;Negotiable&quot;.
+            </span>
+          </span>
+        </label>
       </div>
       <div className="flex gap-2 pt-1">
         <button
