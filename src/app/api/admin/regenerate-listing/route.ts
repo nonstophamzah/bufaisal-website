@@ -4,11 +4,11 @@ import { rateLimit } from '@/lib/rate-limit';
 import { verifyAdmin } from '@/lib/verify-admin';
 import {
   buildItemListingPrompt,
-  callGeminiVision,
+  callAIVision,
   extractJsonObject,
   type ImageInput,
   type ListingContext,
-} from '@/lib/gemini';
+} from '@/lib/ai';
 
 const MAX_IMAGES_PER_ITEM = 4;
 const MAX_BYTES_PER_IMAGE = 8 * 1024 * 1024;
@@ -31,10 +31,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Too many requests. Wait a minute.' }, { status: 429 });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
-      { error: 'Gemini API key not configured on server' },
+      { error: 'AI API key not configured on server' },
       { status: 500 }
     );
   }
@@ -88,10 +88,10 @@ export async function POST(request: NextRequest) {
   };
 
   const prompt = buildItemListingPrompt(context);
-  const result = await callGeminiVision({ apiKey, prompt, images });
+  const result = await callAIVision({ apiKey, prompt, images });
 
   if (!result.ok) {
-    return NextResponse.json({ error: result.error || 'Gemini error' }, { status: 502 });
+    return NextResponse.json({ error: result.error || 'AI error' }, { status: 502 });
   }
 
   const parsed = extractJsonObject(result.text) as { title?: string; description?: string } | null;

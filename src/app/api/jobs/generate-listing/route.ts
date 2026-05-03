@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import {
   buildItemListingPrompt,
-  callGeminiVision,
+  callAIVision,
   extractJsonObject,
   type ImageInput,
   type ListingContext,
-} from '@/lib/gemini';
+} from '@/lib/ai';
 
 // Sprint 4 / Fix 3: background AI listing generation.
 // Triggered via fire-and-forget HTTP from /api/team/items immediately after
@@ -23,8 +23,8 @@ const MAX_IMAGES_PER_ITEM = 4;
 const MAX_BYTES_PER_IMAGE = 8 * 1024 * 1024;
 const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp'];
 
-// Allow the route to run for up to 60s (default is 10s on hobby/Pro). Gemini
-// can take 20-40s on multi-image listings, plus we fetch images first.
+// Allow the route to run for up to 60s (default is 10s on hobby/Pro). Claude
+// vision can take 20-40s on multi-image listings, plus we fetch images first.
 export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
@@ -52,12 +52,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing item_id' }, { status: 400 });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    // No Gemini key — flip to pending_review with no AI content so the admin
+    // No AI key — flip to pending_review with no AI content so the admin
     // sees it and can fill manually. Don't strand the item in drafting.
-    await markPendingReview(itemId, null, null, 'gemini_key_missing');
-    return NextResponse.json({ ok: true, applied: false, reason: 'gemini_key_missing' });
+    await markPendingReview(itemId, null, null, 'ai_key_missing');
+    return NextResponse.json({ ok: true, applied: false, reason: 'ai_key_missing' });
   }
 
   // Idempotency: only process if the row is still in agent_drafting.
@@ -106,19 +106,19 @@ export async function POST(request: NextRequest) {
   };
 
   const prompt = buildItemListingPrompt(context);
-  const result = await callGeminiVision({ apiKey, prompt, images });
+  const result = await callAIVision({ apiKey, prompt, images });
 
   if (!result.ok) {
-    console.error('[generate-listing] gemini error', itemId, result.error);
-    await markPendingReview(itemId, null, null, `gemini_error:${result.status}`);
-    return NextResponse.json({ ok: true, applied: false, reason: 'gemini_error' });
+    console.error('[generate-listing] ai error', itemId, result.error);
+    await markPendingReview(itemId, null, null, `ai_error:${result.status}`);
+    return NextResponse.json({ ok: true, applied: false, reason: 'ai_error' });
   }
 
   const parsed = extractJsonObject(result.text) as { title?: string; description?: string } | null;
   if (!parsed?.title && !parsed?.description) {
     console.error('[generate-listing] no usable output for', itemId);
-    await markPendingReview(itemId, null, null, 'no_usable_output');
-    return NextResponse.json({ ok: true, applied: false, reason: 'no_usable_output' });
+    await markPendingReview(itemId, null, null, 'ai_parse_failed');
+    return NextResponse.json({ ok: true, applied: false, reason: 'ai_parse_failed' });
   }
 
   await markPendingReview(itemId, parsed.title ?? null, parsed.description ?? null, null);
