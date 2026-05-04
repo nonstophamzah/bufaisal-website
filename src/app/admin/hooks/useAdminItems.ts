@@ -3,18 +3,42 @@
 import { useState, useCallback } from 'react';
 import { ShopItem } from '@/lib/supabase';
 import * as adminApi from '@/lib/admin-api';
+import type { BulkAction, PreviousStatus } from '@/lib/admin-api';
 
 type Tab = 'pending' | 'published' | 'sold' | 'hidden';
 
-export function useAdminItems(
-  tab: Tab,
-  onToast: (type: 'ok' | 'err', msg: string) => void
-) {
+// PR #15: showToast can carry an optional onUndo callback. Settings
+// and Team hooks still call it with two arguments and stay
+// backwards-compatible.
+type ToastFn = (
+  type: 'ok' | 'err',
+  msg: string,
+  opts?: { onUndo?: () => void; durationMs?: number }
+) => void;
+
+function pastTenseLabel(action: BulkAction, count: number): string {
+  const verb =
+    action === 'approve'
+      ? 'approved'
+      : action === 'reject'
+        ? 'rejected'
+        : action === 'hide'
+          ? 'hidden'
+          : action === 'mark_sold'
+            ? 'marked as sold'
+            : action === 'mark_live'
+              ? 'moved to Live'
+              : 'deleted';
+  return `${count} item${count === 1 ? '' : 's'} ${verb}`;
+}
+
+export function useAdminItems(tab: Tab, onToast: ToastFn) {
   const [items, setItems] = useState<ShopItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<ShopItem>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState<BulkAction | null>(null);
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -197,28 +221,88 @@ export function useAdminItems(
     }
   }, [items, selected.size]);
 
-  const bulkApprove = useCallback(async () => {
-    if (selected.size === 0) return;
-    const result = await adminApi.bulkApproveItems(Array.from(selected));
-    if (result.error) {
-      onToast('err', result.error);
-    } else {
-      onToast('ok', `${selected.size} items approved`);
-      fetchItems();
-    }
-  }, [selected, fetchItems, onToast]);
+  const clearSelection = useCallback(() => {
+    setSelected(new Set());
+  }, []);
 
-  const bulkDelete = useCallback(async () => {
-    if (selected.size === 0) return;
-    if (!confirm(`Delete ${selected.size} items permanently?`)) return;
-    const result = await adminApi.bulkRejectItems(Array.from(selected));
-    if (result.error) {
-      onToast('err', result.error);
-    } else {
-      onToast('ok', `${selected.size} items deleted`);
-      fetchItems();
-    }
-  }, [selected, fetchItems, onToast]);
+  // PR #15: single bulk runner for all six actions. Optimistically
+  // removes the affected items from the current tab (they're moving
+  // to a different tab's filter or going away entirely), then puts
+  // back any items the server failed to update. The toast carries an
+  // Undo callback for non-delete actions.
+  const runBulkAction = useCallback(
+    async (action: BulkAction) => {
+      if (selected.size === 0) return;
+      const ids = Array.from(selected);
+      const idSet = new Set(ids);
+      const itemsBefore = items;
+      const selectedItems = items.filter((i) => idSet.has(i.id));
+
+      setItems((cur) => cur.filter((i) => !idSet.has(i.id)));
+      setSelected(new Set());
+      setBulkBusy(action);
+
+      try {
+        const result = await adminApi.batchAction(action, ids);
+        if (result.error) {
+          setItems(itemsBefore);
+          onToast('err', result.error);
+          return;
+        }
+
+        const successIds = new Set(
+          (result.previousStatuses ?? []).map((p) => p.itemId)
+        );
+        const failedItems = selectedItems.filter((it) => !successIds.has(it.id));
+
+        if (failedItems.length > 0) {
+          // Put items the server didn't touch back into the visible tab.
+          setItems((cur) => [...failedItems, ...cur]);
+        }
+
+        if (result.success === 0) {
+          onToast(
+            'err',
+            result.errors?.[0]?.error || 'Bulk action failed for every item'
+          );
+          return;
+        }
+
+        const undoable = action !== 'delete' && (result.previousStatuses ?? []).length > 0;
+        const baseMsg = pastTenseLabel(action, result.success);
+        const msg = result.failed
+          ? `${baseMsg} (${result.failed} failed)`
+          : baseMsg;
+
+        if (undoable) {
+          const previousStatuses = result.previousStatuses ?? [];
+          onToast('ok', msg, {
+            onUndo: async () => {
+              const undoResult = await adminApi.undoBatch(previousStatuses);
+              if (undoResult.error) {
+                onToast('err', undoResult.error);
+              } else {
+                onToast(
+                  'ok',
+                  `${undoResult.success} item${undoResult.success === 1 ? '' : 's'} restored`
+                );
+                fetchItems();
+              }
+            },
+            durationMs: 5000,
+          });
+        } else {
+          onToast('ok', msg);
+        }
+      } catch (err) {
+        setItems(itemsBefore);
+        onToast('err', err instanceof Error ? err.message : 'Network error');
+      } finally {
+        setBulkBusy(null);
+      }
+    },
+    [selected, items, fetchItems, onToast]
+  );
 
   return {
     items,
@@ -227,6 +311,7 @@ export function useAdminItems(
     editForm,
     setEditForm,
     selected,
+    bulkBusy,
     fetchItems,
     approve,
     reject,
@@ -241,7 +326,10 @@ export function useAdminItems(
     cancelEdit,
     toggleSelect,
     toggleSelectAll,
-    bulkApprove,
-    bulkDelete,
+    clearSelection,
+    runBulkAction,
   };
 }
+
+// Re-export for component consumers
+export type { BulkAction, PreviousStatus };

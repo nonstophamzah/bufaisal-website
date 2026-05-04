@@ -115,6 +115,51 @@ export async function editItem(id: string, updates: Record<string, unknown>): Pr
   return adminItemsApi({ action: 'edit', id, updates });
 }
 
+// ── PR #15: bulk operations ──
+
+export type BulkAction =
+  | 'approve'
+  | 'reject'
+  | 'hide'
+  | 'mark_sold'
+  | 'mark_live'
+  | 'delete';
+
+export type ConceptualStatus = 'pending' | 'live' | 'sold' | 'hidden';
+
+export type PreviousStatus = { itemId: string; previousStatus: ConceptualStatus };
+
+export type BatchResult = {
+  success: number;
+  failed: number;
+  errors?: Array<{ itemId: string; error: string }>;
+  previousStatuses?: PreviousStatus[];
+  action?: BulkAction;
+  error?: string;
+};
+
+async function adminBatchApi<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(body),
+  });
+  if (res.status === 401) {
+    sessionStorage.removeItem('admin_session');
+    window.location.href = '/login';
+    throw new Error('Session expired');
+  }
+  return res.json();
+}
+
+export function batchAction(action: BulkAction, itemIds: string[]): Promise<BatchResult> {
+  return adminBatchApi<BatchResult>('/api/admin/items/batch', { action, itemIds });
+}
+
+export function undoBatch(items: PreviousStatus[]): Promise<BatchResult> {
+  return adminBatchApi<BatchResult>('/api/admin/items/batch/undo', { items });
+}
+
 // ── Config operations ──
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
