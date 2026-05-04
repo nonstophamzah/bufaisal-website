@@ -32,20 +32,41 @@ type Tab =
   | 'team'
   | 'analytics';
 
+type Toast = {
+  id: number;
+  type: 'ok' | 'err';
+  msg: string;
+  onUndo?: () => void;
+};
+
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>('pending');
-  const [toast, setToast] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
   const [allItems, setAllItems] = useState<ShopItem[]>([]);
 
   // Auth hook
   const { pin, setPin, user, loginError, loginLoading, handleLogin, logout } =
     useAdminAuth();
 
-  // Toast helper
-  const showToast = useCallback((type: 'ok' | 'err', msg: string) => {
-    setToast({ type, msg });
-    setTimeout(() => setToast(null), 4000);
-  }, []);
+  // PR #15: toast can carry an optional onUndo callback. Settings/Team
+  // hooks call it with two arguments and stay backward compatible.
+  const showToast = useCallback(
+    (
+      type: 'ok' | 'err',
+      msg: string,
+      opts?: { onUndo?: () => void; durationMs?: number }
+    ) => {
+      const id = Date.now() + Math.random();
+      setToast({ id, type, msg, onUndo: opts?.onUndo });
+      const ms = opts?.durationMs ?? (opts?.onUndo ? 5000 : 4000);
+      setTimeout(() => {
+        setToast((current) => (current?.id === id ? null : current));
+      }, ms);
+    },
+    []
+  );
+
+  const dismissToast = useCallback(() => setToast(null), []);
 
   // Items hook
   const itemsHook = useAdminItems(
@@ -166,13 +187,36 @@ export default function AdminPage() {
       {/* Toast */}
       {toast && (
         <div
-          className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl text-sm font-semibold shadow-lg ${
+          role="status"
+          aria-live="polite"
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-xl text-sm font-semibold shadow-lg max-w-[90vw] ${
             toast.type === 'ok'
               ? 'bg-green-600 text-white'
               : 'bg-red-600 text-white'
           }`}
         >
-          {toast.msg}
+          <span>{toast.msg}</span>
+          {toast.onUndo && (
+            <button
+              type="button"
+              onClick={() => {
+                const fn = toast.onUndo;
+                dismissToast();
+                fn?.();
+              }}
+              className="px-3 py-1 rounded-md bg-white/15 hover:bg-white/25 text-white text-xs font-bold transition-colors"
+            >
+              Undo
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={dismissToast}
+            aria-label="Dismiss"
+            className="text-white/70 hover:text-white"
+          >
+            ×
+          </button>
         </div>
       )}
       <div className="max-w-6xl mx-auto px-4">
@@ -227,6 +271,7 @@ export default function AdminPage() {
             editForm={itemsHook.editForm}
             setEditForm={itemsHook.setEditForm}
             selected={itemsHook.selected}
+            bulkBusy={itemsHook.bulkBusy}
             onApprove={itemsHook.approve}
             onReject={itemsHook.reject}
             onMarkSold={itemsHook.markSold}
@@ -240,8 +285,8 @@ export default function AdminPage() {
             onCancelEdit={itemsHook.cancelEdit}
             onToggleSelect={itemsHook.toggleSelect}
             onToggleSelectAll={itemsHook.toggleSelectAll}
-            onBulkApprove={itemsHook.bulkApprove}
-            onBulkDelete={itemsHook.bulkDelete}
+            onClearSelection={itemsHook.clearSelection}
+            onRunBulkAction={itemsHook.runBulkAction}
           />
         )}
 
