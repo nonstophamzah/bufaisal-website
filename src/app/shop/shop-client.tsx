@@ -2,9 +2,8 @@
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import Image from 'next/image';
 import Link from 'next/link';
-import { Search, X, ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
+import { Search, X, ChevronDown, ChevronRight } from 'lucide-react';
 import ItemCard from '@/components/ItemCard';
 import { supabase, ShopItem } from '@/lib/supabase';
 import { CATEGORIES, CATEGORY_SLUG_MAP } from '@/lib/constants';
@@ -27,6 +26,35 @@ const CATEGORY_INTROS: Record<string, string> = {
   'everyday-essentials':
     'Bags, shoes, clothes, books, and everyday accessories at unbeatable prices. New items added daily across all 5 Bu Faisal shops in Ajman.',
 };
+
+// PR #14: pill-shaped bubble for the horizontal category bar. Yellow
+// fill when selected, light grey when not. min-h-[44px] keeps the tap
+// target at the iOS guideline minimum on mobile.
+function CategoryBubble({
+  label,
+  selected,
+  onClick,
+}: {
+  label: string;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={selected}
+      onClick={onClick}
+      className={`min-h-[44px] flex-shrink-0 rounded-full px-4 text-sm font-semibold whitespace-nowrap transition-colors ${
+        selected
+          ? 'bg-yellow text-black'
+          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
 
 const FAQS = [
   {
@@ -64,7 +92,6 @@ export default function ShopClient({
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [activeCategory, setActiveCategory] = useState(initialCategory);
   const [sortBy, setSortBy] = useState('newest');
-  const [showCategories, setShowCategories] = useState(true);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   const catName = activeCategory ? CATEGORY_SLUG_MAP[activeCategory] : '';
@@ -264,28 +291,40 @@ export default function ShopClient({
           </div>
         </form>
 
-        {/* Active category chip + toggle */}
-        <div className="flex items-center gap-3 mb-4">
-          {activeCategory && (
-            <button
-              onClick={() => handleCategoryClick(activeCategory)}
-              className="flex items-center gap-1.5 bg-yellow text-black px-4 py-2 rounded-xl text-sm font-semibold"
-            >
-              {CATEGORY_SLUG_MAP[activeCategory]}
-              <X size={14} />
-            </button>
-          )}
-          <button
-            onClick={() => setShowCategories(!showCategories)}
-            className="flex items-center gap-1.5 text-sm font-medium text-muted hover:text-black transition-colors"
+        {/* PR #14: sticky horizontal bubble bar replaces the giant
+            stock-photo category grid. The negative margins bleed the
+            white background to the container's content edges so the
+            bar feels full-width when stuck to the top. top-24 sits
+            just below the fixed Navbar (h-16) plus TrustStrip. */}
+        <div className="sticky top-24 z-30 -mx-4 sm:-mx-6 lg:-mx-8 bg-white border-b border-gray-100 mb-4">
+          <div
+            className="flex items-center gap-2 px-4 sm:px-6 lg:px-8 py-3 overflow-x-auto hide-scrollbar"
+            role="tablist"
+            aria-label="Categories"
           >
-            {showCategories ? 'Hide' : 'Browse'} Categories
-            {showCategories ? (
-              <ChevronUp size={16} />
-            ) : (
-              <ChevronDown size={16} />
-            )}
-          </button>
+            <CategoryBubble
+              label="All"
+              selected={!activeCategory}
+              onClick={() => {
+                if (activeCategory) {
+                  setActiveCategory('');
+                  writeUrl('', search);
+                }
+              }}
+            />
+            {CATEGORIES.map((cat) => (
+              <CategoryBubble
+                key={cat.slug}
+                label={cat.name}
+                selected={activeCategory === cat.slug}
+                onClick={() => handleCategoryClick(cat.slug)}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Sort + future filters row */}
+        <div className="flex items-center mb-4">
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
@@ -295,50 +334,6 @@ export default function ShopClient({
             <option value="featured">Featured First</option>
           </select>
         </div>
-
-        {/* Category image cards */}
-        {showCategories && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-8">
-            {CATEGORIES.map((cat) => {
-              const isActive = activeCategory === cat.slug;
-              return (
-                <button
-                  key={cat.slug}
-                  onClick={() => handleCategoryClick(cat.slug)}
-                  className={`group relative overflow-hidden rounded-2xl aspect-[3/2] text-left transition-all ${
-                    isActive
-                      ? 'ring-3 ring-yellow ring-offset-2'
-                      : 'hover:shadow-lg'
-                  }`}
-                >
-                  <Image
-                    src={cat.image}
-                    alt={cat.name}
-                    fill
-                    className="object-cover group-hover:scale-105 transition-transform duration-300"
-                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-                  <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4">
-                    <h3 className="font-heading text-xl sm:text-2xl text-white leading-tight">
-                      {cat.name.toUpperCase()}
-                    </h3>
-                    <p className="text-white/70 text-xs sm:text-sm mt-0.5 line-clamp-1">
-                      {cat.description}
-                    </p>
-                  </div>
-                  {isActive && (
-                    <div className="absolute top-3 right-3 w-6 h-6 bg-yellow rounded-full flex items-center justify-center">
-                      <span className="text-black text-xs font-bold">
-                        &#10003;
-                      </span>
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
 
         {/* Items grid */}
         {loading ? (
@@ -352,10 +347,29 @@ export default function ShopClient({
           </div>
         ) : items.length === 0 ? (
           <div className="text-center py-20">
-            <p className="font-heading text-2xl mb-2">NO ITEMS FOUND</p>
-            <p className="text-muted">
-              Try adjusting your search or filters
-            </p>
+            {activeCategory ? (
+              <>
+                <p className="font-heading text-2xl mb-2">NOTHING IN THIS CATEGORY YET</p>
+                <p className="text-muted mb-5">
+                  No items in this category yet. Browse all items?
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveCategory('');
+                    writeUrl('', search);
+                  }}
+                  className="inline-flex items-center gap-2 bg-yellow text-black font-semibold px-5 py-2.5 rounded-xl hover:bg-yellow/90 transition-colors"
+                >
+                  Show all items
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="font-heading text-2xl mb-2">NO ITEMS FOUND</p>
+                <p className="text-muted">Try adjusting your search.</p>
+              </>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
