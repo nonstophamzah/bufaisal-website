@@ -55,7 +55,10 @@ export async function POST(request: NextRequest) {
   }
 
   const incoming = body.item;
-  if (!incoming.item_name || !incoming.category) {
+  // PR #13: item_name is optional. The async AI job will fill it from
+  // photos if blank. Category is still required so the listing can be
+  // routed correctly while the AI is working.
+  if (!incoming.category) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
