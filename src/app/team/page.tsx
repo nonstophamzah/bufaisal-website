@@ -11,8 +11,70 @@ const SHOP_TOKEN_KEY = 'bufaisal_shop_token';
 const SHOP_LABELS = ['A', 'B', 'C', 'D', 'E'] as const;
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Brand New'] as const;
 const PHOTO_LABELS = ['Item Photo', 'Barcode Label', 'Extra (optional)'];
+const MIN_PHOTOS = 3;
 
 type Step = 'shop' | 'password' | 'name' | 'upload';
+
+// PR #13: small pill that lives next to the PHOTOS heading. Tells the
+// worker how many photos they've uploaded out of the required minimum.
+function PhotoCount({ count }: { count: number }) {
+  if (count >= MIN_PHOTOS) {
+    return (
+      <span className="text-sm font-bold text-green-600">
+        Photos uploaded: {count} ✓
+      </span>
+    );
+  }
+  const need = MIN_PHOTOS - count;
+  return (
+    <span className="text-sm font-medium text-gray-500">
+      Photos uploaded: {count} of {MIN_PHOTOS}
+      <span className="text-gray-400"> (need {need} more)</span>
+    </span>
+  );
+}
+
+// PR #13: motivational box at the top of the upload step. Pulls today's
+// upload count for this worker at this shop, plus a soft progress bar
+// against a 20/day goal.
+function WorkerHistory({
+  shopLabel,
+  workerName,
+  todayCount,
+  goal,
+}: {
+  shopLabel: string;
+  workerName: string;
+  todayCount: number | null;
+  goal: number;
+}) {
+  const pct = todayCount === null ? 0 : Math.min(100, Math.round((todayCount / goal) * 100));
+  return (
+    <div className="bg-yellow/10 border border-yellow/40 rounded-xl px-4 py-3 mb-5">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-sm">
+          <span className="font-bold">Today: </span>
+          {todayCount === null ? (
+            <span className="text-gray-500">…</span>
+          ) : (
+            <span className="font-heading text-lg">{todayCount}</span>
+          )}
+          <span className="text-gray-600"> items uploaded</span>
+        </p>
+        <p className="text-xs text-gray-500">Goal: {goal}/day</p>
+      </div>
+      <div className="mt-2 h-1.5 w-full bg-yellow/20 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-yellow rounded-full transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="text-[11px] text-gray-500 mt-1.5">
+        {workerName} @ Shop {shopLabel}
+      </p>
+    </div>
+  );
+}
 
 export default function TeamPage() {
   const router = useRouter();
@@ -33,6 +95,41 @@ export default function TeamPage() {
     if (saved) setNameInput(saved);
   }, []);
 
+  // PR #13: fetch today's upload count whenever a named worker reaches
+  // the upload step. Re-runs after a successful submit (success flips
+  // back to false in resetForm but the worker stays on 'upload').
+  const fetchTodayCount = async () => {
+    const token = sessionStorage.getItem(SHOP_TOKEN_KEY);
+    if (!token || !managerName) return;
+    try {
+      const res = await fetch('/api/team/stats', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ worker_name: managerName }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof data?.today_count === 'number') {
+          setTodayCount(data.today_count);
+        }
+      }
+    } catch {
+      // Silent fail — counter is motivational, not essential.
+    }
+  };
+
+  useEffect(() => {
+    if (step === 'upload' && managerName) {
+      fetchTodayCount();
+    }
+    // managerName change is the only trigger that matters; fetchTodayCount
+    // closes over current state at call time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, managerName]);
+
   // --- upload state ---
   const [uploading, setUploading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
@@ -50,7 +147,9 @@ export default function TeamPage() {
     item_name: '',
     brand: '',
     description: '',
-    category: CATEGORIES[0].name,
+    // PR #13: empty default forces the worker to make an explicit pick.
+    // The "-- Choose category --" option keeps the submit button gated.
+    category: '',
     condition: 'Good' as string,
     barcode: '',
     product_type: '',
@@ -62,6 +161,11 @@ export default function TeamPage() {
     // floor (item shows a "Starting Price" pill instead of "Negotiable").
     negotiable: true,
   });
+
+  // PR #13: today-counter for the worker. Fetched on entering the upload
+  // step and refreshed after a successful submission.
+  const [todayCount, setTodayCount] = useState<number | null>(null);
+  const DAILY_GOAL = 20;
 
   // Architecture Section 2.2: real prices required.
   const priceNum = Number(form.sale_price);
@@ -290,8 +394,11 @@ export default function TeamPage() {
   // --- Submit ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.item_name) {
-      setError('Item name is required');
+    // PR #13: item_name is no longer required client-side. Empty title
+    // is filled by the async AI job. Category is still required so the
+    // listing can be routed while the AI runs.
+    if (!form.category) {
+      setError('Choose a category');
       return;
     }
 
@@ -363,6 +470,8 @@ export default function TeamPage() {
         setError(data.error || 'Upload failed');
       } else {
         setSuccess(true);
+        // PR #13: refresh counter so the next form sees the new total.
+        fetchTodayCount();
       }
     } catch {
       setError('Network error — please try again');
@@ -376,7 +485,7 @@ export default function TeamPage() {
       item_name: '',
       brand: '',
       description: '',
-      category: CATEGORIES[0].name,
+      category: '',
       condition: 'Good',
       barcode: '',
       product_type: '',
@@ -615,10 +724,20 @@ export default function TeamPage() {
           </button>
         </div>
 
+        <WorkerHistory
+          shopLabel={shopLabel}
+          workerName={managerName}
+          todayCount={todayCount}
+          goal={DAILY_GOAL}
+        />
+
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Photo upload — 3 labeled slots */}
           <div>
-            <p className="font-heading text-xl mb-3">PHOTOS</p>
+            <div className="flex items-baseline justify-between mb-3">
+              <p className="font-heading text-xl">PHOTOS</p>
+              <PhotoCount count={imageUrls.filter((u) => !!u).length} />
+            </div>
             <div className="grid grid-cols-3 gap-3">
               {PHOTO_LABELS.map((label, i) => (
                 <div key={label}>
@@ -698,7 +817,7 @@ export default function TeamPage() {
           <div className="space-y-4">
             <div>
               <label className="block text-base font-bold mb-1">
-                Item Name *
+                Item Name
               </label>
               <input
                 type="text"
@@ -706,8 +825,8 @@ export default function TeamPage() {
                 onChange={(e) =>
                   setForm({ ...form, item_name: e.target.value })
                 }
-                className="w-full px-4 py-3.5 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow"
-                required
+                placeholder="Leave blank — AI will generate from photos"
+                className="w-full px-4 py-3.5 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow placeholder:text-gray-400"
               />
             </div>
 
@@ -789,15 +908,21 @@ export default function TeamPage() {
 
             <div>
               <label className="block text-base font-bold mb-1">
-                Category
+                Category *
               </label>
               <select
                 value={form.category}
                 onChange={(e) =>
                   setForm({ ...form, category: e.target.value })
                 }
-                className="w-full px-4 py-3.5 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow bg-white"
+                className={`w-full px-4 py-3.5 text-lg border-2 rounded-xl focus:outline-none focus:border-yellow bg-white ${
+                  form.category ? 'border-gray-200 text-black' : 'border-gray-200 text-gray-400'
+                }`}
+                required
               >
+                <option value="" disabled>
+                  -- Choose category --
+                </option>
                 {CATEGORIES.map((cat) => (
                   <option key={cat.slug} value={cat.name}>
                     {cat.name}
@@ -860,6 +985,7 @@ export default function TeamPage() {
               </label>
               <input
                 type="text"
+                inputMode="numeric"
                 value={form.barcode}
                 onChange={(e) =>
                   setForm({ ...form, barcode: e.target.value })
@@ -892,7 +1018,7 @@ export default function TeamPage() {
 
           <button
             type="submit"
-            disabled={uploading || !priceValid}
+            disabled={uploading || !priceValid || !form.category}
             className="w-full flex items-center justify-center gap-2 bg-yellow text-black font-heading text-3xl py-5 rounded-2xl active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {uploading ? (
