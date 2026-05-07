@@ -84,7 +84,7 @@ DESCRIPTION
 - Lead with what it is and the condition.
 - State whether it has been tested, working, or repaired (use the Condition value above).
 - If condition notes is non-empty, incorporate the flaws honestly.
-- Mention the Ajman shop location and delivery to Dubai and Sharjah.
+- Mention the Ajman shop location and delivery across all UAE emirates.
 - End the description with the exact sentence: Click WhatsApp to negotiate.
 
 Voice rules — strictly enforced:
