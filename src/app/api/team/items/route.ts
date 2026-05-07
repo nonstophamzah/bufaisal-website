@@ -18,7 +18,11 @@ const ALLOWED_FIELDS = [
   'barcode',
   'image_urls',
   'thumbnail_url',
-  'uploaded_by',
+  // uploaded_by intentionally NOT in this list — it's set
+  // server-side from the verified shop session token below so a
+  // caller can't spoof attribution. See the assignment to
+  // safe.uploaded_by under "Path A — server-controlled shop_label
+  // attribution".
   'condition_notes',
   'seo_title',
   'seo_description',
@@ -71,6 +75,21 @@ export async function POST(request: NextRequest) {
     if (key in incoming) safe[key] = incoming[key];
   }
   safe.shop_label = tokenShop;
+  // ── Upload attribution (Path A, Phase 1) ───────────────────
+  // uploaded_by is sourced from the verified shop session token,
+  // NOT the request body. Today the session only carries the
+  // shop label (A/B/C/D/E), so attribution is at shop granularity:
+  // every new row gets uploaded_by = 'A' | 'B' | 'C' | 'D' | 'E'.
+  // uploaded_at is server-stamped here (cannot be influenced by
+  // the client).
+  //
+  // Phase 2 (Path C, deferred): add worker_name to the shop
+  // session token at /api/shop-auth so attribution can name the
+  // actual worker who uploaded. That is the proper long-term fix;
+  // it requires invalidating in-flight tokens and a UI tweak at
+  // /team to capture worker name during login.
+  safe.uploaded_by = tokenShop;
+  safe.uploaded_at = new Date().toISOString();
   safe.is_published = false;
   safe.is_sold = false;
   // PR #12: server-side default. If the client omits negotiable, treat
