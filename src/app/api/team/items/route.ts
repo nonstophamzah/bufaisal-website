@@ -27,6 +27,7 @@ const ALLOWED_FIELDS = [
   'seo_title',
   'seo_description',
   'negotiable',
+  'listing_type',
 ] as const;
 
 export async function POST(request: NextRequest) {
@@ -64,6 +65,15 @@ export async function POST(request: NextRequest) {
   // routed correctly while the AI is working.
   if (!incoming.category) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+  }
+  // listing_type is required and constrained to two values. Strict server
+  // validation keeps stale clients (workers mid-upload during a deploy)
+  // from inserting a NULL row that bypasses the new gate at /team.
+  if (incoming.listing_type !== 'used' && incoming.listing_type !== 'new') {
+    return NextResponse.json(
+      { error: 'listing_type must be "used" or "new"' },
+      { status: 400 }
+    );
   }
 
   if (incoming.shop_label && incoming.shop_label !== tokenShop) {

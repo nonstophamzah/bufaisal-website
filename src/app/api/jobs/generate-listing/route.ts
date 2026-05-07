@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
   const { data: item, error: itemErr } = await supabaseAdmin
     .from('shop_items')
     .select(
-      'id, status, image_urls, thumbnail_url, brand, category, condition, condition_notes, shop_source, sale_price'
+      'id, status, image_urls, thumbnail_url, brand, category, condition, condition_notes, shop_source, sale_price, listing_type'
     )
     .eq('id', itemId)
     .single();
@@ -101,6 +101,7 @@ export async function POST(request: NextRequest) {
     category: item.category,
     condition: item.condition,
     condition_notes: item.condition_notes,
+    listing_type: item.listing_type,
     shop: item.shop_source ?? 'Ajman',
     price: item.sale_price,
   };
