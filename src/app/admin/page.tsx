@@ -13,6 +13,7 @@ import {
   Package,
 } from 'lucide-react';
 import { ShopItem } from '@/lib/supabase';
+import * as adminApi from '@/lib/admin-api';
 import { useAdminAuth } from './hooks/useAdminAuth';
 import { useAdminItems } from './hooks/useAdminItems';
 import { useAdminSettings } from './hooks/useAdminSettings';
@@ -91,16 +92,15 @@ export default function AdminPage() {
   }, [user, tab]);
 
   const fetchAnalytics = useCallback(async () => {
-    itemsHook.fetchItems().then(() => {
-      // Fetch all items for analytics
-      const fetchAllItems = async () => {
-        const res = await fetch('/api/admin/items?limit=10000');
-        if (res.ok) {
-          const data = await res.json();
-          setAllItems(data || []);
-        }
-      };
-      fetchAllItems();
+    itemsHook.fetchItems().then(async () => {
+      // Fetch all items for analytics. Uses the same authed POST path
+      // as the rest of the admin app (adminApi.getItems → POST with
+      // bearer token, extracts data.items). The previous bare GET
+      // against this endpoint silently 405'd because /api/admin/items
+      // only exports POST + verifyAdmin, so allItems stayed empty and
+      // the Analytics tab rendered all zeros.
+      const items = (await adminApi.getItems({ limit: 10000 })) as ShopItem[];
+      setAllItems(items);
     });
   }, [itemsHook]);
 
