@@ -21,6 +21,9 @@ export type ListingContext = {
   condition_notes?: string | null;
   shop?: string | null;
   price?: number | string | null;
+  // Worker's explicit Used/New choice from /team upload (PR: listing-type).
+  // Null/undefined on legacy rows — the prompt falls back to "Used".
+  listing_type?: 'used' | 'new' | null;
 };
 
 // Bufaisal uses Claude Haiku 4.5 (claude-haiku-4-5-20251001):
@@ -53,6 +56,15 @@ export function buildItemListingPrompt(ctx: ListingContext): string {
   const shop = fmt(ctx.shop);
   const price = fmt(ctx.price);
 
+  // listing_type drives the title prefix. NULL/undefined falls back to "Used"
+  // so legacy rows (pre-listing_type column) regenerate identically to today.
+  const isNew = ctx.listing_type === 'new';
+  const prefix = isNew ? 'New' : 'Used';
+  const listingType = fmt(ctx.listing_type);
+  const descriptionLead = isNew
+    ? 'Lead with what it is and that it is new/unused.'
+    : 'Lead with what it is and the condition.';
+
   return `You write product listings for Bufaisal, a UAE used-goods marketplace based in Ajman.
 
 Worker-provided form context — treat as authoritative, do not contradict:
@@ -60,6 +72,7 @@ Worker-provided form context — treat as authoritative, do not contradict:
 - Category: ${category}
 - Condition: ${condition}
 - Condition notes: ${conditionNotes}
+- Listing type: ${listingType}
 - Shop location: ${shop}
 - Price (AED): ${price}
 
@@ -69,19 +82,19 @@ Generate exactly two outputs.
 
 TITLE
 - Under 60 characters.
-- Format: "Used [Brand] [Item Type] [Key Spec]".
+- Format: "${prefix} [Brand] [Item Type] [Key Spec]".
 - Brand and item type front-loaded. Key spec is the most identifying feature: capacity for appliances ("500L", "8kg"), size for furniture ("Queen", "180cm"), screen size for TVs ("55in"), etc.
-- If brand is "(not provided)", "Unknown", or not visible in photos, omit it: "Used [Item Type] [Key Spec]".
-- Always start with the word "Used".
+- If brand is "(not provided)", "Unknown", or not visible in photos, omit it: "${prefix} [Item Type] [Key Spec]".
+- Always start with the word "${prefix}".
 
 Examples:
-- "Used Bosch Side-by-Side Refrigerator 500L"
-- "Used Samsung 8kg Front-Load Washing Machine"
-- "Used IKEA MALM Queen Bed Frame White"
+- "${prefix} Bosch Side-by-Side Refrigerator 500L"
+- "${prefix} Samsung 8kg Front-Load Washing Machine"
+- "${prefix} IKEA MALM Queen Bed Frame White"
 
 DESCRIPTION
 - 30–50 words, plain factual English at an 8th-grade reading level.
-- Lead with what it is and the condition.
+- ${descriptionLead}
 - State whether it has been tested, working, or repaired (use the Condition value above).
 - If condition notes is non-empty, incorporate the flaws honestly.
 - Mention the Ajman shop location and delivery across all UAE emirates.

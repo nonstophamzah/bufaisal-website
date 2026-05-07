@@ -52,6 +52,9 @@ export interface ShopItem {
   // PR #12: per-item negotiable flag. true = "Negotiable" pill (default),
   // false = "Starting Price" pill (price is at the floor).
   negotiable: boolean;
+  // Worker's explicit Used/New choice from /team upload. Drives the AI
+  // prompt's title prefix. NULL on legacy rows — prompt falls back to "Used".
+  listing_type: 'used' | 'new' | null;
 }
 
 export interface WebsiteConfig {

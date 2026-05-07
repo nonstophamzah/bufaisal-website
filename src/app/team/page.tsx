@@ -160,6 +160,9 @@ export default function TeamPage() {
     // PR #12: default ON. Worker flips to OFF only when price is at the
     // floor (item shows a "Starting Price" pill instead of "Negotiable").
     negotiable: true,
+    // Empty default forces the worker to tap Used or New before AI Scan
+    // and SUBMIT unlock. Server rejects inserts where this is missing.
+    listing_type: '' as '' | 'used' | 'new',
   });
 
   // PR #13: today-counter for the worker. Fetched on entering the upload
@@ -291,6 +294,11 @@ export default function TeamPage() {
       return;
     }
 
+    if (!form.listing_type) {
+      setError('Tap Used or New before scanning');
+      return;
+    }
+
     setAiLoading(true);
     setError('');
 
@@ -309,6 +317,7 @@ export default function TeamPage() {
             category: form.category,
             condition: form.condition,
             condition_notes: form.condition_notes,
+            listing_type: form.listing_type,
             shop: shopLabel ? `Shop ${shopLabel}, Ajman` : 'Ajman',
             price: form.sale_price ? Number(form.sale_price) : null,
           },
@@ -402,6 +411,11 @@ export default function TeamPage() {
       return;
     }
 
+    if (!form.listing_type) {
+      setError('Tap Used or New');
+      return;
+    }
+
     const price = Number(form.sale_price);
     if (!form.sale_price || isNaN(price) || price <= 0) {
       setError('Price is required and must be greater than 0');
@@ -453,6 +467,7 @@ export default function TeamPage() {
             seo_title: form.seo_title || null,
             seo_description: form.seo_description || null,
             negotiable: form.negotiable,
+            listing_type: form.listing_type,
           },
         }),
       });
@@ -494,6 +509,7 @@ export default function TeamPage() {
       seo_description: '',
       sale_price: '',
       negotiable: true,
+      listing_type: '',
     });
     setImageUrls([]);
     setSuccess(false);
@@ -796,13 +812,51 @@ export default function TeamPage() {
             </div>
           </div>
 
+          {/* Used / New picker — must be tapped before AI Scan unlocks. */}
+          {imageUrls.some((u) => !!u) && (
+            <div>
+              <p className="font-heading text-xl mb-3">USED OR NEW?</p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, listing_type: 'used' })}
+                  className={`py-5 rounded-2xl font-heading text-3xl border-2 active:scale-95 transition-transform ${
+                    form.listing_type === 'used'
+                      ? 'bg-yellow text-black border-yellow'
+                      : 'bg-white text-gray-700 border-gray-300'
+                  }`}
+                  aria-pressed={form.listing_type === 'used'}
+                >
+                  USED
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, listing_type: 'new' })}
+                  className={`py-5 rounded-2xl font-heading text-3xl border-2 active:scale-95 transition-transform ${
+                    form.listing_type === 'new'
+                      ? 'bg-yellow text-black border-yellow'
+                      : 'bg-white text-gray-700 border-gray-300'
+                  }`}
+                  aria-pressed={form.listing_type === 'new'}
+                >
+                  NEW
+                </button>
+              </div>
+              {!form.listing_type && (
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  Tap one to unlock AI Scan
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Gemini AI button */}
           {imageUrls.some((u) => !!u) && (
             <button
               type="button"
               onClick={handleGeminiAI}
-              disabled={aiLoading}
-              className="w-full flex items-center justify-center gap-2 bg-black text-white font-heading text-2xl py-4 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
+              disabled={aiLoading || !form.listing_type}
+              className="w-full flex items-center justify-center gap-2 bg-black text-white font-heading text-2xl py-4 rounded-xl active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {aiLoading ? (
                 <Loader2 size={22} className="animate-spin" />
@@ -1018,7 +1072,7 @@ export default function TeamPage() {
 
           <button
             type="submit"
-            disabled={uploading || !priceValid || !form.category}
+            disabled={uploading || !priceValid || !form.category || !form.listing_type}
             className="w-full flex items-center justify-center gap-2 bg-yellow text-black font-heading text-3xl py-5 rounded-2xl active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {uploading ? (
