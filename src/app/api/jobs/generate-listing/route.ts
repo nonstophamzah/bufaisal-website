@@ -132,7 +132,7 @@ async function markPendingReview(
   description: string | null,
   failureReason: string | null
 ) {
-  const updates: Record<string, unknown> = { status: 'pending_review' };
+  const updates: Record<string, unknown> = { status: 'pending' };
   if (title) {
     updates.item_name = title;
     updates.seo_title = title;
