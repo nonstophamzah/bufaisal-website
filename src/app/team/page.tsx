@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { Upload, Sparkles, Loader2, LogOut, Camera, ArrowLeft, Check, Home } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import imageCompression from 'browser-image-compression';
 import { CATEGORIES } from '@/lib/constants';
 
 const SHOP_TOKEN_KEY = 'bufaisal_shop_token';
@@ -209,7 +210,23 @@ export default function TeamPage() {
     setStep('upload');
   };
 
-  // --- Cloudinary upload (kept from original) ---
+  // --- Cloudinary upload ---
+  //
+  // IMPORTANT (Decisions Log v1.1 Addendum, decision 6):
+  // Cloudinary photos are PERMANENT. Once uploaded they must never be
+  // auto-deleted by any client- or server-side code path. Photos persist
+  // through admin reject, item un-publish, and listing regeneration so the
+  // history of every worker upload remains auditable. If you ever need to
+  // remove a photo, do it manually from the Cloudinary dashboard with
+  // explicit human approval — do not script it.
+  //
+  // Phase 2 (this commit): compress on-device before the Cloudinary POST.
+  // Target ~400KB per photo at max 1600px on the long edge, JPEG out.
+  // browser-image-compression runs the work in a Web Worker so the UI
+  // stays responsive on phones. The original device file is never sent.
+  // If compression itself fails, we fall back to uploading the raw file
+  // rather than blocking the worker — a heavier upload is better than a
+  // dropped intake.
   const handleImageUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
     slotIndex: number
@@ -221,8 +238,23 @@ export default function TeamPage() {
     setError('');
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
 
+    let payload: Blob = files[0];
+    try {
+      payload = await imageCompression(files[0], {
+        maxSizeMB: 0.4,
+        maxWidthOrHeight: 1600,
+        useWebWorker: true,
+        fileType: 'image/jpeg',
+      });
+    } catch {
+      // Compression failed (rare — corrupt file or browser without worker
+      // support). Fall back to the raw file so the worker still gets the
+      // upload through; Cloudinary will accept either way.
+      payload = files[0];
+    }
+
     const formData = new FormData();
-    formData.append('file', files[0]);
+    formData.append('file', payload);
     formData.append('upload_preset', 'bufaisal_unsigned');
 
     try {
