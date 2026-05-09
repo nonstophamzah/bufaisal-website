@@ -1,43 +1,55 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import Image from 'next/image';
-import { Upload, Sparkles, Loader2, LogOut, Camera, ArrowLeft, Check, Home } from 'lucide-react';
+import { Loader2, LogOut, Camera, ArrowLeft, Check, Home } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import imageCompression from 'browser-image-compression';
-import { CATEGORIES } from '@/lib/constants';
 
 const SHOP_TOKEN_KEY = 'bufaisal_shop_token';
+const DRAFT_KEY = 'bufaisal-upload-draft';
+// Drafts older than this are dropped silently — anything from a previous
+// shift is almost certainly stale work the worker has already moved past.
+const DRAFT_MAX_AGE_MS = 12 * 60 * 60 * 1000; // 12 hours
+const DAILY_GOAL = 20;
 
 const SHOP_LABELS = ['A', 'B', 'C', 'D', 'E'] as const;
-const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Brand New'] as const;
-const PHOTO_LABELS = ['Item Photo', 'Barcode Label', 'Extra (optional)'];
-const MIN_PHOTOS = 3;
 
 type Step = 'shop' | 'password' | 'name' | 'upload';
+type ConditionType = 'Used' | 'New' | '';
+type ConditionGrade = 'Excellent' | 'Good' | 'Fair' | '';
+type Negotiable = 'Yes' | 'No' | '';
+type PhotoSlot = 'brand' | 'photo_2' | 'photo_3' | 'barcode';
 
-// PR #13: small pill that lives next to the PHOTOS heading. Tells the
-// worker how many photos they've uploaded out of the required minimum.
-function PhotoCount({ count }: { count: number }) {
-  if (count >= MIN_PHOTOS) {
-    return (
-      <span className="text-sm font-bold text-green-600">
-        Photos uploaded: {count} ✓
-      </span>
-    );
-  }
-  const need = MIN_PHOTOS - count;
-  return (
-    <span className="text-sm font-medium text-gray-500">
-      Photos uploaded: {count} of {MIN_PHOTOS}
-      <span className="text-gray-400"> (need {need} more)</span>
-    </span>
-  );
+interface PhotoState {
+  brand: string;
+  photo_2: string;
+  photo_3: string;
+  barcode: string;
 }
 
-// PR #13: motivational box at the top of the upload step. Pulls today's
-// upload count for this worker at this shop, plus a soft progress bar
-// against a 20/day goal.
+interface DraftState {
+  worker_id: string;
+  photos: PhotoState;
+  condition_type: ConditionType;
+  condition_grade: ConditionGrade;
+  negotiable: Negotiable;
+  price_aed: string;
+  note: string;
+  saved_at: number;
+}
+
+const EMPTY_PHOTOS: PhotoState = {
+  brand: '',
+  photo_2: '',
+  photo_3: '',
+  barcode: '',
+};
+
+// Motivational header showing today's upload count vs the daily goal.
+// Counter is fetched from /api/team/stats (DB count for the worker today)
+// rather than localStorage so it survives clearing browser data and
+// matches what admin sees server-side.
 function WorkerHistory({
   shopLabel,
   workerName,
@@ -79,6 +91,7 @@ function WorkerHistory({
 
 export default function TeamPage() {
   const router = useRouter();
+
   // --- navigation state ---
   const [step, setStep] = useState<Step>('shop');
   const [shopLabel, setShopLabel] = useState('');
@@ -90,16 +103,40 @@ export default function TeamPage() {
   const [passwordError, setPasswordError] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
 
-  // Load saved name from localStorage
+  // --- form state (Phase 3 pill design) ---
+  const [photos, setPhotos] = useState<PhotoState>(EMPTY_PHOTOS);
+  const [conditionType, setConditionType] = useState<ConditionType>('');
+  const [conditionGrade, setConditionGrade] = useState<ConditionGrade>('');
+  const [negotiable, setNegotiable] = useState<Negotiable>('');
+  const [priceAed, setPriceAed] = useState('');
+  const [note, setNote] = useState('');
+
+  // --- ui state ---
+  const [uploadingSlot, setUploadingSlot] = useState<PhotoSlot | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState(0);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
+  const [todayCount, setTodayCount] = useState<number | null>(null);
+  const [showResume, setShowResume] = useState(false);
+  const [pendingDraft, setPendingDraft] = useState<DraftState | null>(null);
+  const draftHydratedRef = useRef(false);
+
+  const fileInputRefs = {
+    brand: useRef<HTMLInputElement>(null),
+    photo_2: useRef<HTMLInputElement>(null),
+    photo_3: useRef<HTMLInputElement>(null),
+    barcode: useRef<HTMLInputElement>(null),
+  };
+
+  // Restore worker name from a previous session.
   useEffect(() => {
     const saved = localStorage.getItem('bufaisal_worker_name');
     if (saved) setNameInput(saved);
   }, []);
 
-  // PR #13: fetch today's upload count whenever a named worker reaches
-  // the upload step. Re-runs after a successful submit (success flips
-  // back to false in resetForm but the worker stays on 'upload').
-  const fetchTodayCount = async () => {
+  // Today-counter fetch — runs on entering the upload step and after submit.
+  const fetchTodayCount = useCallback(async () => {
     const token = sessionStorage.getItem(SHOP_TOKEN_KEY);
     if (!token || !managerName) return;
     try {
@@ -120,74 +157,92 @@ export default function TeamPage() {
     } catch {
       // Silent fail — counter is motivational, not essential.
     }
-  };
+  }, [managerName]);
 
   useEffect(() => {
     if (step === 'upload' && managerName) {
       fetchTodayCount();
     }
-    // managerName change is the only trigger that matters; fetchTodayCount
-    // closes over current state at call time.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, managerName, fetchTodayCount]);
+
+  // Draft hydration on entering upload step. Runs once per session per worker
+  // so re-entering upload after a successful submit doesn't re-prompt.
+  useEffect(() => {
+    if (step !== 'upload' || draftHydratedRef.current) return;
+    draftHydratedRef.current = true;
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as DraftState;
+      if (
+        !draft ||
+        draft.worker_id !== managerName ||
+        Date.now() - draft.saved_at > DRAFT_MAX_AGE_MS
+      ) {
+        localStorage.removeItem(DRAFT_KEY);
+        return;
+      }
+      const hasContent =
+        draft.photos.brand ||
+        draft.photos.photo_2 ||
+        draft.photos.photo_3 ||
+        draft.photos.barcode ||
+        draft.condition_type ||
+        draft.price_aed ||
+        draft.note;
+      if (!hasContent) {
+        localStorage.removeItem(DRAFT_KEY);
+        return;
+      }
+      setPendingDraft(draft);
+      setShowResume(true);
+    } catch {
+      localStorage.removeItem(DRAFT_KEY);
+    }
   }, [step, managerName]);
 
-  // --- upload state ---
-  const [uploading, setUploading] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState('');
-  const [priceTouched, setPriceTouched] = useState(false);
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
-  const fileInputRefs = [
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-  ];
+  // Draft autosave on every meaningful field change. Skipped while the
+  // resume prompt is up so we don't overwrite the saved draft with the
+  // empty form before the worker decides.
+  useEffect(() => {
+    if (step !== 'upload' || !managerName || showResume) return;
+    const draft: DraftState = {
+      worker_id: managerName,
+      photos,
+      condition_type: conditionType,
+      condition_grade: conditionGrade,
+      negotiable,
+      price_aed: priceAed,
+      note,
+      saved_at: Date.now(),
+    };
+    const hasContent =
+      photos.brand ||
+      photos.photo_2 ||
+      photos.photo_3 ||
+      photos.barcode ||
+      conditionType ||
+      priceAed ||
+      note;
+    if (hasContent) {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      } catch {
+        // Quota exceeded or storage disabled — nothing actionable.
+      }
+    }
+  }, [step, managerName, photos, conditionType, conditionGrade, negotiable, priceAed, note, showResume]);
 
-  const [form, setForm] = useState({
-    item_name: '',
-    brand: '',
-    description: '',
-    // PR #13: empty default forces the worker to make an explicit pick.
-    // The "-- Choose category --" option keeps the submit button gated.
-    category: '',
-    condition: 'Good' as string,
-    barcode: '',
-    product_type: '',
-    condition_notes: '',
-    seo_title: '',
-    seo_description: '',
-    sale_price: '',
-    // PR #12: default ON. Worker flips to OFF only when price is at the
-    // floor (item shows a "Starting Price" pill instead of "Negotiable").
-    negotiable: true,
-    // Empty default forces the worker to tap Used or New before AI Scan
-    // and SUBMIT unlock. Server rejects inserts where this is missing.
-    listing_type: '' as '' | 'used' | 'new',
-  });
-
-  // PR #13: today-counter for the worker. Fetched on entering the upload
-  // step and refreshed after a successful submission.
-  const [todayCount, setTodayCount] = useState<number | null>(null);
-  const DAILY_GOAL = 20;
-
-  // Architecture Section 2.2: real prices required.
-  const priceNum = Number(form.sale_price);
-  const priceValid =
-    form.sale_price.trim() !== '' && !isNaN(priceNum) && priceNum >= 1;
-
-  // --- STEP 2: password validation (server-side, never exposes hashes) ---
+  // --- shop password ---
   const handlePasswordSubmit = async () => {
     setPasswordLoading(true);
     setPasswordError(false);
-
     try {
       const res = await fetch('/api/shop-auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ shop_label: shopLabel, password }),
       });
-
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.token) {
         sessionStorage.setItem(SHOP_TOKEN_KEY, data.token);
@@ -210,7 +265,7 @@ export default function TeamPage() {
     setStep('upload');
   };
 
-  // --- Cloudinary upload ---
+  // --- Photo upload ---
   //
   // IMPORTANT (Decisions Log v1.1 Addendum, decision 6):
   // Cloudinary photos are PERMANENT. Once uploaded they must never be
@@ -220,21 +275,20 @@ export default function TeamPage() {
   // remove a photo, do it manually from the Cloudinary dashboard with
   // explicit human approval — do not script it.
   //
-  // Phase 2 (this commit): compress on-device before the Cloudinary POST.
-  // Target ~400KB per photo at max 1600px on the long edge, JPEG out.
-  // browser-image-compression runs the work in a Web Worker so the UI
-  // stays responsive on phones. The original device file is never sent.
-  // If compression itself fails, we fall back to uploading the raw file
-  // rather than blocking the worker — a heavier upload is better than a
-  // dropped intake.
+  // Phase 2: compress on-device before the Cloudinary POST. Target ~400KB
+  // per photo at max 1600px on the long edge, JPEG out. The Web Worker
+  // path keeps the UI responsive; libURL points at the self-hosted copy in
+  // /public so the worker can importScripts() it from same-origin (CSP
+  // allows worker-src 'self' blob: only). Without this, iPhone Safari falls
+  // back to main-thread compression and freezes the UI for 10–25s.
   const handleImageUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
-    slotIndex: number
+    slot: PhotoSlot
   ) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    setUploading(true);
+    setUploadingSlot(slot);
     setError('');
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
 
@@ -245,12 +299,6 @@ export default function TeamPage() {
         maxWidthOrHeight: 1600,
         useWebWorker: true,
         fileType: 'image/jpeg',
-        // Self-hosted library file in /public so the inline worker can
-        // importScripts() it from same-origin instead of cdn.jsdelivr.net.
-        // The CSP allows worker-src 'self' blob:, which lets the worker
-        // spawn from a blob: URL and then load this script from our own
-        // domain. Without this, on iPhone Safari the worker fell back to
-        // main-thread compression and froze the UI for 10–25s.
         libURL: '/browser-image-compression.js',
       });
     } catch {
@@ -271,289 +319,173 @@ export default function TeamPage() {
       );
       const data = await res.json();
       if (data.secure_url) {
-        setImageUrls((prev) => {
-          const updated = [...prev];
-          updated[slotIndex] = data.secure_url;
-          return updated;
-        });
+        setPhotos((prev) => ({ ...prev, [slot]: data.secure_url }));
+      } else {
+        setError('Failed to upload image');
       }
     } catch {
       setError('Failed to upload image');
     }
 
-    setUploading(false);
-    // reset the input so the same file can be re-selected
+    setUploadingSlot(null);
     e.target.value = '';
   };
 
-  // Helper: compress image to max 1200px, JPEG quality 0.85.
-  // Sprint 3 / Fix 3: bumped from 800px / 0.7 so daylight photos retain
-  // enough detail for Gemini to read brand/model labels.
-  const compressImage = (url: string): Promise<{ base64: string; mimeType: string }> =>
-    new Promise((resolve, reject) => {
-      const img = new window.Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        const MAX = 1200;
-        let { width, height } = img;
-        if (width > MAX || height > MAX) {
-          if (width > height) {
-            height = Math.round(height * (MAX / width));
-            width = MAX;
-          } else {
-            width = Math.round(width * (MAX / height));
-            height = MAX;
-          }
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) { reject(new Error('Canvas context failed')); return; }
-        ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        const b64 = dataUrl.split(',')[1];
-        if (b64) resolve({ base64: b64, mimeType: 'image/jpeg' });
-        else reject(new Error('Compression failed'));
-      };
-      img.onerror = () => reject(new Error('Failed to load image for compression'));
-      img.src = url;
-    });
-
-  // Gemini AI: send all uploaded photos + form context for item_analysis,
-  // run a separate barcode_scan on the barcode label slot if present.
-  // Sprint 3 / Fix 3: AI now only returns title + description.
-  // Brand / category / condition stay as the worker entered them.
-  const handleGeminiAI = async () => {
-    const allPhotos = imageUrls.filter((u) => !!u);
-    const barcodePhotoUrl = imageUrls[1];
-
-    if (allPhotos.length === 0) {
-      setError('Upload at least one photo first');
-      return;
-    }
-
-    if (!form.listing_type) {
-      setError('Tap Used or New before scanning');
-      return;
-    }
-
-    setAiLoading(true);
-    setError('');
-
-    try {
-      // Compress all uploaded photos in parallel for the listing-prompt call.
-      const compressed = await Promise.all(allPhotos.map((u) => compressImage(u)));
-
-      const listingReq = fetch('/api/gemini', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'item_analysis',
-          images: compressed,
-          context: {
-            brand: form.brand,
-            category: form.category,
-            condition: form.condition,
-            condition_notes: form.condition_notes,
-            listing_type: form.listing_type,
-            shop: shopLabel ? `Shop ${shopLabel}, Ajman` : 'Ajman',
-            price: form.sale_price ? Number(form.sale_price) : null,
-          },
-        }),
-      });
-
-      // Run barcode_scan in parallel if the barcode label slot is filled.
-      const barcodeReq = barcodePhotoUrl
-        ? compressImage(barcodePhotoUrl).then((img) =>
-            fetch('/api/gemini', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                action: 'barcode_scan',
-                imageBase64: img.base64,
-                mimeType: img.mimeType,
-              }),
-            })
-          )
-        : null;
-
-      const [listingRes, barcodeRes] = await Promise.all([
-        listingReq,
-        barcodeReq ?? Promise.resolve(null),
-      ]);
-
-      let listingResult: { title?: string; description?: string } = {};
-      if (listingRes.ok) {
-        const data = await listingRes.json();
-        if (data.text) {
-          const match = data.text.match(/\{[\s\S]*\}/);
-          if (match) {
-            try {
-              listingResult = JSON.parse(match[0]);
-            } catch {
-              /* ignore JSON parse error — fall through to error message below */
-            }
-          }
-        }
-      }
-
-      let barcodeResult: { barcode?: string } = {};
-      if (barcodeRes && barcodeRes.ok) {
-        const data = await barcodeRes.json();
-        if (data.text) {
-          const match = data.text.match(/\{[\s\S]*\}/);
-          if (match) {
-            try {
-              barcodeResult = JSON.parse(match[0]);
-            } catch {
-              /* ignore */
-            }
-          }
-        }
-      }
-
-      // Apply ONLY title + description (and optionally barcode).
-      // Worker-entered brand/category/condition are NOT overwritten.
-      setForm((prev) => ({
-        ...prev,
-        item_name: listingResult.title || prev.item_name,
-        description: listingResult.description || prev.description,
-        seo_title: listingResult.title || prev.seo_title,
-        seo_description: listingResult.description || prev.seo_description,
-        barcode: barcodeResult.barcode || prev.barcode,
-      }));
-
-      // Loosened validation: only error if BOTH title and description are
-      // missing. Workers can still submit manually — AI failure is non-blocking.
-      if (!listingResult.title && !listingResult.description) {
-        setError(
-          'AI could not generate a listing from the photos. Fill the title and description manually and tap SUBMIT.'
-        );
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
-      setError(`AI scan failed: ${msg}. You can still fill the form manually and submit.`);
-    }
-
-    setAiLoading(false);
+  const clearPhoto = (slot: PhotoSlot) => {
+    setPhotos((prev) => ({ ...prev, [slot]: '' }));
   };
 
   // --- Submit ---
+  const priceNum = Number(priceAed);
+  const priceValid = priceAed.trim() !== '' && Number.isInteger(priceNum) && priceNum >= 1;
+
+  const allPhotosUploaded =
+    !!photos.brand && !!photos.photo_2 && !!photos.photo_3 && !!photos.barcode;
+  const conditionValid =
+    conditionType === 'New' ||
+    (conditionType === 'Used' && conditionGrade !== '');
+  const submitEnabled =
+    allPhotosUploaded && conditionValid && negotiable !== '' && priceValid && !submitting;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // PR #13: item_name is no longer required client-side. Empty title
-    // is filled by the async AI job. Category is still required so the
-    // listing can be routed while the AI runs.
-    if (!form.category) {
-      setError('Choose a category');
-      return;
-    }
-
-    if (!form.listing_type) {
-      setError('Tap Used or New');
-      return;
-    }
-
-    const price = Number(form.sale_price);
-    if (!form.sale_price || isNaN(price) || price <= 0) {
-      setError('Price is required and must be greater than 0');
-      return;
-    }
-
-    const urls = imageUrls.filter((u) => !!u);
-    if (urls.length === 0) {
-      setError('Upload at least one photo');
-      return;
-    }
+    if (!submitEnabled) return;
 
     setError('');
-    setUploading(true);
+    setSubmitting(true);
+    setSubmitProgress(0);
+
+    // Smooth progress fill 0→100% over ~1.5s. The actual network call runs
+    // in parallel; we wait on whichever finishes last so the worker sees a
+    // complete bar before the green tick.
+    const PROGRESS_DURATION_MS = 1500;
+    const PROGRESS_STEPS = 30;
+    const progressPromise = new Promise<void>((resolve) => {
+      let i = 0;
+      const tick = setInterval(() => {
+        i += 1;
+        setSubmitProgress(Math.round((i / PROGRESS_STEPS) * 100));
+        if (i >= PROGRESS_STEPS) {
+          clearInterval(tick);
+          resolve();
+        }
+      }, PROGRESS_DURATION_MS / PROGRESS_STEPS);
+    });
 
     const token = sessionStorage.getItem(SHOP_TOKEN_KEY);
     if (!token) {
       setError('Session expired. Please sign in again.');
-      setUploading(false);
+      setSubmitting(false);
       handleLogout();
       return;
     }
 
-    try {
-      const res = await fetch('/api/team/items', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+    // Map shop letter (A–E) to the BF1–BF5 worker_shop_id used by the
+    // SEO Agent prompt. Decisions Log v1.1 names BF1–BF5 explicitly.
+    const shopIndex = SHOP_LABELS.indexOf(shopLabel as (typeof SHOP_LABELS)[number]);
+    const workerShopId = shopIndex >= 0 ? `BF${shopIndex + 1}` : shopLabel;
+
+    const apiPromise = fetch('/api/team/items', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        action: 'insert_item',
+        item: {
+          worker_id: managerName,
+          worker_shop_id: workerShopId,
+          worker_condition_type: conditionType,
+          worker_condition_grade: conditionType === 'Used' ? conditionGrade : null,
+          worker_negotiable: negotiable === 'Yes',
+          worker_price_aed: priceNum,
+          worker_note: note.trim() || null,
+          worker_photo_brand_url: photos.brand,
+          worker_photo_2_url: photos.photo_2,
+          worker_photo_3_url: photos.photo_3,
+          worker_photo_barcode_url: photos.barcode,
         },
-        body: JSON.stringify({
-          action: 'insert_item',
-          item: {
-            item_name: form.item_name,
-            brand: form.brand || null,
-            product_type: form.product_type || null,
-            description: form.description || null,
-            category: form.category,
-            condition: form.condition,
-            sale_price: price,
-            shop_source: `Shop ${shopLabel}`,
-            shop_label: shopLabel,
-            duty_manager: managerName,
-            barcode: form.barcode || null,
-            image_urls: urls,
-            thumbnail_url: urls[0] || null,
-            uploaded_by: managerName,
-            condition_notes: form.condition_notes || null,
-            seo_title: form.seo_title || null,
-            seo_description: form.seo_description || null,
-            negotiable: form.negotiable,
-            listing_type: form.listing_type,
-          },
-        }),
-      });
+      }),
+    });
 
-      if (res.status === 401) {
-        sessionStorage.removeItem(SHOP_TOKEN_KEY);
-        setError('Session expired. Please sign in again.');
-        setUploading(false);
-        handleLogout();
-        return;
-      }
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.error || 'Upload failed');
-      } else {
-        setSuccess(true);
-        // PR #13: refresh counter so the next form sees the new total.
-        fetchTodayCount();
-      }
+    let res: Response;
+    try {
+      [, res] = await Promise.all([progressPromise, apiPromise]);
     } catch {
       setError('Network error — please try again');
+      setSubmitting(false);
+      setSubmitProgress(0);
+      return;
     }
 
-    setUploading(false);
+    if (res.status === 401) {
+      sessionStorage.removeItem(SHOP_TOKEN_KEY);
+      setError('Session expired. Please sign in again.');
+      setSubmitting(false);
+      setSubmitProgress(0);
+      handleLogout();
+      return;
+    }
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(data.error || 'Upload failed');
+      setSubmitting(false);
+      setSubmitProgress(0);
+      return;
+    }
+
+    // Success — clear draft, show green tick, then auto-redirect.
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      // ignore
+    }
+    setSuccess(true);
+    fetchTodayCount();
+    window.setTimeout(() => {
+      resetForm();
+    }, 1100);
   };
 
   const resetForm = () => {
-    setForm({
-      item_name: '',
-      brand: '',
-      description: '',
-      category: '',
-      condition: 'Good',
-      barcode: '',
-      product_type: '',
-      condition_notes: '',
-      seo_title: '',
-      seo_description: '',
-      sale_price: '',
-      negotiable: true,
-      listing_type: '',
-    });
-    setImageUrls([]);
+    setPhotos(EMPTY_PHOTOS);
+    setConditionType('');
+    setConditionGrade('');
+    setNegotiable('');
+    setPriceAed('');
+    setNote('');
     setSuccess(false);
     setError('');
-    setPriceTouched(false);
+    setSubmitting(false);
+    setSubmitProgress(0);
+    setPendingDraft(null);
+    setShowResume(false);
+    // Allow the resume prompt to fire again next time the page mounts.
+    draftHydratedRef.current = true;
+  };
+
+  const handleResume = () => {
+    if (!pendingDraft) return;
+    setPhotos(pendingDraft.photos);
+    setConditionType(pendingDraft.condition_type);
+    setConditionGrade(pendingDraft.condition_grade);
+    setNegotiable(pendingDraft.negotiable);
+    setPriceAed(pendingDraft.price_aed);
+    setNote(pendingDraft.note);
+    setPendingDraft(null);
+    setShowResume(false);
+  };
+
+  const handleDiscardDraft = () => {
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      // ignore
+    }
+    setPendingDraft(null);
+    setShowResume(false);
   };
 
   const handleLogout = () => {
@@ -564,6 +496,7 @@ export default function TeamPage() {
     setPassword('');
     setPasswordError(false);
     resetForm();
+    draftHydratedRef.current = false;
   };
 
   // =========================================================
@@ -572,7 +505,6 @@ export default function TeamPage() {
   if (step === 'shop') {
     return (
       <div className="relative min-h-screen bg-black flex flex-col pt-20 px-4 pb-8">
-        {/* Home chip */}
         <button
           onClick={() => router.push('/')}
           className="absolute top-4 left-4 flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/5 border border-white/10 text-gray-300 text-xs font-bold active:scale-95 min-h-[40px]"
@@ -609,7 +541,6 @@ export default function TeamPage() {
   if (step === 'password') {
     return (
       <div className="relative min-h-screen bg-black flex flex-col pt-20 px-4 pb-8">
-        {/* Home chip */}
         <button
           onClick={() => router.push('/')}
           className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/5 border border-white/10 text-gray-300 text-xs font-bold active:scale-95 min-h-[40px]"
@@ -679,7 +610,6 @@ export default function TeamPage() {
   if (step === 'name') {
     return (
       <div className="relative min-h-screen bg-black flex flex-col pt-20 px-4 pb-8">
-        {/* Home chip */}
         <button
           onClick={() => router.push('/')}
           className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/5 border border-white/10 text-gray-300 text-xs font-bold active:scale-95 min-h-[40px]"
@@ -725,51 +655,32 @@ export default function TeamPage() {
   }
 
   // =========================================================
-  // SUCCESS SCREEN
+  // SUCCESS SCREEN — shown briefly between submit and reset.
   // =========================================================
   if (success) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center px-4 text-center">
-        <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mb-6">
+        <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mb-6 animate-[scaleIn_0.3s_ease-out]">
           <Check size={44} className="text-white" />
         </div>
-        <h1 className="font-heading text-4xl text-white mb-3">SUBMITTED!</h1>
-        <p className="text-gray-300 text-lg max-w-md mb-2">
-          AI is preparing the listing.
-        </p>
-        <p className="text-gray-500 text-base max-w-md mb-10">
-          Admin will review shortly. You can upload another item now.
-        </p>
-        <button
-          onClick={resetForm}
-          className="w-full max-w-sm bg-yellow text-black font-heading text-3xl py-5 rounded-2xl active:scale-95 transition-transform"
-        >
-          UPLOAD ANOTHER
-        </button>
-        <button
-          onClick={handleLogout}
-          className="mt-4 text-gray-500 text-lg"
-        >
-          Switch Shop
-        </button>
+        <h1 className="font-heading text-4xl text-white mb-2">Item uploaded ✓</h1>
+        <p className="text-gray-400 text-base">Loading next item...</p>
       </div>
     );
   }
 
   // =========================================================
-  // STEP 4 — UPLOAD FORM
+  // STEP 4 — UPLOAD FORM (Phase 3 pill design)
   // =========================================================
   return (
     <div className="pt-20 pb-16 bg-white min-h-screen">
       <div className="max-w-2xl mx-auto px-4">
         {/* Header */}
         <div className="flex items-center justify-between mb-6 mt-2">
-          <div>
-            <h1 className="font-heading text-3xl">
-              SHOP {shopLabel} <span className="text-yellow">&bull;</span>{' '}
-              <span className="text-yellow">{managerName.toUpperCase()}</span>
-            </h1>
-          </div>
+          <h1 className="font-heading text-3xl">
+            SHOP {shopLabel} <span className="text-yellow">&bull;</span>{' '}
+            <span className="text-yellow">{managerName.toUpperCase()}</span>
+          </h1>
           <button
             onClick={handleLogout}
             className="flex items-center gap-1.5 bg-gray-100 px-4 py-2 rounded-xl text-base font-medium"
@@ -786,321 +697,185 @@ export default function TeamPage() {
           goal={DAILY_GOAL}
         />
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Photo upload — 3 labeled slots */}
-          <div>
-            <div className="flex items-baseline justify-between mb-3">
-              <p className="font-heading text-xl">PHOTOS</p>
-              <PhotoCount count={imageUrls.filter((u) => !!u).length} />
+        {/* Resume-draft prompt */}
+        {showResume && pendingDraft && (
+          <div className="bg-yellow/10 border-2 border-yellow rounded-xl p-4 mb-5">
+            <p className="font-bold text-base mb-3">Resume previous upload?</p>
+            <p className="text-sm text-gray-600 mb-3">
+              You have an unfinished upload from earlier. Resume it or start fresh?
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={handleResume}
+                className="py-3 rounded-xl bg-yellow text-black font-heading text-lg active:scale-95"
+              >
+                RESUME
+              </button>
+              <button
+                type="button"
+                onClick={handleDiscardDraft}
+                className="py-3 rounded-xl bg-white border-2 border-gray-300 text-gray-700 font-heading text-lg active:scale-95"
+              >
+                DISCARD
+              </button>
             </div>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* ITEM PHOTOS — 3 slots, slot 1 = Brand */}
+          <div>
+            <p className="font-heading text-xl mb-3">ITEM PHOTOS (3 required)</p>
             <div className="grid grid-cols-3 gap-3">
-              {PHOTO_LABELS.map((label, i) => (
-                <div key={label}>
-                  <p className="text-sm font-semibold text-center mb-1.5">
-                    {label}
-                  </p>
-                  {imageUrls[i] ? (
-                    <div className="relative aspect-square rounded-xl overflow-hidden border-2 border-yellow">
-                      <Image
-                        src={imageUrls[i]}
-                        alt={label}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 640px) 30vw, 200px"
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setImageUrls((prev) => {
-                            const updated = [...prev];
-                            updated[i] = '';
-                            return updated;
-                          })
-                        }
-                        className="absolute top-1.5 right-1.5 w-8 h-8 bg-red-500 text-white rounded-full text-lg flex items-center justify-center font-bold"
-                      >
-                        &times;
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => fileInputRefs[i]?.current?.click()}
-                      disabled={uploading}
-                      className="w-full aspect-square border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 active:border-yellow active:text-yellow transition-colors"
-                    >
-                      {uploading ? (
-                        <Loader2 size={28} className="animate-spin" />
-                      ) : (
-                        <>
-                          <Camera size={28} />
-                          <span className="text-xs mt-1 font-medium">TAP</span>
-                        </>
-                      )}
-                    </button>
-                  )}
-                  <input
-                    ref={fileInputRefs[i]}
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleImageUpload(e, i)}
-                    className="hidden"
-                  />
-                </div>
-              ))}
+              <PhotoSlotCard
+                slot="brand"
+                label="Brand"
+                helper="Shoot the brand plate or logo. For furniture without a brand, take a clean angle of the item."
+                url={photos.brand}
+                uploading={uploadingSlot === 'brand'}
+                inputRef={fileInputRefs.brand}
+                onUpload={handleImageUpload}
+                onClear={clearPhoto}
+              />
+              <PhotoSlotCard
+                slot="photo_2"
+                label="Photo 2"
+                url={photos.photo_2}
+                uploading={uploadingSlot === 'photo_2'}
+                inputRef={fileInputRefs.photo_2}
+                onUpload={handleImageUpload}
+                onClear={clearPhoto}
+              />
+              <PhotoSlotCard
+                slot="photo_3"
+                label="Photo 3"
+                url={photos.photo_3}
+                uploading={uploadingSlot === 'photo_3'}
+                inputRef={fileInputRefs.photo_3}
+                onUpload={handleImageUpload}
+                onClear={clearPhoto}
+              />
             </div>
           </div>
 
-          {/* Used / New picker — must be tapped before AI Scan unlocks. */}
-          {imageUrls.some((u) => !!u) && (
+          {/* BARCODE LABEL PHOTO — visually distinct zone */}
+          <div className="bg-blue-50 border-2 border-blue-300 rounded-2xl p-4">
+            <p className="font-heading text-xl mb-1 text-blue-900">
+              BARCODE LABEL PHOTO (required)
+            </p>
+            <p className="text-xs text-blue-700 mb-3">
+              The Bufaisal sticker (e.g. BFW26031208).
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              <PhotoSlotCard
+                slot="barcode"
+                label="Barcode"
+                url={photos.barcode}
+                uploading={uploadingSlot === 'barcode'}
+                inputRef={fileInputRefs.barcode}
+                onUpload={handleImageUpload}
+                onClear={clearPhoto}
+                accent="blue"
+              />
+            </div>
+          </div>
+
+          {/* USED OR NEW pills (reused from PR #18 picker) */}
+          <div>
+            <p className="font-heading text-xl mb-3">USED OR NEW?</p>
+            <div className="grid grid-cols-2 gap-3">
+              <PillButton
+                active={conditionType === 'Used'}
+                onClick={() => setConditionType('Used')}
+                size="lg"
+              >
+                USED
+              </PillButton>
+              <PillButton
+                active={conditionType === 'New'}
+                onClick={() => {
+                  setConditionType('New');
+                  setConditionGrade('');
+                }}
+                size="lg"
+              >
+                NEW
+              </PillButton>
+            </div>
+          </div>
+
+          {/* CONDITION pills — only when Used */}
+          {conditionType === 'Used' && (
             <div>
-              <p className="font-heading text-xl mb-3">USED OR NEW?</p>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, listing_type: 'used' })}
-                  className={`py-5 rounded-2xl font-heading text-3xl border-2 active:scale-95 transition-transform ${
-                    form.listing_type === 'used'
-                      ? 'bg-yellow text-black border-yellow'
-                      : 'bg-white text-gray-700 border-gray-300'
-                  }`}
-                  aria-pressed={form.listing_type === 'used'}
+              <p className="font-heading text-xl mb-3">CONDITION</p>
+              <div className="grid grid-cols-3 gap-3">
+                <PillButton
+                  active={conditionGrade === 'Excellent'}
+                  onClick={() => setConditionGrade('Excellent')}
                 >
-                  USED
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, listing_type: 'new' })}
-                  className={`py-5 rounded-2xl font-heading text-3xl border-2 active:scale-95 transition-transform ${
-                    form.listing_type === 'new'
-                      ? 'bg-yellow text-black border-yellow'
-                      : 'bg-white text-gray-700 border-gray-300'
-                  }`}
-                  aria-pressed={form.listing_type === 'new'}
+                  EXCELLENT
+                </PillButton>
+                <PillButton
+                  active={conditionGrade === 'Good'}
+                  onClick={() => setConditionGrade('Good')}
                 >
-                  NEW
-                </button>
+                  GOOD
+                </PillButton>
+                <PillButton
+                  active={conditionGrade === 'Fair'}
+                  onClick={() => setConditionGrade('Fair')}
+                >
+                  FAIR
+                </PillButton>
               </div>
-              {!form.listing_type && (
-                <p className="text-xs text-gray-500 mt-2 text-center">
-                  Tap one to unlock AI Scan
-                </p>
-              )}
             </div>
           )}
 
-          {/* Gemini AI button */}
-          {imageUrls.some((u) => !!u) && (
-            <button
-              type="button"
-              onClick={handleGeminiAI}
-              disabled={aiLoading || !form.listing_type}
-              className="w-full flex items-center justify-center gap-2 bg-black text-white font-heading text-2xl py-4 rounded-xl active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {aiLoading ? (
-                <Loader2 size={22} className="animate-spin" />
-              ) : (
-                <Sparkles size={22} />
-              )}
-              {aiLoading ? 'SCANNING...' : 'AI SCAN'}
-            </button>
-          )}
-
-          {/* Form fields */}
-          <div className="space-y-4">
-            <div>
-              <label className="block text-base font-bold mb-1">
-                Item Name
-              </label>
-              <input
-                type="text"
-                value={form.item_name}
-                onChange={(e) =>
-                  setForm({ ...form, item_name: e.target.value })
-                }
-                placeholder="Leave blank — AI will generate from photos"
-                className="w-full px-4 py-3.5 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow placeholder:text-gray-400"
-              />
-            </div>
-
-            <div>
-              <label className="block text-base font-bold mb-1">Brand</label>
-              <input
-                type="text"
-                value={form.brand}
-                onChange={(e) => setForm({ ...form, brand: e.target.value })}
-                className="w-full px-4 py-3.5 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow"
-              />
-            </div>
-
-            <div>
-              <label className="block text-base font-bold mb-1">
-                Price (AED) *
-              </label>
-              <input
-                type="number"
-                inputMode="numeric"
-                min="1"
-                step="1"
-                value={form.sale_price}
-                onChange={(e) =>
-                  setForm({ ...form, sale_price: e.target.value })
-                }
-                onBlur={() => setPriceTouched(true)}
-                placeholder="e.g. 250"
-                className={`w-full px-4 py-3.5 text-lg border-2 rounded-xl focus:outline-none ${
-                  priceTouched && !priceValid
-                    ? 'border-red-500 focus:border-red-500'
-                    : 'border-gray-200 focus:border-yellow'
-                }`}
-                required
-                aria-invalid={priceTouched && !priceValid}
-                aria-describedby="price-help"
-              />
-              {priceTouched && !priceValid && (
-                <p id="price-help" className="text-red-500 text-sm font-bold mt-1.5">
-                  Price is required (must be at least 1 AED)
-                </p>
-              )}
-            </div>
-
-            {/* PR #12: Negotiable toggle. Default ON. */}
-            <div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={form.negotiable}
-                aria-label="Price is negotiable"
-                onClick={() => setForm({ ...form, negotiable: !form.negotiable })}
-                className={`w-full flex items-center justify-between gap-3 px-4 py-3.5 rounded-xl border-2 transition-colors ${
-                  form.negotiable
-                    ? 'bg-yellow/10 border-yellow'
-                    : 'bg-gray-100 border-gray-300'
-                }`}
+          {/* NEGOTIABLE pills */}
+          <div>
+            <p className="font-heading text-xl mb-3">NEGOTIABLE?</p>
+            <div className="grid grid-cols-2 gap-3">
+              <PillButton
+                active={negotiable === 'Yes'}
+                onClick={() => setNegotiable('Yes')}
               >
-                <span className="text-left">
-                  <span className="block font-bold text-base">Price is negotiable</span>
-                  <span className="block text-xs text-gray-500 mt-0.5">
-                    Off = customer sees &quot;Starting Price&quot; instead
-                  </span>
-                </span>
-                <span
-                  aria-hidden
-                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors flex-shrink-0 ${
-                    form.negotiable ? 'bg-yellow' : 'bg-gray-300'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-                      form.negotiable ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </span>
-              </button>
-            </div>
-
-            <div>
-              <label className="block text-base font-bold mb-1">
-                Category *
-              </label>
-              <select
-                value={form.category}
-                onChange={(e) =>
-                  setForm({ ...form, category: e.target.value })
-                }
-                className={`w-full px-4 py-3.5 text-lg border-2 rounded-xl focus:outline-none focus:border-yellow bg-white ${
-                  form.category ? 'border-gray-200 text-black' : 'border-gray-200 text-gray-400'
-                }`}
-                required
+                YES
+              </PillButton>
+              <PillButton
+                active={negotiable === 'No'}
+                onClick={() => setNegotiable('No')}
               >
-                <option value="" disabled>
-                  -- Choose category --
-                </option>
-                {CATEGORIES.map((cat) => (
-                  <option key={cat.slug} value={cat.name}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
+                NO
+              </PillButton>
             </div>
+          </div>
 
-            <div>
-              <label className="block text-base font-bold mb-1">
-                Condition
-              </label>
-              <select
-                value={form.condition}
-                onChange={(e) =>
-                  setForm({ ...form, condition: e.target.value })
-                }
-                className="w-full px-4 py-3.5 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow bg-white"
-              >
-                {CONDITIONS.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {/* PRICE */}
+          <div>
+            <label className="block font-heading text-xl mb-2">PRICE (AED)</label>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="1"
+              step="1"
+              value={priceAed}
+              onChange={(e) => setPriceAed(e.target.value)}
+              placeholder="e.g. 250"
+              className="w-full px-4 py-3.5 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow"
+            />
+          </div>
 
-            <div>
-              <label className="block text-base font-bold mb-1">
-                Description
-              </label>
-              <textarea
-                value={form.description}
-                onChange={(e) =>
-                  setForm({ ...form, description: e.target.value })
-                }
-                rows={3}
-                className="w-full px-4 py-3.5 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow resize-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-base font-bold mb-1">
-                Condition Notes <span className="text-gray-400 font-normal">(e.g. &quot;small scratch on side&quot;)</span>
-              </label>
-              <textarea
-                value={form.condition_notes}
-                onChange={(e) =>
-                  setForm({ ...form, condition_notes: e.target.value })
-                }
-                rows={2}
-                placeholder="Any scratches, marks, missing parts..."
-                className="w-full px-4 py-3.5 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow resize-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-base font-bold mb-1">
-                Barcode <span className="text-gray-400 font-normal">(optional)</span>
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={form.barcode}
-                onChange={(e) =>
-                  setForm({ ...form, barcode: e.target.value })
-                }
-                className="w-full px-4 py-3.5 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow"
-              />
-            </div>
-
-            <div>
-              <label className="block text-base font-bold mb-1">
-                Product Type{' '}
-                <span className="text-gray-400 font-normal">(optional)</span>
-              </label>
-              <input
-                type="text"
-                value={form.product_type}
-                onChange={(e) =>
-                  setForm({ ...form, product_type: e.target.value })
-                }
-                className="w-full px-4 py-3.5 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow"
-              />
-            </div>
+          {/* NOTE */}
+          <div>
+            <label className="block font-heading text-xl mb-2">NOTE (optional)</label>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
+              placeholder="Anything to flag — repair history, where it came from, special details"
+              className="w-full px-4 py-3.5 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow resize-none"
+            />
           </div>
 
           {error && (
@@ -1109,20 +884,141 @@ export default function TeamPage() {
             </p>
           )}
 
+          {/* Progress bar (visible during submit) */}
+          {submitting && (
+            <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-yellow transition-all"
+                style={{ width: `${submitProgress}%` }}
+              />
+            </div>
+          )}
+
+          {/* SUBMIT */}
           <button
             type="submit"
-            disabled={uploading || !priceValid || !form.category || !form.listing_type}
-            className="w-full flex items-center justify-center gap-2 bg-yellow text-black font-heading text-3xl py-5 rounded-2xl active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!submitEnabled}
+            className={`w-full flex items-center justify-center gap-2 font-heading text-3xl py-5 rounded-2xl active:scale-95 transition-transform ${
+              submitEnabled
+                ? 'bg-yellow text-black'
+                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            }`}
           >
-            {uploading ? (
+            {submitting ? (
               <Loader2 size={26} className="animate-spin" />
             ) : (
-              <Upload size={26} />
+              'SUBMIT'
             )}
-            SUBMIT
           </button>
         </form>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Subcomponents
+// ---------------------------------------------------------------------
+
+function PillButton({
+  active,
+  onClick,
+  size = 'md',
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  size?: 'md' | 'lg';
+  children: React.ReactNode;
+}) {
+  const sizeClass = size === 'lg' ? 'py-5 text-3xl' : 'py-4 text-xl';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`${sizeClass} rounded-2xl font-heading border-2 active:scale-95 transition-transform ${
+        active
+          ? 'bg-yellow text-black border-yellow'
+          : 'bg-white text-gray-700 border-gray-300'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function PhotoSlotCard({
+  slot,
+  label,
+  helper,
+  url,
+  uploading,
+  inputRef,
+  onUpload,
+  onClear,
+  accent,
+}: {
+  slot: PhotoSlot;
+  label: string;
+  helper?: string;
+  url: string;
+  uploading: boolean;
+  inputRef: React.RefObject<HTMLInputElement>;
+  onUpload: (e: React.ChangeEvent<HTMLInputElement>, slot: PhotoSlot) => void;
+  onClear: (slot: PhotoSlot) => void;
+  accent?: 'blue';
+}) {
+  const filledBorder = accent === 'blue' ? 'border-blue-500' : 'border-yellow';
+  const emptyBorder = accent === 'blue' ? 'border-blue-300' : 'border-gray-300';
+  const tapColor = accent === 'blue' ? 'active:border-blue-600 active:text-blue-600' : 'active:border-yellow active:text-yellow';
+  return (
+    <div>
+      <p className="text-sm font-semibold text-center mb-1.5">{label}</p>
+      {url ? (
+        <div className={`relative aspect-square rounded-xl overflow-hidden border-2 ${filledBorder}`}>
+          <Image
+            src={url}
+            alt={label}
+            fill
+            className="object-cover"
+            sizes="(max-width: 640px) 30vw, 200px"
+          />
+          <button
+            type="button"
+            onClick={() => onClear(slot)}
+            className="absolute top-1.5 right-1.5 w-8 h-8 bg-red-500 text-white rounded-full text-lg flex items-center justify-center font-bold"
+          >
+            &times;
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          className={`w-full aspect-square border-2 border-dashed ${emptyBorder} rounded-xl flex flex-col items-center justify-center text-gray-400 ${tapColor} transition-colors`}
+        >
+          {uploading ? (
+            <Loader2 size={28} className="animate-spin" />
+          ) : (
+            <>
+              <Camera size={28} />
+              <span className="text-xs mt-1 font-medium">TAP</span>
+            </>
+          )}
+        </button>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        onChange={(e) => onUpload(e, slot)}
+        className="hidden"
+      />
+      {helper && (
+        <p className="text-[11px] text-gray-500 mt-1.5 leading-tight">{helper}</p>
+      )}
     </div>
   );
 }
