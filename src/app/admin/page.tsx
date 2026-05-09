@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import {
   LogOut,
   Eye,
@@ -11,6 +12,7 @@ import {
   Users,
   ShoppingBag,
   Package,
+  Sparkles,
 } from 'lucide-react';
 import { ShopItem } from '@/lib/supabase';
 import * as adminApi from '@/lib/admin-api';
@@ -256,6 +258,21 @@ export default function AdminPage() {
               </button>
             );
           })}
+          {/* Phase 5: pointer to the new pending dashboard. The legacy
+              Pending tab above stays operational — admins can use either
+              flow during the transition. Remove when the legacy tab is
+              retired in Phase 9. */}
+          <Link
+            href="/admin/pending"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors bg-yellow/10 text-yellow-800 border border-yellow hover:bg-yellow/20"
+            title="New AI-driven pending dashboard"
+          >
+            <Sparkles size={15} />
+            New Pending
+            <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-yellow text-black ml-0.5">
+              BETA
+            </span>
+          </Link>
         </div>
 
         {/* Content */}
