@@ -1,0 +1,149 @@
+# Listing Generator Rebuild — Phase State
+
+**Last updated:** 2026-05-09 (after Phase 4 verification + admin-approve hotfix)
+**Owner:** Hamzah Khan
+**Driver doc:** `docs/Bufaisal-Claude-Code-Implementation-Spec-v1_0_1.md`
+**Decisions log:** `docs/Bufaisal-Decisions-Log-v1_1-Addendum.docx`
+
+This file is the canonical phase ledger for the 9-phase listing-generator rebuild. Update it at the close of every phase. Future Claude sessions read this first.
+
+---
+
+## Phase ledger
+
+### Phase 0 — Audit & discovery
+**Status:** ✅ Complete
+
+Findings reported. State-machine mismatch flagged (legacy `agent_drafting`/`pending_review` vs spec's `processing`/`pending`). Established the rebuild scope.
+
+### Phase 1 — Database schema migration
+**Status:** ✅ Complete
+
+**Commits:** `668e5b7` on main.
+**Migration file:** `supabase-phase1-listing-generator.sql` in repo root.
+
+What shipped:
+- 67 nullable schema-separation columns on `shop_items` (`worker_*`, `ai_*`, `admin_*`, `published_*`).
+- New `audit_log` table with RLS-enabled-no-policies (anon blocked, service_role bypasses).
+- Status value migration: `pending_review` → `pending` (46 rows).
+- Writer flipped from `'pending_review'` to `'pending'` at `src/app/api/jobs/generate-listing/route.ts`.
+
+### Phase 2 — Photo upload optimization
+**Status:** ✅ Complete
+
+**Commits:** `7d5bfaf` (PR #19), `1e639d8` (PR #20).
+
+What shipped:
+- `browser-image-compression` library + self-hosted at `public/browser-image-compression.js`.
+- CSP `worker-src 'self' blob:` so the Web Worker spawns on iPhone.
+- Compression target: ~400KB max, 1600px long edge, JPEG.
+- Phone-confirmed: 1–2s per photo on UAE 4G.
+
+### Phase 3 — Worker upload screen rebuild
+**Status:** ✅ Complete
+
+**Commit:** `bd4cf90` on main (PR #22).
+
+What shipped:
+- `src/app/team/page.tsx` rebuilt around the locked pill design: 4 photos (3 item + 1 visually-distinct barcode), Used/New, Excellent/Good/Fair (when Used), Negotiable Yes/No, price, optional note.
+- AI Scan removed from worker side. Phase 4 runs the AI in the background.
+- Draft autosave to `localStorage` (`bufaisal-upload-draft`, 12h TTL, scoped to worker name) with Resume/Discard prompt.
+- Submit UX: 1.5s smooth progress bar → green tick "Item uploaded ✓" → auto-redirect.
+- `/api/team/items` tightened to the new `worker_*` shape with full validation. Status default flipped `'agent_drafting'` → `'processing'`.
+- TS union extended: `ShopItem.status` now includes `'processing'`.
+
+### Phase 4 — Background AI processor
+**Status:** ✅ Complete and verified end-to-end in production
+
+**Commits:**
+- `12a1a54` (PR #23) — initial Phase 4 build
+- `e7d4422` (PR #24) — admin-approve status fix (see "Bug found" below)
+
+**What shipped:**
+
+*Endpoints:*
+- `POST /api/items/[id]/generate-listing` — Bearer-auth'd via `INTERNAL_API_SECRET`. Loads the locked SEO Agent v1.0 prompt from `lib/prompts/listing-generator-v1.md`, calls `claude-sonnet-4-6` with 4 Cloudinary photo URLs (URL image source format, no base64), validates JSON shape with up to 3 attempts, maps output to all 24 `ai_*` columns, flips `status='processing'` → `'pending'`. Every failure mode produces a `'pending'` row with a flag (`ai_api_timeout`, `ai_json_invalid`, `ai_validation_failed`, `photo_missing`, `ai_auth_error`).
+- `GET /api/cron/cleanup-stuck-processing` — daily cron at 4am UTC (Hobby tier cap on sub-daily). Accepts Bearer matching `CRON_SECRET` or `INTERNAL_API_SECRET`.
+- `src/lib/cleanup-stuck.ts` — `rescueStuckItems()` shared between the cron route and the piggyback `waitUntil()` on every worker submit. The piggyback gives us the 10-min stuck SLA in practice during business hours despite the daily cron cap.
+
+*Wiring:*
+- `/api/team/items` fires `waitUntil()` to `/api/items/[id]/generate-listing` after insert. Sub-2s submit latency preserved.
+- `next.config.mjs` `outputFileTracingIncludes` ensures the prompt `.md` ships with the serverless function bundle.
+
+*Tooling:*
+- `src/scripts/process-backlog.ts` — one-time runner used to drain the Phase 3 phone-test backlog. Re-runnable; supports `--force` for reprocessing `'pending'` rows. Kept as documentation / future debugging tool.
+
+*Constants:*
+- `src/lib/ai.ts` exports both `CLAUDE_MODEL` (Haiku, for legacy `/api/gemini`) and `CLAUDE_SONNET_MODEL` (Sonnet 4.6, for Phase 4).
+
+**Bug found and fixed** (PR #24):
+
+The legacy admin-approve flow at `src/app/api/admin/items/route.ts:63` (and `:80`) and `src/app/api/admin/items/batch/route.ts:68` was setting `status: null` on approve — predating the Phase 1 state machine. On a fresh Phase 4 run, status would correctly land at `'pending'`, but the moment an admin clicked Approve, status got clobbered to NULL while `is_published=true`, `approved_by`, `approved_at` were correctly set. Fix: change all three writes to `status: 'published'`. TS union extended again to include `'published'`.
+
+**Audit_log gap noted, not fixed:** legacy admin-approve does NOT write to `audit_log`. Phase 5's new admin approve must.
+
+**Verification record:**
+- Production row `01ff3138-63a7-4267-b782-0a41c0330022`
+- `worker_submitted_at` → AI completion: 35 seconds
+- `ai_seo_title` = "Used Apple MacBook Pro Laptop Space Gray"
+- After admin approve: `status='published'`, `is_published=true`, `approved_by='Humaan'`, `approved_at` set
+- Confirms the full pipeline `processing → pending → published` works end-to-end.
+
+---
+
+## Phase 5 — Admin pending dashboard
+**Status:** ⏳ Ready to start
+
+**Spec reference:** Implementation Spec v1.0.1 §5.
+
+**Why next:** Phase 4 lands all new uploads in `status='pending'` with 24 `ai_*` columns populated. Admin currently sees these in the legacy `/admin` view (which reads legacy columns and finds them blank). Phase 5 rewrites the pending dashboard around the schema-separation columns: AI-prefilled drafts with confidence scores and flag badges, quick-approve for high-confidence flag-free items, detail editor for everything else, regenerate button.
+
+**Critical carryforward for Phase 5:**
+- The legacy admin-approve flow at `/api/admin/items` (action='approve' / 'bulk_approve') and `/api/admin/items/batch` is still in place. PR #24 made it status-aware (`status='published'`) but it does NOT yet:
+  - Write to `audit_log`
+  - Compute `published_*` columns from admin-overrides + AI fallback per spec §5C
+  - Handle the new `admin_*` override columns from Phase 1B
+  - Support regenerate-AI (would call `/api/items/[id]/generate-listing` with `force: true`)
+  Phase 5 either rewrites these or builds a new `/api/admin/items-v2` alongside.
+- Per the workflow memory: small Phase 5 should NOT clobber the existing `/admin` for live items management (sold/hidden/etc.). Scope Phase 5 to the pending tab.
+
+**Open data state Phase 5 must NOT touch:**
+- 49 legacy items in production currently have `status=NULL` AND `is_published=true`. They were approved before the Phase 1 state machine landed. They are live on bufaisal.ae and shoppable. Phase 5 should not retroactively migrate them — they live on the legacy `/admin` view (which finds items by `is_published`/`is_sold`/`is_hidden` flags, NOT by `status`). Phase 7 (optional, post-launch) can decide whether to backfill `status='published'` for forensic cleanliness.
+
+---
+
+## Phases 6–9 — Not yet started
+
+- **Phase 6:** Public site rendering switch to `published_*` columns + JSON-LD schemas
+- **Phase 7:** Optional migration of legacy items (the 49 above)
+- **Phase 8:** Daily summary endpoint + monitoring
+- **Phase 9:** Cleanup — delete legacy `/api/jobs/generate-listing`, drop `JOBS_SECRET`, tighten audit comments
+
+---
+
+## Workflow rules (carry forward to every phase)
+
+Per memory `feedback_listing_generator_workflow.md`:
+
+- **Approval is per step, not per phase.** Wait for "approved" / "proceed" before each step.
+- **Default: PR + merge** (not direct fast-forward) for meaty phases. Hamzah did fast-forward for Phase 1, then PR + merge for Phases 3 and 4. Phase 5 should follow the PR pattern.
+- **Hamzah runs SQL migrations himself** in the Supabase SQL Editor. Claude produces the SQL file, commits, pushes, then waits for Hamzah's verification queries.
+- **Companion docs win conflicts** with the implementation spec. If `Bufaisal-Decisions-Log-*.docx`, `Bufaisal-SEO-Agent-v1.0.docx`, or `Bufaisal-Listing-Generator-Prompt-*.md` disagree with the spec — stop and flag.
+- **Sacred routes:** `/team`, `/admin`, `/appliance-tracker`, `/api/appliances`. Surgical edits only; never refactor end-to-end without explicit ask.
+- **Scope discipline:** "two-line change" means two lines. Comment cleanup is Phase 9 material.
+
+---
+
+## Outstanding tech-debt items (for Phase 9 or earlier as needed)
+
+1. **Pre-existing 3 failing tests in `src/__tests__/api/gemini.test.ts`** — predate Phase 3, unrelated to the listing pipeline. Likely a mocking issue with `@anthropic-ai/sdk`. Touch in passing if Phase 5 modifies the same mock pattern.
+2. **`/api/jobs/generate-listing` legacy route** — zero callers in current code. Safe to delete in Phase 9.
+3. **`JOBS_SECRET` env var** — only consumed by the legacy job route. Safe to drop in Phase 9.
+4. **`agent_drafting` status value** — still in the TS union for any in-flight legacy rows. 0 rows match in production. Drop in Phase 9.
+5. **CLAUDE.md known-issues #1, #2, #7, #10** about marketplace using anon Supabase from `/admin` — unchanged through Phases 1–4. Phase 5 will address as it rewrites the admin pending dashboard.
+
+---
+
+## Change log for this file
+
+- **2026-05-09:** Phase 4 marked complete. Added admin-approve bug record (PR #24). Added Phase 5 carryforward notes including the 49 legacy items.
