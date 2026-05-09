@@ -245,6 +245,13 @@ export default function TeamPage() {
         maxWidthOrHeight: 1600,
         useWebWorker: true,
         fileType: 'image/jpeg',
+        // Self-hosted library file in /public so the inline worker can
+        // importScripts() it from same-origin instead of cdn.jsdelivr.net.
+        // The CSP allows worker-src 'self' blob:, which lets the worker
+        // spawn from a blob: URL and then load this script from our own
+        // domain. Without this, on iPhone Safari the worker fell back to
+        // main-thread compression and froze the UI for 10–25s.
+        libURL: '/browser-image-compression.js',
       });
     } catch {
       // Compression failed (rare — corrupt file or browser without worker

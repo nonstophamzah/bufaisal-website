@@ -31,6 +31,16 @@ const nextConfig = {
             value: [
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https://www.facebook.com https://www.googletagmanager.com https://www.google-analytics.com",
+              // Phase 2 fix: browser-image-compression spawns an inline blob:
+              // worker on /team. Without an explicit worker-src, browsers
+              // fall back through child-src to script-src, which doesn't
+              // include blob:, and the worker creation gets blocked with a
+              // CSP SecurityError. The library then falls back to main-thread
+              // compression on iPhone — slow enough that Phase 2 looked
+              // broken in production. Allowing 'self' + blob: here is the
+              // minimum needed; the worker only ever importScripts our own
+              // /browser-image-compression.js (self-hosted, see public/).
+              "worker-src 'self' blob:",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob: https://res.cloudinary.com https://*.supabase.co https://*.supabase.in https://images.unsplash.com https://www.facebook.com https://www.google-analytics.com https://maps.googleapis.com https://maps.gstatic.com",
