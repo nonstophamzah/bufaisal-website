@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { waitUntil } from '@vercel/functions';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { rateLimit } from '@/lib/rate-limit';
 import { verifyOrigin } from '@/lib/verify-origin';
 import { verifyShopSessionToken } from '@/lib/shop-session';
+import { rescueStuckItems } from '@/lib/cleanup-stuck';
 
 // Phase 3 (Decisions Log v1.1 Addendum, May 7 2026): the worker submit
 // payload is now a small fixed shape — 4 photos + Used/New + (Excellent/
@@ -237,10 +239,54 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Phase 4 (background AI processor) re-attaches a kickoff here. The
-  // legacy /api/jobs/generate-listing job filters strictly on
-  // status='agent_drafting' and won't touch 'processing' rows, so for now
-  // the row sits in 'processing' until the new processor lands.
+  // Phase 4: kick off the background AI processor. waitUntil() lets this
+  // function return its 200 to the worker IMMEDIATELY while the inner fetch
+  // continues running on Vercel's infrastructure (a naive fire-and-forget
+  // would be killed when the response is sent — known Vercel limitation).
+  // If this fetch fails for any reason, the piggyback cleanup below + the
+  // daily cron rescue the row, so we never lose an item in 'processing' limbo.
+  //
+  // Piggyback stuck-item cleanup. Vercel Hobby caps cron at once-per-day, so
+  // we lean on submit traffic to maintain the 10-minute rescue SLA during
+  // shop hours. Each submit scans for any 'processing' row older than 10
+  // minutes and flips it to 'pending' with the ai_stuck_in_processing flag.
+  // No-op when the queue is clean.
+  waitUntil(rescueStuckItems().catch((err) => {
+    console.error('[team/items] piggyback cleanup failed:', err);
+  }));
+
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+  const internalSecret = process.env.INTERNAL_API_SECRET;
+  if (baseUrl && internalSecret) {
+    waitUntil(
+      fetch(`${baseUrl}/api/items/${inserted.id}/generate-listing`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${internalSecret}`,
+        },
+        body: JSON.stringify({}),
+      })
+        .then(async (res) => {
+          if (!res.ok) {
+            const body = await res.text().catch(() => '');
+            console.error(
+              `[team/items] generate-listing kickoff non-OK for ${inserted.id}: ${res.status} ${body.slice(0, 200)}`
+            );
+          }
+        })
+        .catch((err) => {
+          console.error(
+            `[team/items] generate-listing kickoff failed for ${inserted.id}:`,
+            err
+          );
+        })
+    );
+  } else {
+    console.error(
+      `[team/items] cannot kick off AI: NEXT_PUBLIC_BASE_URL=${!!baseUrl} INTERNAL_API_SECRET=${!!internalSecret}. Cleanup cron will rescue ${inserted.id}.`
+    );
+  }
 
   return NextResponse.json({ success: true, id: inserted.id });
 }

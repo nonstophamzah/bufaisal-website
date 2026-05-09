@@ -1,5 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Phase 4: ensure the listing-generator prompt is bundled with the API
+  // function. fs.readFileSync(process.cwd(), 'lib/prompts/...') is invisible
+  // to Next.js's file tracer, so we add an explicit hint or Vercel ships the
+  // function without the .md file and reads blow up at runtime.
+  experimental: {
+    outputFileTracingIncludes: {
+      '/api/items/[id]/generate-listing': ['./lib/prompts/listing-generator-v1.md'],
+    },
+  },
   images: {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [

@@ -33,6 +33,13 @@ export type ListingContext = {
 //   not a different version of Haiku.
 export const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
 
+// Claude Sonnet 4.6 — used by Phase 4's listing generator pipeline only.
+// Locked decision (Decisions Log v1.1 Addendum, 2026-05-07 #4): the async
+// listing AI moves from Haiku to Sonnet for better vision reasoning and
+// structured-output adherence. Haiku stays for the legacy /api/gemini
+// non-listing actions (appliance tracker + diesel) until Phase 9 cleanup.
+export const CLAUDE_SONNET_MODEL = 'claude-sonnet-4-6';
+
 // Anthropic image blocks accept these media types.
 type ClaudeImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
 const CLAUDE_IMAGE_MEDIA_TYPES: readonly ClaudeImageMediaType[] = [
