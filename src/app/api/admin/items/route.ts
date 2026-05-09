@@ -49,8 +49,13 @@ export async function POST(request: NextRequest) {
     }
 
     // ── APPROVE: Publish an item ──
-    // Sprint 4: also clears status (agent_drafting/pending_review) so the
-    // status column only describes items currently inside the agent pipeline.
+    // 2026-05-09: status flips from 'pending' → 'published' (was → null).
+    // The legacy null-clobber predated the Phase 4 state machine and was
+    // wiping the 'pending' status that Phase 4 had just set, breaking the
+    // upcoming Phase 5 pending dashboard. Decisions Log v1.1 #3 defines
+    // {processing, pending, published, sold, archived} as the canonical
+    // states; aligning admin approve with that. Full Phase 5 rewrite of
+    // this route (published_* column writes, etc.) still pending.
     if (action === 'approve') {
       const { id } = body;
       if (!id) return NextResponse.json({ error: 'Missing item id' }, { status: 400 });
@@ -60,7 +65,7 @@ export async function POST(request: NextRequest) {
           is_published: true,
           approved_by: admin,
           approved_at: new Date().toISOString(),
-          status: null,
+          status: 'published',
         })
         .eq('id', id);
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -77,7 +82,7 @@ export async function POST(request: NextRequest) {
           is_published: true,
           approved_by: admin,
           approved_at: new Date().toISOString(),
-          status: null,
+          status: 'published',
         })
         .in('id', ids);
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });

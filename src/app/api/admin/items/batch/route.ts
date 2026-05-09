@@ -59,13 +59,17 @@ function updatesForAction(action: BulkAction, adminName: string): Record<string,
   // delete (handled separately).
   switch (action) {
     case 'approve':
+      // 2026-05-09: status flips to 'published' (was null). The legacy
+      // null-clobber predated the Phase 4 state machine and was wiping
+      // the 'pending' status Phase 4 had just set. See sibling comment
+      // in /api/admin/items/route.ts. Full Phase 5 rewrite still pending.
       return {
         is_published: true,
         is_sold: false,
         is_hidden: false,
         approved_by: adminName,
         approved_at: new Date().toISOString(),
-        status: null,
+        status: 'published',
       };
     case 'reject':
       // Soft-reject: hide the item rather than deleting. PR #16 will
