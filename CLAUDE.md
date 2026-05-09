@@ -15,7 +15,7 @@ The long-term goal: make the appliance tracking system so precise that an AI age
 - **Styling:** TailwindCSS 3.4, custom `font-heading` class for headings
 - **Database:** Supabase (PostgreSQL with RLS policies)
 - **Auth:** PIN-based admin login (bcrypt), shop passwords (bcrypt), entry/manager codes for appliance tracker
-- **AI:** Google Gemini 2.5-flash-lite (image analysis: barcode reading, item identification)
+- **AI:** Anthropic Claude `claude-haiku-4-5-20251001` (migrated from Gemini in PR #11). Note: `/api/gemini` route file still named for legacy reasons but uses Claude. Gemini is no longer used.
 - **Images:** Cloudinary (uploads), Supabase Storage, Unsplash (category cards)
 - **Hosting:** Vercel
 - **Analytics:** Facebook Pixel
@@ -27,7 +27,7 @@ src/
 ├── app/                    # Next.js App Router pages
 │   ├── page.tsx            # Marketplace homepage (category pills, product grid)
 │   ├── item/[id]/          # Product detail pages (SSR metadata)
-│   ├── team/               # Upload portal (shop password → name → photo upload → Gemini auto-fill)
+│   ├── team/               # Upload portal (shop password → name → photo upload → AI auto-fill). Has USED/NEW picker after photos that gates AI Scan and Submit. Phase 3 of the listing-generator rebuild will rebuild this flow entirely.
 │   ├── admin/              # Admin dashboard (approve/reject items, settings, analytics)
 │   ├── appliances/         # Appliance tracker (the core ops system)
 │   │   ├── page.tsx        # Entry code gate
@@ -64,7 +64,8 @@ src/
 ### Core Tables
 
 **shop_items** — Marketplace products
-- Key fields: barcode, item_name, brand, product_type, category, sale_price, shop_source, image_urls[], is_published, is_sold, is_hidden, is_featured, condition, seo_title, seo_description
+- Key fields: barcode, item_name, brand, product_type, category, sale_price, shop_source, image_urls[], is_published, is_sold, is_hidden, is_featured, condition, seo_title, seo_description, listing_type ('used'|'new'|null), negotiable, status ('processing'|'pending'|'sent_back'|'archived'|null)
+- 67 schema-separation columns added in Phase 1 with prefixes `worker_*`, `ai_*`, `admin_*`, `published_*` — see `docs/Bufaisal-Claude-Code-Implementation-Spec-v1_0_1.md` Phase 1B for full list.
 - RLS: anon can read published items; service_role for writes
 
 **appliance_items** — Appliance operations (THE CRITICAL TABLE)
@@ -78,6 +79,7 @@ src/
 **website_config** — CMS settings (hero text, WhatsApp number, etc.)
 **duty_managers** — Active managers per shop
 **appliance_audit_log** — Action tracking (user_name, action, item_id, details JSONB)
+**audit_log** — Cross-system action tracking added in Phase 1 of the listing-generator rebuild. RLS-locked, service_role only.
 
 ## Appliance State Machine
 
@@ -119,7 +121,7 @@ Items with location_status `sent_to_jurf` for >24 hours are flagged as overdue i
 - **Font:** `font-heading` class for all headings (uppercase, bold)
 - **API Pattern:** Single POST endpoint per domain (`/api/appliances`) with `action` field to route operations. All server-side operations use `supabaseAdmin` (service role).
 - **Auth Pattern:** No JWT/session cookies. PIN hashes in env vars (admin), bcrypt in DB (shop passwords), plain text codes (entry/manager — should migrate to bcrypt).
-- **Image Handling:** Camera capture → canvas compression (max 800px width, JPEG 0.7 quality) → base64 → Gemini analysis or Cloudinary upload
+- **Image Handling:** `browser-image-compression` in a Web Worker, target ~400KB max, max 1600px on long edge, JPEG output, uploaded directly to Cloudinary (cloud `df8y0k626`, preset `bufaisal_unsigned`). Self-hosted library at `/browser-image-compression.js`. CSP includes `worker-src 'self' blob:`.
 - **Error Handling:** ErrorFlash/SuccessFlash components for user feedback. Toast pattern in manager dashboard.
 
 ## Environment Variables
@@ -128,7 +130,7 @@ Items with location_status `sent_to_jurf` for >24 hours are flagged as overdue i
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
-GEMINI_API_KEY
+ANTHROPIC_API_KEY
 NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
 ADMIN_PIN_HASHES          # JSON array: [{"hash":"$2a$10$...","name":"Admin"}]
 NEXT_PUBLIC_FB_PIXEL_ID
@@ -142,8 +144,7 @@ NEXT_PUBLIC_WHATSAPP_NUMBER
 2. **website_config RLS allows anon UPDATE** — anyone can change site settings. Same fix needed.
 3. **Gemini endpoint accepts custom prompts from client** — remove `customPrompt`, define all prompts server-side.
 4. **Plain text password column still exists** in shop_passwords table — drop it.
-5. **No middleware.ts** — no server-side route protection.
-6. **No CSP header** — XSS risk.
+- (Items #5 "No middleware.ts" and #6 "No CSP header" from the original audit are now resolved — `src/middleware.ts` exists and CSP is set in `next.config.mjs`. Numbering preserved below for traceability with the original audit doc.)
 
 ### ARCHITECTURE
 7. **Admin page uses anon Supabase client for CRUD** — must move to API routes like appliance tracker does.
