@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { rateLimit } from '@/lib/rate-limit';
 import { verifyOrigin } from '@/lib/verify-origin';
 import { verifyShopSessionToken } from '@/lib/shop-session';
+import { rescueStuckItems } from '@/lib/cleanup-stuck';
 
 // Phase 3 (Decisions Log v1.1 Addendum, May 7 2026): the worker submit
 // payload is now a small fixed shape — 4 photos + Used/New + (Excellent/
@@ -242,9 +243,18 @@ export async function POST(request: NextRequest) {
   // function return its 200 to the worker IMMEDIATELY while the inner fetch
   // continues running on Vercel's infrastructure (a naive fire-and-forget
   // would be killed when the response is sent — known Vercel limitation).
-  // If this fetch fails for any reason, the cleanup-stuck-processing cron
-  // will pick the row up within 10 minutes as a safety net, so we never
-  // lose an item in 'processing' limbo.
+  // If this fetch fails for any reason, the piggyback cleanup below + the
+  // daily cron rescue the row, so we never lose an item in 'processing' limbo.
+  //
+  // Piggyback stuck-item cleanup. Vercel Hobby caps cron at once-per-day, so
+  // we lean on submit traffic to maintain the 10-minute rescue SLA during
+  // shop hours. Each submit scans for any 'processing' row older than 10
+  // minutes and flips it to 'pending' with the ai_stuck_in_processing flag.
+  // No-op when the queue is clean.
+  waitUntil(rescueStuckItems().catch((err) => {
+    console.error('[team/items] piggyback cleanup failed:', err);
+  }));
+
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
   const internalSecret = process.env.INTERNAL_API_SECRET;
   if (baseUrl && internalSecret) {
