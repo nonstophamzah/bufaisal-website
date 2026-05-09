@@ -47,8 +47,12 @@ export interface ShopItem {
   duty_manager: string | null;
   shop_label: string | null;
   condition_notes: string | null;
-  // Sprint 4: agent-workflow status. NULL on legacy items and after approval.
-  status: 'agent_drafting' | 'pending' | 'sent_back' | null;
+  // Agent-workflow status. NULL on legacy items and after approval.
+  // Phase 3 (Decisions Log v1.1 Addendum): new submissions land in
+  // 'processing' (AI hasn't run) and Phase 4's background job moves them
+  // to 'pending'. 'agent_drafting' stays in the union for any in-flight
+  // legacy rows still being processed by the old kickoff path.
+  status: 'processing' | 'pending' | 'agent_drafting' | 'sent_back' | null;
   // PR #12: per-item negotiable flag. true = "Negotiable" pill (default),
   // false = "Starting Price" pill (price is at the floor).
   negotiable: boolean;

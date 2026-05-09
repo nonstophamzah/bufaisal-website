@@ -4,31 +4,43 @@ import { rateLimit } from '@/lib/rate-limit';
 import { verifyOrigin } from '@/lib/verify-origin';
 import { verifyShopSessionToken } from '@/lib/shop-session';
 
-const ALLOWED_FIELDS = [
-  'item_name',
-  'brand',
-  'product_type',
-  'description',
-  'category',
-  'condition',
-  'sale_price',
-  'shop_source',
-  'shop_label',
-  'duty_manager',
-  'barcode',
-  'image_urls',
-  'thumbnail_url',
-  // uploaded_by intentionally NOT in this list — it's set
-  // server-side from the verified shop session token below so a
-  // caller can't spoof attribution. See the assignment to
-  // safe.uploaded_by under "Path A — server-controlled shop_label
-  // attribution".
-  'condition_notes',
-  'seo_title',
-  'seo_description',
-  'negotiable',
-  'listing_type',
-] as const;
+// Phase 3 (Decisions Log v1.1 Addendum, May 7 2026): the worker submit
+// payload is now a small fixed shape — 4 photos + Used/New + (Excellent/
+// Good/Fair if Used) + Yes/No + price + optional note. AI runs after
+// submit; the row lands in status='processing' for the Phase 4 background
+// job to pick up. The legacy fields (item_name / brand / category /
+// description / barcode / product_type / condition_notes / seo_*) are
+// no longer accepted from /team — those will be filled by the AI agent.
+//
+// shop_items has NOT NULL columns for item_name and category that predate
+// schema separation. Until the legacy admin view is rewritten in Phase 5
+// we satisfy them with empty strings; the row is is_published=false and
+// status='processing', so the public site never sees these placeholders.
+
+interface WorkerSubmitItem {
+  worker_id?: unknown;
+  worker_shop_id?: unknown;
+  worker_condition_type?: unknown;
+  worker_condition_grade?: unknown;
+  worker_negotiable?: unknown;
+  worker_price_aed?: unknown;
+  worker_note?: unknown;
+  worker_photo_brand_url?: unknown;
+  worker_photo_2_url?: unknown;
+  worker_photo_3_url?: unknown;
+  worker_photo_barcode_url?: unknown;
+}
+
+const VALID_GRADES = new Set(['Excellent', 'Good', 'Fair']);
+
+function isHttpsUrl(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length < 2048 &&
+    value.startsWith('https://')
+  );
+}
 
 export async function POST(request: NextRequest) {
   if (!verifyOrigin(request)) {
@@ -48,7 +60,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
   }
 
-  let body: { action?: string; item?: Record<string, unknown> };
+  let body: { action?: string; item?: WorkerSubmitItem };
   try {
     body = await request.json();
   } catch {
@@ -59,92 +71,176 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
   }
 
-  const incoming = body.item;
-  // PR #13: item_name is optional. The async AI job will fill it from
-  // photos if blank. Category is still required so the listing can be
-  // routed correctly while the AI is working.
-  if (!incoming.category) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-  }
-  // listing_type is required and constrained to two values. Strict server
-  // validation keeps stale clients (workers mid-upload during a deploy)
-  // from inserting a NULL row that bypasses the new gate at /team.
-  if (incoming.listing_type !== 'used' && incoming.listing_type !== 'new') {
+  const item = body.item;
+
+  // --- worker_id (worker name from session, sent by client) ---
+  const workerId =
+    typeof item.worker_id === 'string' ? item.worker_id.trim() : '';
+  if (!workerId) {
     return NextResponse.json(
-      { error: 'listing_type must be "used" or "new"' },
+      { error: 'Missing worker_id' },
       { status: 400 }
     );
   }
 
-  if (incoming.shop_label && incoming.shop_label !== tokenShop) {
-    return NextResponse.json({ error: 'Shop mismatch' }, { status: 403 });
+  // --- worker_shop_id (BF1–BF5) ---
+  const workerShopId =
+    typeof item.worker_shop_id === 'string' ? item.worker_shop_id.trim() : '';
+  if (!/^BF[1-5]$/.test(workerShopId)) {
+    return NextResponse.json(
+      { error: 'worker_shop_id must be BF1–BF5' },
+      { status: 400 }
+    );
   }
 
-  const safe: Record<string, unknown> = {};
-  for (const key of ALLOWED_FIELDS) {
-    if (key in incoming) safe[key] = incoming[key];
+  // --- worker_condition_type ---
+  const conditionType = item.worker_condition_type;
+  if (conditionType !== 'Used' && conditionType !== 'New') {
+    return NextResponse.json(
+      { error: 'worker_condition_type must be "Used" or "New"' },
+      { status: 400 }
+    );
   }
-  safe.shop_label = tokenShop;
-  // ── Upload attribution (Path A, Phase 1) ───────────────────
-  // uploaded_by is sourced from the verified shop session token,
-  // NOT the request body. Today the session only carries the
-  // shop label (A/B/C/D/E), so attribution is at shop granularity:
-  // every new row gets uploaded_by = 'A' | 'B' | 'C' | 'D' | 'E'.
-  // uploaded_at is server-stamped here (cannot be influenced by
-  // the client).
-  //
-  // Phase 2 (Path C, deferred): add worker_name to the shop
-  // session token at /api/shop-auth so attribution can name the
-  // actual worker who uploaded. That is the proper long-term fix;
-  // it requires invalidating in-flight tokens and a UI tweak at
-  // /team to capture worker name during login.
-  safe.uploaded_by = tokenShop;
-  safe.uploaded_at = new Date().toISOString();
-  safe.is_published = false;
-  safe.is_sold = false;
-  // PR #12: server-side default. If the client omits negotiable, treat
-  // the item as negotiable (matches the database default and keeps
-  // legacy /team clients working unchanged).
-  if (typeof safe.negotiable !== 'boolean') safe.negotiable = true;
-  // Sprint 4: kick off the agent pipeline. Background job will flip this to
-  // 'pending_review' (success or failure) so admins always see the item.
-  safe.status = 'agent_drafting';
+
+  // --- worker_condition_grade — required iff Used ---
+  let conditionGrade: string | null = null;
+  if (conditionType === 'Used') {
+    if (
+      typeof item.worker_condition_grade !== 'string' ||
+      !VALID_GRADES.has(item.worker_condition_grade)
+    ) {
+      return NextResponse.json(
+        { error: 'worker_condition_grade must be Excellent / Good / Fair when Used' },
+        { status: 400 }
+      );
+    }
+    conditionGrade = item.worker_condition_grade;
+  }
+
+  // --- worker_negotiable ---
+  if (typeof item.worker_negotiable !== 'boolean') {
+    return NextResponse.json(
+      { error: 'worker_negotiable must be a boolean' },
+      { status: 400 }
+    );
+  }
+  const negotiable = item.worker_negotiable;
+
+  // --- worker_price_aed ---
+  if (
+    typeof item.worker_price_aed !== 'number' ||
+    !Number.isInteger(item.worker_price_aed) ||
+    item.worker_price_aed < 1
+  ) {
+    return NextResponse.json(
+      { error: 'worker_price_aed must be a positive integer' },
+      { status: 400 }
+    );
+  }
+  const priceAed = item.worker_price_aed;
+
+  // --- worker_note (optional, trimmed, length-capped to keep DB writes sane) ---
+  let workerNote: string | null = null;
+  if (item.worker_note != null) {
+    if (typeof item.worker_note !== 'string') {
+      return NextResponse.json(
+        { error: 'worker_note must be a string' },
+        { status: 400 }
+      );
+    }
+    const trimmed = item.worker_note.trim();
+    if (trimmed.length > 1000) {
+      return NextResponse.json(
+        { error: 'worker_note too long (max 1000 chars)' },
+        { status: 400 }
+      );
+    }
+    workerNote = trimmed || null;
+  }
+
+  // --- 4 photo URLs (Cloudinary HTTPS) ---
+  if (
+    !isHttpsUrl(item.worker_photo_brand_url) ||
+    !isHttpsUrl(item.worker_photo_2_url) ||
+    !isHttpsUrl(item.worker_photo_3_url) ||
+    !isHttpsUrl(item.worker_photo_barcode_url)
+  ) {
+    return NextResponse.json(
+      { error: 'All 4 photo URLs are required' },
+      { status: 400 }
+    );
+  }
+
+  const now = new Date().toISOString();
+
+  const insertRow = {
+    // ── Worker schema-separation columns (Phase 1) ────────────
+    worker_id: workerId,
+    worker_shop_id: workerShopId,
+    worker_condition_type: conditionType,
+    worker_condition_grade: conditionGrade,
+    worker_negotiable: negotiable,
+    worker_price_aed: priceAed,
+    worker_note: workerNote,
+    worker_photo_brand_url: item.worker_photo_brand_url,
+    worker_photo_2_url: item.worker_photo_2_url,
+    worker_photo_3_url: item.worker_photo_3_url,
+    worker_photo_barcode_url: item.worker_photo_barcode_url,
+    worker_submitted_at: now,
+
+    // ── Phase 3 state machine ─────────────────────────────────
+    // 'processing' = worker submitted, AI hasn't run yet. Phase 4's
+    // background processor flips this to 'pending' (success or failure)
+    // so admin always sees the item in the queue.
+    status: 'processing' as const,
+
+    // ── Legacy column compatibility ───────────────────────────
+    // shop_items has NOT NULL constraints on item_name and category that
+    // predate schema separation. Empty strings satisfy the constraint.
+    // The row is is_published=false until admin approves, so the public
+    // site never reads these placeholders.
+    item_name: '',
+    category: '',
+    sale_price: priceAed, // legacy mirror — kept in sync with worker_price_aed
+    shop_source: `Shop ${tokenShop}`,
+    shop_label: tokenShop,
+    duty_manager: workerId,
+    // listing_type mirrors worker_condition_type ('used' | 'new') so any
+    // legacy code paths (e.g. /admin) reading listing_type keep working
+    // until Phase 5 rewrites them.
+    listing_type: conditionType.toLowerCase(),
+    image_urls: [
+      item.worker_photo_brand_url,
+      item.worker_photo_2_url,
+      item.worker_photo_3_url,
+    ],
+    thumbnail_url: item.worker_photo_brand_url,
+    is_published: false,
+    is_sold: false,
+    negotiable,
+    // /api/team/stats counts items by uploaded_by = workerName. Set this
+    // to the worker name (not the shop label as before) so the daily
+    // counter actually returns matches.
+    uploaded_by: workerId,
+    uploaded_at: now,
+  };
 
   const { data: inserted, error } = await supabaseAdmin
     .from('shop_items')
-    .insert(safe)
+    .insert(insertRow)
     .select('id')
     .single();
   if (error || !inserted) {
-    return NextResponse.json({ error: error?.message ?? 'Insert failed' }, { status: 500 });
+    return NextResponse.json(
+      { error: error?.message ?? 'Insert failed' },
+      { status: 500 }
+    );
   }
 
-  // Fire-and-forget: kick the AI job. The worker's response does not depend
-  // on it. If JOBS_SECRET isn't configured the item just sits in
-  // agent_drafting and the admin can fill it manually — that's documented.
-  kickoffListingJob(request, inserted.id as string);
+  // Phase 4 (background AI processor) re-attaches a kickoff here. The
+  // legacy /api/jobs/generate-listing job filters strictly on
+  // status='agent_drafting' and won't touch 'processing' rows, so for now
+  // the row sits in 'processing' until the new processor lands.
 
   return NextResponse.json({ success: true, id: inserted.id });
-}
-
-function kickoffListingJob(request: NextRequest, itemId: string): void {
-  const secret = process.env.JOBS_SECRET;
-  if (!secret) {
-    console.warn('[team-items] JOBS_SECRET missing — agent pipeline disabled');
-    return;
-  }
-  const origin = new URL(request.url).origin;
-  // Unawaited on purpose. Vercel keeps the function alive briefly after the
-  // response, which is enough to flush the request to the network. The job
-  // route is idempotent on status, so any duplicate fires are no-ops.
-  fetch(`${origin}/api/jobs/generate-listing`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-jobs-secret': secret,
-    },
-    body: JSON.stringify({ item_id: itemId }),
-  }).catch((err) => {
-    console.error('[team-items] kickoff failed', itemId, err);
-  });
 }
