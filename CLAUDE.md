@@ -15,7 +15,9 @@ The long-term goal: make the appliance tracking system so precise that an AI age
 - **Styling:** TailwindCSS 3.4, custom `font-heading` class for headings
 - **Database:** Supabase (PostgreSQL with RLS policies)
 - **Auth:** PIN-based admin login (bcrypt), shop passwords (bcrypt), entry/manager codes for appliance tracker
-- **AI:** Anthropic Claude `claude-haiku-4-5-20251001` (migrated from Gemini in PR #11). Note: `/api/gemini` route file still named for legacy reasons but uses Claude. Gemini is no longer used.
+- **AI:** Anthropic Claude. Two models in production:
+  - `claude-haiku-4-5-20251001` for the legacy `/api/gemini` actions (appliance tracker barcode scan, diesel route OCR). Migrated from Gemini in PR #11; route file still named for legacy reasons.
+  - `claude-sonnet-4-6` for the Phase 4 listing-generator pipeline at `/api/items/[id]/generate-listing`. The locked SEO Agent v1.0 prompt at `lib/prompts/listing-generator-v1.md` is the system prompt.
 - **Images:** Cloudinary (uploads), Supabase Storage, Unsplash (category cards)
 - **Hosting:** Vercel
 - **Analytics:** Facebook Pixel
@@ -27,8 +29,8 @@ src/
 ├── app/                    # Next.js App Router pages
 │   ├── page.tsx            # Marketplace homepage (category pills, product grid)
 │   ├── item/[id]/          # Product detail pages (SSR metadata)
-│   ├── team/               # Upload portal (shop password → name → photo upload → AI auto-fill). Has USED/NEW picker after photos that gates AI Scan and Submit. Phase 3 of the listing-generator rebuild will rebuild this flow entirely.
-│   ├── admin/              # Admin dashboard (approve/reject items, settings, analytics)
+│   ├── team/               # Worker upload portal. Phase 3 rebuilt this around the locked pill design: 4 photos (3 item + 1 visually-distinct barcode) → Used/New → Excellent/Good/Fair (when Used) → Negotiable Yes/No → price → optional note. NO AI button. Submit lands the row in status='processing' and Phase 4 runs the AI in the background.
+│   ├── admin/              # Admin dashboard (approve/reject items, settings, analytics). Approve flips status='pending' → 'published' and sets is_published=true. Phase 5 will rewrite this around the new pending dashboard with AI-prefilled drafts.
 │   ├── appliances/         # Appliance tracker (the core ops system)
 │   │   ├── page.tsx        # Entry code gate
 │   │   ├── select/         # Worker selection (SHOP/JURF/SECURITY tabs)
@@ -44,12 +46,20 @@ src/
 │       ├── auth/           # Admin PIN validation (bcrypt, rate-limited)
 │       ├── shop-auth/      # Shop password validation (bcrypt)
 │       ├── appliances/     # All appliance CRUD (single POST endpoint, action-based)
-│       ├── gemini/         # Gemini AI image analysis
+│       ├── gemini/         # Claude Haiku image analysis (legacy name; serves appliance tracker + diesel)
+│       ├── team/items/     # Worker submit endpoint (Phase 3). Inserts row with status='processing' and fires waitUntil() to /api/items/[id]/generate-listing.
+│       ├── items/[id]/generate-listing/  # Phase 4: background AI processor. Bearer auth via INTERNAL_API_SECRET. Loads the locked SEO Agent v1.0 prompt, calls Sonnet, populates 24 ai_* columns, flips status='processing' → 'pending'.
+│       ├── cron/cleanup-stuck-processing/ # Phase 4 safety net. Daily cron (Hobby tier cap) plus piggyback on every worker submit — flips any 'processing' row older than 10 min to 'pending' with ai_stuck_in_processing flag.
+│       ├── jobs/generate-listing/ # LEGACY. Filters strictly on status='agent_drafting' (no rows match anymore). Has zero callers in current code. Retires in Phase 9.
 │       └── track-click/    # WhatsApp click tracking
+├── scripts/
+│   └── process-backlog.ts  # One-time runner: drains any status='processing' rows by curling the generate-listing endpoint. Safe to re-run; supports --force for 'pending' reprocessing.
 ├── components/             # Shared UI (Navbar, Hero, ItemCard, Footer, WhatsAppFloat)
 └── lib/
-    ├── supabase.ts         # Anon client + TypeScript interfaces
+    ├── supabase.ts         # Anon client + TypeScript interfaces (ShopItem.status union: processing | pending | published | agent_drafting | sent_back | null)
     ├── supabase-admin.ts   # Service role client (server-side only)
+    ├── ai.ts               # CLAUDE_MODEL (Haiku constant) + CLAUDE_SONNET_MODEL constant. Plus the legacy buildItemListingPrompt + callAIVision used by /api/gemini.
+    ├── cleanup-stuck.ts    # rescueStuckItems(): shared cleanup logic used by the cron route AND the piggyback waitUntil() on every worker submit.
     ├── appliance-api.ts    # Client-side API wrapper for /api/appliances
     ├── appliance-catalog.ts # 12 product types, 90+ brands, legacy mapping
     ├── constants.ts        # 8 categories, shop list, WhatsApp URL builder
@@ -57,6 +67,10 @@ src/
     ├── verify-origin.ts    # Origin/referer validation
     ├── fbpixel.ts          # Facebook Pixel
     └── lang.tsx            # EN/AR language context
+
+lib/                        # ROOT-level (NOT src/lib). Phase 4 added this for files that need to live outside the Next.js src/ tree but still be bundled into serverless functions via outputFileTracingIncludes.
+└── prompts/
+    └── listing-generator-v1.md  # The locked SEO Agent v1.0 prompt. Loaded at runtime by /api/items/[id]/generate-listing via fs.readFileSync.
 ```
 
 ## Database Schema (Supabase)
@@ -64,7 +78,7 @@ src/
 ### Core Tables
 
 **shop_items** — Marketplace products
-- Key fields: barcode, item_name, brand, product_type, category, sale_price, shop_source, image_urls[], is_published, is_sold, is_hidden, is_featured, condition, seo_title, seo_description, listing_type ('used'|'new'|null), negotiable, status ('processing'|'pending'|'sent_back'|'archived'|null)
+- Key fields: barcode, item_name, brand, product_type, category, sale_price, shop_source, image_urls[], is_published, is_sold, is_hidden, is_featured, condition, seo_title, seo_description, listing_type ('used'|'new'|null), negotiable, status ('processing'|'pending'|'published'|'agent_drafting'|'sent_back'|null)
 - 67 schema-separation columns added in Phase 1 with prefixes `worker_*`, `ai_*`, `admin_*`, `published_*` — see `docs/Bufaisal-Claude-Code-Implementation-Spec-v1_0_1.md` Phase 1B for full list.
 - RLS: anon can read published items; service_role for writes
 
@@ -79,7 +93,20 @@ src/
 **website_config** — CMS settings (hero text, WhatsApp number, etc.)
 **duty_managers** — Active managers per shop
 **appliance_audit_log** — Action tracking (user_name, action, item_id, details JSONB)
-**audit_log** — Cross-system action tracking added in Phase 1 of the listing-generator rebuild. RLS-locked, service_role only.
+**audit_log** — Cross-system action tracking added in Phase 1 of the listing-generator rebuild. RLS-locked, service_role only. Phase 4 writes `ai_completed` rows; the daily cleanup cron and piggyback rescue write `cleanup_stuck_processing` rows. Legacy admin-approve does NOT write here yet — Phase 5's new admin approve flow needs to.
+
+## Listing Generator Pipeline (Phases 1–4 complete and verified, May 2026)
+
+The full pipeline turning a worker upload into a published listing on bufaisal.ae:
+
+1. **Worker submit** (`/team` → `POST /api/team/items`) — inserts row with `status='processing'`. Fires two `waitUntil()` side effects: (a) the AI processor for THIS row, (b) `rescueStuckItems()` to clean any other stuck rows piggybacked on this submit.
+2. **Phase 4 AI processor** (`POST /api/items/[id]/generate-listing`, Bearer-auth'd via `INTERNAL_API_SECRET`) — fetches the row, calls Sonnet 4.6 with the locked SEO Agent v1.0 prompt + 4 photo URLs, validates the JSON output (max 3 attempts), populates 24 `ai_*` columns, flips `status='processing'` → `'pending'`. Every failure mode (`ai_api_timeout`, `ai_json_invalid`, `ai_validation_failed`, `photo_missing`, `ai_auth_error`) still produces a `'pending'` row with the appropriate flag — items NEVER stay in `'processing'`.
+3. **Cleanup safety net** — daily cron at 4am UTC + piggyback on every worker submit. Flips any `'processing'` row older than 10 min to `'pending'` with the `ai_stuck_in_processing` flag.
+4. **Admin approve** (`/admin` → `POST /api/admin/items` action='approve') — flips `status='pending'` → `'published'` and sets `is_published=true`, `approved_by=<admin>`, `approved_at=<now>`. Fixed in PR #24 (commit `a5fcaab`); previously it set `status=null`, which clobbered Phase 4's correct output. Phase 5 will rewrite the admin pending dashboard around AI-prefilled drafts and the schema-separation columns; until then this minimal fix keeps the state machine consistent.
+
+**Audit_log gap:** the legacy admin-approve flow does NOT write to `audit_log`. Phase 5's new admin approve must.
+
+**End-to-end verified** in production on a real upload (see `docs/PHASE_STATE.md` for the verification record).
 
 ## Appliance State Machine
 
@@ -135,6 +162,10 @@ NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
 ADMIN_PIN_HASHES          # JSON array: [{"hash":"$2a$10$...","name":"Admin"}]
 NEXT_PUBLIC_FB_PIXEL_ID
 NEXT_PUBLIC_WHATSAPP_NUMBER
+NEXT_PUBLIC_BASE_URL      # Phase 4: e.g. https://bufaisal.ae. Used by /api/team/items to call /api/items/[id]/generate-listing internally.
+INTERNAL_API_SECRET       # Phase 4: random 40-char string. Bearer auth for /api/items/[id]/generate-listing AND /api/cron/cleanup-stuck-processing.
+JOBS_SECRET               # LEGACY: still set, used only by the no-longer-called /api/jobs/generate-listing. Safe to remove in Phase 9 cleanup.
+CRON_SECRET               # OPTIONAL: if set in Vercel env, Vercel auto-injects Authorization: Bearer ${CRON_SECRET} on cron triggers. The cron route accepts CRON_SECRET OR INTERNAL_API_SECRET.
 ```
 
 ## Known Issues / Tech Debt (From Full Audit — April 2026)
@@ -163,9 +194,9 @@ NEXT_PUBLIC_WHATSAPP_NUMBER
 16. **Sequential Gemini calls** — should be parallel with Promise.all().
 
 ### AGENT-READINESS
-17. **No state transition validation** — API accepts any update, no business rule enforcement.
-18. **No Gemini auto-fill on appliance intake** — workers manually select everything.
-19. **No end states defined** — items sit in "delivered" forever.
+17. **No state transition validation on appliance_items** — API accepts any update, no business rule enforcement. (shop_items state machine is now constrained; appliance_items still wide-open.)
+18. **No AI auto-fill on appliance intake** — workers manually select everything. Separate from the listing-generator pipeline; appliance tracker still has a typed-input flow.
+19. **No end states defined** for appliance_items — items sit in "delivered" forever.
 20. **No duplicate barcode detection** on insert.
 21. **Phantom states in SQL** — migration defines ready_to_sell, sold, scrapped but code doesn't use them.
 
