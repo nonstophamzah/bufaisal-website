@@ -10,7 +10,16 @@ const nextConfig = {
     },
   },
   images: {
-    formats: ['image/avif', 'image/webp'],
+    // Custom loader bypasses /_next/image entirely so we don't hit
+    // Vercel's image-optimization quota (Hobby tier returns HTTP 402
+    // once the monthly limit is exhausted, which broke every Cloudinary
+    // thumbnail site-wide on 2026-05-09). The loader injects Cloudinary
+    // transformations directly into res.cloudinary.com URLs, which
+    // Cloudinary serves from its own CDN for free at our volume.
+    // remotePatterns is kept for next dev validation and any leftover
+    // <Image> calls that bypass our loader.
+    loader: 'custom',
+    loaderFile: './src/lib/cloudinary-loader.ts',
     remotePatterns: [
       { protocol: 'https', hostname: 'res.cloudinary.com' },
       { protocol: 'https', hostname: '*.supabase.co' },

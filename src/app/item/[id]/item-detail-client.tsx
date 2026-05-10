@@ -51,12 +51,16 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
     window.location.href = buildWhatsAppUrl(item);
   };
 
+  // Gallery fallback chain matches src/lib/item-image.ts:
+  // legacy image_urls > legacy thumbnail_url > Phase 1B worker_photo_brand_url.
   const images =
     item.image_urls?.length > 0
       ? item.image_urls
       : item.thumbnail_url
         ? [item.thumbnail_url]
-        : [];
+        : item.worker_photo_brand_url
+          ? [item.worker_photo_brand_url]
+          : [];
 
   return (
     <div className="pt-24 pb-28 md:pb-16">
