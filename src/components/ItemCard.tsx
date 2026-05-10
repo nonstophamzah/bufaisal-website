@@ -6,6 +6,7 @@ import { MessageCircle, Star, Clock } from 'lucide-react';
 import { ShopItem } from '@/lib/supabase';
 import { buildWhatsAppUrl } from '@/lib/constants';
 import { trackWhatsAppClick } from '@/lib/fbpixel';
+import { getItemImageUrl } from '@/lib/item-image';
 
 function ConditionBadge({ condition }: { condition: string | null }) {
   if (!condition) return null;
@@ -33,8 +34,7 @@ function isJustArrived(createdAt: string) {
 }
 
 export default function ItemCard({ item, priority = false }: { item: ShopItem; priority?: boolean }) {
-  const imageUrl =
-    item.thumbnail_url || item.image_urls?.[0] || '/placeholder.png';
+  const imageUrl = getItemImageUrl(item);
   const justArrived = isJustArrived(item.created_at);
 
   const handleWhatsAppClick = (e: React.MouseEvent) => {

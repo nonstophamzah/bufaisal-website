@@ -7,6 +7,7 @@ import { Search, X, ChevronDown, ChevronRight } from 'lucide-react';
 import ItemCard from '@/components/ItemCard';
 import { supabase, ShopItem } from '@/lib/supabase';
 import { CATEGORIES, CATEGORY_SLUG_MAP } from '@/lib/constants';
+import { resolveItemImageUrl } from '@/lib/item-image';
 
 const CATEGORY_INTROS: Record<string, string> = {
   'living-room-lounge':
@@ -172,7 +173,7 @@ export default function ShopClient({
           name: item.item_name,
           description: item.description || `Used ${item.item_name}`,
           url: `https://bufaisal.ae/item/${item.id}`,
-          image: item.thumbnail_url || item.image_urls?.[0] || '',
+          image: resolveItemImageUrl(item) ?? '',
           brand: { '@type': 'Brand', name: item.brand || 'Bu Faisal' },
           offers: {
             '@type': 'Offer',

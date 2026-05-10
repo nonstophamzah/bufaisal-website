@@ -62,6 +62,14 @@ export interface ShopItem {
   // Worker's explicit Used/New choice from /team upload. Drives the AI
   // prompt's title prefix. NULL on legacy rows — prompt falls back to "Used".
   listing_type: 'used' | 'new' | null;
+  // Phase 1B worker_*_url canonical photo columns. Always set on Phase
+  // 3+ rows. Used as a fallback by `getItemImageUrl()` when the legacy
+  // image_urls / thumbnail_url columns are empty. NULL on pre-Phase-3
+  // legacy rows.
+  worker_photo_brand_url: string | null;
+  worker_photo_2_url: string | null;
+  worker_photo_3_url: string | null;
+  worker_photo_barcode_url: string | null;
 }
 
 export interface WebsiteConfig {

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { cache } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { ShopItem } from '@/lib/supabase';
+import { resolveItemImageUrl } from '@/lib/item-image';
 import ItemDetailClient from './item-detail-client';
 
 function getSupabase() {
@@ -34,7 +35,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     item.seo_description ||
     item.description ||
     `${item.item_name} available at Bu Faisal second-hand store in Ajman, UAE.`;
-  const image = item.thumbnail_url || item.image_urls?.[0];
+  const image = resolveItemImageUrl(item);
 
   return {
     title,
@@ -71,7 +72,7 @@ export default async function ItemDetailPage({ params }: Props) {
   // page description) so search results can hint at negotiability.
   // Schema.org has no official negotiable signal; this is the
   // simplest approach Google reliably surfaces.
-  const image = item.thumbnail_url || item.image_urls?.[0];
+  const image = resolveItemImageUrl(item);
   const baseDescription =
     item.seo_description ||
     item.description ||
