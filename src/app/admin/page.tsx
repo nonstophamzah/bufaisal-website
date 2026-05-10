@@ -6,7 +6,6 @@ import {
   LogOut,
   Eye,
   EyeOff,
-  Clock,
   BarChart3,
   Settings,
   Users,
@@ -43,7 +42,14 @@ type Toast = {
 };
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<Tab>('pending');
+  // Phase 5 follow-up (2026-05-10): default tab moved from 'pending' to
+  // 'published'. The Pending tab was removed from the nav (admins now
+  // approve via /admin/pending which computes published_* columns
+  // correctly via src/lib/admin-pending-publish.ts). Keeping the default
+  // as 'pending' would render the legacy Pending UI on first load even
+  // without a nav button. Removing it from the render switch below is
+  // the second layer of defence.
+  const [tab, setTab] = useState<Tab>('published');
   const [toast, setToast] = useState<Toast | null>(null);
   const [allItems, setAllItems] = useState<ShopItem[]>([]);
 
@@ -174,8 +180,16 @@ export default function AdminPage() {
   }
 
   // ─── Tab config ────────────────────────────
+  // Phase 5 follow-up (2026-05-10): the legacy 'pending' tab is removed.
+  // It was shipping is_published=true on shop_items rows without
+  // computing published_* columns (because the legacy approve route at
+  // /api/admin/items doesn't), which left two production rows with NULL
+  // published_description / seo_title / etc. while still appearing on
+  // bufaisal.ae. Approval now lives exclusively at /admin/pending,
+  // reachable via the BETA link below. The 'pending' value is kept in
+  // the Tab union and in /api/admin/items for backwards compat with
+  // any direct API callers (none in current code) until Phase 9.
   const tabs: { key: Tab; label: string; icon: typeof Package }[] = [
-    { key: 'pending', label: 'Pending', icon: Clock },
     { key: 'published', label: 'Live', icon: Eye },
     { key: 'sold', label: 'Sold', icon: ShoppingBag },
     { key: 'hidden', label: 'Hidden', icon: EyeOff },
@@ -276,8 +290,11 @@ export default function AdminPage() {
         </div>
 
         {/* Content */}
-        {(tab === 'pending' ||
-          tab === 'published' ||
+        {/* Phase 5 follow-up (2026-05-10): 'pending' intentionally
+            excluded from the render branch. Belt-and-braces with the
+            default-tab + nav-removal changes above so the legacy
+            Pending UI cannot be reached by any code path on this page. */}
+        {(tab === 'published' ||
           tab === 'sold' ||
           tab === 'hidden') && (
           <AdminItems

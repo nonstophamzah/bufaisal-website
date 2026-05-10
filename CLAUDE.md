@@ -18,7 +18,7 @@ The long-term goal: make the appliance tracking system so precise that an AI age
 - **AI:** Anthropic Claude. Two models in production:
   - `claude-haiku-4-5-20251001` for the legacy `/api/gemini` actions (appliance tracker barcode scan, diesel route OCR). Migrated from Gemini in PR #11; route file still named for legacy reasons.
   - `claude-sonnet-4-6` for the Phase 4 listing-generator pipeline at `/api/items/[id]/generate-listing`. The locked SEO Agent v1.0 prompt at `lib/prompts/listing-generator-v1.md` is the system prompt.
-- **Images:** Cloudinary (uploads), Supabase Storage, Unsplash (category cards)
+- **Images:** Cloudinary (uploads), Supabase Storage, Unsplash (category cards). next/image is wired to a custom loader at `src/lib/cloudinary-loader.ts` that injects Cloudinary transforms (`f_auto,q_<n>,w_<n>,c_limit`) and bypasses Vercel's `/_next/image` optimizer entirely (which 402'd at the Hobby quota on 2026-05-09 and broke every Cloudinary thumbnail site-wide — see PR #27).
 - **Hosting:** Vercel
 - **Analytics:** Facebook Pixel
 
@@ -30,7 +30,8 @@ src/
 │   ├── page.tsx            # Marketplace homepage (category pills, product grid)
 │   ├── item/[id]/          # Product detail pages (SSR metadata)
 │   ├── team/               # Worker upload portal. Phase 3 rebuilt this around the locked pill design: 4 photos (3 item + 1 visually-distinct barcode) → Used/New → Excellent/Good/Fair (when Used) → Negotiable Yes/No → price → optional note. NO AI button. Submit lands the row in status='processing' and Phase 4 runs the AI in the background.
-│   ├── admin/              # Admin dashboard (approve/reject items, settings, analytics). Approve flips status='pending' → 'published' and sets is_published=true. Phase 5 will rewrite this around the new pending dashboard with AI-prefilled drafts.
+│   ├── admin/              # Legacy admin dashboard (settings, analytics, Live/Sold/Hidden tabs). Phase 5 added a "→ New Pending [BETA]" link in the nav. The legacy Pending tab was REMOVED on 2026-05-10 after two production rows were approved through it and ended up status='published' with all 12 published_* columns NULL — the legacy approve flow at /api/admin/items never computed them. All approvals now go through /admin/pending. Default tab is 'published' (Live). The 'pending' value stays in the Tab union and the API for backwards compat with any direct callers (none in current code) until Phase 9.
+│   ├── admin/pending/      # Phase 5: NEW admin pending dashboard. /admin/pending lists rows with status='pending' (strict). /admin/pending/[id] is the full-page detail editor with photo lightbox, 17 editable fields, audit_log history, sticky action bar (Approve/Save/Regenerate/Reject). Quick Approve gated by confidence ≥ 0.8 AND no flags AND no admin overrides — server re-checks the same rule.
 │   ├── appliances/         # Appliance tracker (the core ops system)
 │   │   ├── page.tsx        # Entry code gate
 │   │   ├── select/         # Worker selection (SHOP/JURF/SECURITY tabs)
@@ -51,6 +52,8 @@ src/
 │       ├── items/[id]/generate-listing/  # Phase 4: background AI processor. Bearer auth via INTERNAL_API_SECRET. Loads the locked SEO Agent v1.0 prompt, calls Sonnet, populates 24 ai_* columns, flips status='processing' → 'pending'.
 │       ├── cron/cleanup-stuck-processing/ # Phase 4 safety net. Daily cron (Hobby tier cap) plus piggyback on every worker submit — flips any 'processing' row older than 10 min to 'pending' with ai_stuck_in_processing flag.
 │       ├── jobs/generate-listing/ # LEGACY. Filters strictly on status='agent_drafting' (no rows match anymore). Has zero callers in current code. Retires in Phase 9.
+│       ├── admin/items/    # Legacy admin actions endpoint (approve / reject / hide / mark-sold / etc., action-dispatched POST). Untouched by Phase 5.
+│       ├── admin/pending/  # Phase 5: sidecar admin endpoints for the new dashboard. GET / (list), GET|PATCH /[id] (detail + save admin_* edits), POST /[id]/approve (full publish + legacy mirror), POST /[id]/quick-approve (server re-checks the strict gate, returns 422 if not eligible), POST /[id]/reject (status='archived'), POST /[id]/regenerate (waitUntil → /api/items/[id]/generate-listing with force=true). All write to audit_log with actor_type='admin'.
 │       └── track-click/    # WhatsApp click tracking
 ├── scripts/
 │   └── process-backlog.ts  # One-time runner: drains any status='processing' rows by curling the generate-listing endpoint. Safe to re-run; supports --force for 'pending' reprocessing.
@@ -60,6 +63,10 @@ src/
     ├── supabase-admin.ts   # Service role client (server-side only)
     ├── ai.ts               # CLAUDE_MODEL (Haiku constant) + CLAUDE_SONNET_MODEL constant. Plus the legacy buildItemListingPrompt + callAIVision used by /api/gemini.
     ├── cleanup-stuck.ts    # rescueStuckItems(): shared cleanup logic used by the cron route AND the piggyback waitUntil() on every worker submit.
+    ├── admin-pending-api.ts        # Phase 5: typed client wrappers for the /api/admin/pending sidecar endpoints. Bearer from sessionStorage, 401 → bounce to /admin.
+    ├── admin-pending-publish.ts    # Phase 5: server-only helpers — buildPublishUpdate() (computes published_* + the marked "Phase 6 bridge — remove when public site reads published_* directly" legacy mirror) and writeAdminAudit().
+    ├── item-image.ts       # Image hotfix (PR #27): centralized fallback chain for the public site. getItemImageUrl() (with /og-image.png placeholder, for <img>) and resolveItemImageUrl() (without, for JSON-LD). Chain: thumbnail_url > image_urls[0] > worker_photo_brand_url > placeholder.
+    ├── cloudinary-loader.ts        # Image hotfix (PR #27): custom next/image loader. For res.cloudinary.com URLs injects f_auto,q_<n>,w_<n>,c_limit; other URLs pass through. Wired via next.config.mjs `images.loader = 'custom'` so /_next/image is no longer in the path.
     ├── appliance-api.ts    # Client-side API wrapper for /api/appliances
     ├── appliance-catalog.ts # 12 product types, 90+ brands, legacy mapping
     ├── constants.ts        # 8 categories, shop list, WhatsApp URL builder
@@ -93,20 +100,20 @@ lib/                        # ROOT-level (NOT src/lib). Phase 4 added this for f
 **website_config** — CMS settings (hero text, WhatsApp number, etc.)
 **duty_managers** — Active managers per shop
 **appliance_audit_log** — Action tracking (user_name, action, item_id, details JSONB)
-**audit_log** — Cross-system action tracking added in Phase 1 of the listing-generator rebuild. RLS-locked, service_role only. Phase 4 writes `ai_completed` rows; the daily cleanup cron and piggyback rescue write `cleanup_stuck_processing` rows. Legacy admin-approve does NOT write here yet — Phase 5's new admin approve flow needs to.
+**audit_log** — Cross-system action tracking added in Phase 1 of the listing-generator rebuild. RLS-locked, service_role only. Phase 4 writes `ai_completed` rows; the daily cleanup cron and piggyback rescue write `cleanup_stuck_processing` rows. Phase 5's new admin pending dashboard writes `admin_approved` (with `via=detail_editor` or `via=quick_approve` and `overrides_applied`), `admin_edited`, `admin_rejected`, `admin_regenerate_triggered`. Legacy `/admin` (action='approve' on /api/admin/items) still does NOT write here — that path retires in Phase 9 once the new dashboard handles all flows.
 
-## Listing Generator Pipeline (Phases 1–4 complete and verified, May 2026)
+## Listing Generator Pipeline (Phases 1–5 complete and verified, May 2026)
 
 The full pipeline turning a worker upload into a published listing on bufaisal.ae:
 
 1. **Worker submit** (`/team` → `POST /api/team/items`) — inserts row with `status='processing'`. Fires two `waitUntil()` side effects: (a) the AI processor for THIS row, (b) `rescueStuckItems()` to clean any other stuck rows piggybacked on this submit.
 2. **Phase 4 AI processor** (`POST /api/items/[id]/generate-listing`, Bearer-auth'd via `INTERNAL_API_SECRET`) — fetches the row, calls Sonnet 4.6 with the locked SEO Agent v1.0 prompt + 4 photo URLs, validates the JSON output (max 3 attempts), populates 24 `ai_*` columns, flips `status='processing'` → `'pending'`. Every failure mode (`ai_api_timeout`, `ai_json_invalid`, `ai_validation_failed`, `photo_missing`, `ai_auth_error`) still produces a `'pending'` row with the appropriate flag — items NEVER stay in `'processing'`.
 3. **Cleanup safety net** — daily cron at 4am UTC + piggyback on every worker submit. Flips any `'processing'` row older than 10 min to `'pending'` with the `ai_stuck_in_processing` flag.
-4. **Admin approve** (`/admin` → `POST /api/admin/items` action='approve') — flips `status='pending'` → `'published'` and sets `is_published=true`, `approved_by=<admin>`, `approved_at=<now>`. Fixed in PR #24 (commit `a5fcaab`); previously it set `status=null`, which clobbered Phase 4's correct output. Phase 5 will rewrite the admin pending dashboard around AI-prefilled drafts and the schema-separation columns; until then this minimal fix keeps the state machine consistent.
-
-**Audit_log gap:** the legacy admin-approve flow does NOT write to `audit_log`. Phase 5's new admin approve must.
+4. **Admin approve** (Phase 5) — primary path is `/admin/pending` → `POST /api/admin/pending/[id]/approve` (full editor) or `/quick-approve` (one-tap, server-gated on confidence ≥ 0.8 + no flags + no admin overrides). Computes `published_*` columns (`admin_*` override ?? `ai_*`), writes `published_at` + `admin_approved_*`, status → `'published'`, `is_published=true`, AND mirrors into the legacy columns the public site reads (`item_name, brand, category, condition, sale_price, description, seo_title, seo_description, negotiable, product_type, barcode`). The mirror block in `src/lib/admin-pending-publish.ts` is explicitly marked **"Phase 6 bridge — remove when public site reads published_* directly"** — without it, every Phase 5-published row would render blank on bufaisal.ae because worker submit inserts empty strings into the legacy NOT NULL columns. Audit log row written on every transition. Legacy `/admin` Pending tab still works for backwards compat but doesn't compute `published_*` or write audit_log; it retires in Phase 9.
 
 **End-to-end verified** in production on a real upload (see `docs/PHASE_STATE.md` for the verification record).
+
+**Image rendering:** custom next/image loader at `src/lib/cloudinary-loader.ts` rewrites `res.cloudinary.com` URLs with Cloudinary's transforms (`f_auto,q_<n>,w_<n>,c_limit`) and bypasses `/_next/image` entirely. Required because Vercel Hobby's image-optimization quota 402'd on 2026-05-09, breaking every Cloudinary thumbnail site-wide (PR #27). Public-site fallback chain centralized in `src/lib/item-image.ts`: `thumbnail_url > image_urls[0] > worker_photo_brand_url > /og-image.png`.
 
 ## Appliance State Machine
 
