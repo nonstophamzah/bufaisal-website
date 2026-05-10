@@ -59,37 +59,89 @@ export async function GET(request: NextRequest) {
       worker_id?: unknown;
       ai_item_name?: unknown;
       worker_submitted_at?: unknown;
+      updated_at?: unknown;
     }
+
+    // v2 — point-query the TV stand by id (no status filter) to compare
+    // against the list query result. If the point-query returns
+    // status='archived' but the list returned status='pending' for the
+    // same id, we have proof of read inconsistency on the same client
+    // for the same row.
+    const { data: tvStandPoint, error: tvErr } = await supabaseAdmin
+      .from('shop_items')
+      .select('id, status, updated_at, is_published, is_sold, is_hidden')
+      .eq('id', 'd230899f-8919-4b0f-88be-49b21eca7203')
+      .single();
+
+    // v2 — also do a fresh client query (separate Supabase client
+    // instance) to rule out module-singleton staleness.
+    const { createClient: createFreshClient } = await import('@supabase/supabase-js');
+    const freshClient = createFreshClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    const { data: freshList } = await freshClient
+      .from('shop_items')
+      .select('id, status, worker_id, ai_item_name, updated_at, worker_submitted_at')
+      .eq('status', 'pending')
+      .order('worker_submitted_at', { ascending: false });
+    const { data: freshTvStand } = await freshClient
+      .from('shop_items')
+      .select('id, status, updated_at')
+      .eq('id', 'd230899f-8919-4b0f-88be-49b21eca7203')
+      .single();
+
     await supabaseAdmin.from('audit_log').insert({
       item_id: null,
-      action: 'debug_pending_list_call',
+      action: 'debug_pending_list_call_v2',
       actor_type: 'admin',
       actor_id: admin,
       metadata: {
         deployment_sha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 8) ?? 'unknown',
         deployment_url: process.env.VERCEL_URL ?? 'unknown',
+        env_check: {
+          // What URL is the production server actually hitting?
+          supabase_url: process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'MISSING',
+          service_key_len: process.env.SUPABASE_SERVICE_ROLE_KEY?.length ?? 0,
+          service_key_prefix: process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(0, 12) ?? 'MISSING',
+        },
         request: {
           host: request.headers.get('host'),
           origin: request.headers.get('origin'),
           referer: request.headers.get('referer'),
-          user_agent: request.headers.get('user-agent')?.slice(0, 200),
-          x_forwarded_for: request.headers.get('x-forwarded-for'),
-          x_vercel_id: request.headers.get('x-vercel-id'),
         },
-        response: {
+        // What the SHARED supabaseAdmin singleton returned via the route's
+        // exact .eq('status', 'pending') query
+        list_response_via_singleton: {
           count: items.length,
-          ids: (items as ItemRow[]).map((r) => r.id ?? null),
           rows: (items as ItemRow[]).map((r) => ({
             id: r.id ?? null,
             status: r.status ?? null,
-            is_published: r.is_published ?? null,
-            is_sold: r.is_sold ?? null,
-            is_hidden: r.is_hidden ?? null,
+            updated_at: r.updated_at ?? null,
             worker_id: r.worker_id ?? null,
             ai_item_name: r.ai_item_name ?? null,
-            worker_submitted_at: r.worker_submitted_at ?? null,
           })),
         },
+        // What a POINT QUERY for the TV stand id returns (no status filter)
+        // via the shared singleton — should show 'archived' if data is
+        // current, 'pending' if stale.
+        tv_stand_point_via_singleton: {
+          err: tvErr?.message ?? null,
+          row: tvStandPoint ?? null,
+        },
+        // What a FRESH supabase client (no module-level reuse) returns
+        // for the same list query. If this differs from the singleton,
+        // we have proof of singleton-cache staleness.
+        list_response_via_fresh_client: {
+          count: freshList?.length ?? 0,
+          rows: (freshList ?? []).map((r) => ({
+            id: r.id,
+            status: r.status,
+            worker_id: r.worker_id,
+            ai_item_name: r.ai_item_name,
+          })),
+        },
+        tv_stand_point_via_fresh_client: freshTvStand ?? null,
       },
     });
   } catch (logErr) {
