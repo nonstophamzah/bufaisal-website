@@ -1,6 +1,6 @@
 # Listing Generator Rebuild — Phase State
 
-**Last updated:** 2026-05-10 (after Phase 5 + image-optimizer fix + legacy Pending tab removal)
+**Last updated:** 2026-05-10 (after detail-page + visibility-refresh hardening; full Phase 5 + image fix + legacy Pending tab removal closed)
 **Owner:** Hamzah Khan
 **Driver doc:** `docs/Bufaisal-Claude-Code-Implementation-Spec-v1_0_1.md`
 **Decisions log:** `docs/Bufaisal-Decisions-Log-v1_1-Addendum.docx`
@@ -191,6 +191,20 @@ Per memory `feedback_listing_generator_workflow.md`:
 - **Sacred routes:** `/team`, `/admin`, `/appliance-tracker`, `/api/appliances`. Surgical edits only; never refactor end-to-end without explicit ask.
 - **Scope discipline:** "two-line change" means two lines. Comment cleanup is Phase 9 material.
 
+### Investigation rule: ground truth over screenshots
+**Added 2026-05-10 after a wasted bug-chase that Phase 5 didn't actually have.**
+
+When a bug is reported with screenshot- or memory-based symptoms:
+
+1. **Read the actual route file first.** Find the SQL/update payload that supposedly does the wrong thing. Confirm what it actually writes vs what's reported.
+2. **Read the actual DB row via service role.** What columns are populated, what's NULL, what the audit_log says about who did what when. The script `/tmp/dump-bug-rows.mjs` (Hamzah-side) reads creds from `.env.local` + `.env.production.local` — copy and adapt.
+3. **Check the audit_log timeline.** Reconstruct what happened from `before_state`/`after_state` diffs. If a transition exists in the data but not in the audit trail, suspect legacy actions (legacy `/api/admin/items` doesn't write audit_log).
+4. **Only then write code.** If steps 1-3 contradict the report, push back with the evidence rather than building a fix for a non-existent bug.
+
+The 2026-05-10 case: three bugs reported in `/admin/pending` (list shows wrong rows, reject sets `is_sold=true`, reject doesn't write audit_log). All three were screenshot-inferred. The actual code was correct on all three counts. The real cause was a separate legacy-`/admin` `mark_sold` action with no audit trail (legacy admin doesn't write audit_log) plus stale browser state in the list view.
+
+What to keep doing: Hamzah's "Investigate before fixing. Verify all three bugs in the actual route files before writing fixes. Report findings first." framing is the right one. Don't skip steps under time pressure.
+
 ---
 
 ## Outstanding tech-debt items (for Phase 9 or earlier as needed)
@@ -205,5 +219,10 @@ Per memory `feedback_listing_generator_workflow.md`:
 
 ## Change log for this file
 
+- **2026-05-10 (later):** Three follow-up items shipped (PR #29):
+  - Detail GET endpoint now returns 409 for non-pending rows so deep links to `/admin/pending/<archived-id>` show a clear "this item is in 'X', not 'pending'" message instead of an editor with silently-failing buttons.
+  - List view auto-refreshes on `document.visibilitychange` so a switched-and-returned tab doesn't show stale state.
+  - Cleanup SQL `supabase-cleanup-archived-sold-inconsistency.sql` written for one row that ended up archived AND `is_sold=true` from a legacy mark_sold sequence (audit-trail-narrowed: only touches rows with an `admin_rejected` audit entry).
+  - **Investigation rule** added above: ground truth (code + DB + audit_log) over screenshot-based inference. Triggered by a wasted bug-chase tonight where three reported `/admin/pending` bugs turned out to be screenshot-inferred symptoms with no actual code defect.
 - **2026-05-10:** Phase 5 marked complete (PR #26). Added sitewide image-optimizer hotfix record (PR #27 — Vercel Hobby 402 quota, switched to custom Cloudinary loader). Added Phase 5 follow-up: legacy /admin Pending tab removed after discovering two production rows had been approved through it without populating `published_*` columns. Backfill SQL written. Updated Phases 6/9 to reference the new "Phase 6 bridge" mirror in `admin-pending-publish.ts` and the BETA-link cleanup.
 - **2026-05-09:** Phase 4 marked complete. Added admin-approve bug record (PR #24). Added Phase 5 carryforward notes including the 49 legacy items.

@@ -201,6 +201,23 @@ export default function AdminPendingPage() {
     if (user) fetchItems();
   }, [user, fetchItems]);
 
+  // Auto-refresh on tab/app focus. Added 2026-05-10 after admin-pending
+  // investigation: the in-memory items array could go stale (worker
+  // submits a new item, AI completes, admin switches back to this tab
+  // — without this listener the new pending row stays invisible until
+  // the manual refresh button is clicked). Silent fetch keeps the full-
+  // page spinner away when the queue just refreshes in the background.
+  useEffect(() => {
+    if (!user) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        fetchItems({ silent: true });
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [user, fetchItems]);
+
   const handleQuickApprove = useCallback(
     async (id: string) => {
       setBusyId(id);
