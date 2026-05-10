@@ -50,6 +50,23 @@ export async function GET(
     return NextResponse.json({ error: 'Item not found' }, { status: 404 });
   }
 
+  // Status guard added 2026-05-10 after admin-pending investigation:
+  // direct deep links to /admin/pending/<id> would render the editor
+  // for archived/published rows, with all the action buttons silently
+  // failing 409 because they're status-gated. Refusing the GET up
+  // front gives the admin a clear "this item is no longer pending"
+  // message instead of a broken-feeling editor screen.
+  const itemStatus = (itemRes.data as unknown as { status: string | null }).status;
+  if (itemStatus !== 'pending') {
+    return NextResponse.json(
+      {
+        error: `This item is in '${itemStatus}', not 'pending'. The pending editor only handles items awaiting review.`,
+        current_status: itemStatus,
+      },
+      { status: 409 }
+    );
+  }
+
   return NextResponse.json({
     item: itemRes.data,
     audit_log: auditRes.data ?? [],
