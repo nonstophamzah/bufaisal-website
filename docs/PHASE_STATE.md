@@ -205,6 +205,20 @@ The 2026-05-10 case: three bugs reported in `/admin/pending` (list shows wrong r
 
 What to keep doing: Hamzah's "Investigate before fixing. Verify all three bugs in the actual route files before writing fixes. Report findings first." framing is the right one. Don't skip steps under time pressure.
 
+**Corollary added later same day**: when the screenshot symptom turns out to be REAL (the 12-hour-later report from a fresh device showing the same archived row), the investigation rule still applies — but the answer may be deeper than the route handler. In that case it was Vercel CDN serving a stale response without invoking the function. Diagnosis required deploying temporary diagnostic logging that wrote into `audit_log` (because we couldn't read Vercel runtime logs and couldn't mint a session token from this side). Three iterations of diagnostic — v1 captured the response, v2 returned zero entries (the function never fired), v3 added a heartbeat at the very top of the function plus explicit `Cache-Control: no-store` and the entries reappeared while the bug went away. Lesson: when reported symptoms reproduce on a fresh device after long elapsed time, suspect caching at every layer (CDN, browser, edge) — not just route logic.
+
+### Cache-Control rule: dynamic ≠ uncached
+**Added 2026-05-10 after the CDN cache-poisoning incident on `/api/admin/pending`.**
+
+`export const dynamic = 'force-dynamic'` only affects Next.js's internal route-segment behavior. It does NOT prevent Vercel's CDN edge or iOS Safari Mobile from caching responses based on the response's `Cache-Control` header. Next.js's default response header for dynamic routes is `Cache-Control: public, max-age=0, must-revalidate` — **caches interpret this permissively and DO cache.**
+
+The fix that actually works: explicit `Cache-Control: no-store, no-cache, must-revalidate, max-age=0` on the response. Set globally in `src/middleware.ts` for every `/api/*` path except `/api/feed` (which legitimately caches its Google Shopping XML for 1 hour). Sensitive routes also set the header explicitly on every response as belt-and-braces.
+
+Three things to remember:
+1. **`dynamic = 'force-dynamic'` is necessary but not sufficient.** Always pair with explicit `Cache-Control: no-store` for any auth-gated or per-call-dynamic API response.
+2. **Route-handler response headers win over middleware-set headers** when the same key is set in both, so middleware gives the default and route handlers can override (this is how `/api/feed` keeps its 1-hour cache despite the middleware rule).
+3. **POST endpoints are technically less likely to be CDN-cached** per HTTP semantics, but defensive `no-store` is cheap and prevents future Vercel-edge-case surprises. The middleware applies it to every method by default.
+
 ---
 
 ## Outstanding tech-debt items (for Phase 9 or earlier as needed)
@@ -219,6 +233,7 @@ What to keep doing: Hamzah's "Investigate before fixing. Verify all three bugs i
 
 ## Change log for this file
 
+- **2026-05-10 (later still):** Cache-Control fix shipped (PR #33) after a real production cache-poisoning incident on `/api/admin/pending`. Diagnosis required three iterations of temp diagnostic logging into `audit_log` because we couldn't read Vercel runtime logs from this side. Root cause: Vercel CDN serving stale responses without invoking the function. Fix: middleware-level `Cache-Control: no-store` on every `/api/*` except `/api/feed`. Reverted PRs #30/#31/#32 (the temp diagnostics). Added the **Cache-Control rule** above (dynamic ≠ uncached).
 - **2026-05-10 (later):** Three follow-up items shipped (PR #29):
   - Detail GET endpoint now returns 409 for non-pending rows so deep links to `/admin/pending/<archived-id>` show a clear "this item is in 'X', not 'pending'" message instead of an editor with silently-failing buttons.
   - List view auto-refreshes on `document.visibilitychange` so a switched-and-returned tab doesn't show stale state.
