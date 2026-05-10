@@ -37,6 +37,27 @@ export function middleware(request: NextRequest) {
     response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   }
 
+  // ── Cache-Control: no-store on every /api/* response except /api/feed ──
+  // Added 2026-05-10 after a production cache-poisoning incident where
+  // /api/admin/pending served a stale response from Vercel's CDN showing
+  // one archived row instead of the four actually-pending rows. The
+  // root cause: `dynamic = 'force-dynamic'` is necessary but NOT
+  // sufficient — without an explicit `Cache-Control: no-store` header
+  // on the response, Vercel's edge AND iOS Safari Mobile interpret the
+  // Next.js default `public, max-age=0, must-revalidate` permissively
+  // and cache the response. Belt-and-braces: this default header runs
+  // on the matched response BEFORE any route handler, and routes that
+  // particularly need it (e.g. /api/admin/pending) also set it
+  // explicitly. /api/feed is the one legitimate cache exception (Google
+  // Shopping XML, 1hr s-maxage); it sets its own Cache-Control which
+  // wins via route-handler precedence over middleware response headers.
+  if (pathname.startsWith('/api/') && pathname !== '/api/feed') {
+    response.headers.set(
+      'Cache-Control',
+      'no-store, no-cache, must-revalidate, max-age=0'
+    );
+  }
+
   // ── Block direct access to API routes from non-allowed origins ──
   if (pathname.startsWith('/api/admin') || pathname.startsWith('/api/appliances')) {
     const origin = request.headers.get('origin');
