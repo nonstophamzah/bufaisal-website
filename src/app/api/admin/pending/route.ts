@@ -4,7 +4,7 @@
 // status IS NULL legacy items are intentionally invisible here, the
 // legacy /admin tab still owns them). Sorted newest-submitted first.
 //
-// Cache defeat layers (2026-05-10 — third attempt):
+// Cache defeat layers (2026-05-10):
 //   1. dynamic='force-dynamic' — Next route segment marker
 //   2. revalidate=0 — no ISR
 //   3. fetchCache='force-no-store' — every fetch() inside this route
@@ -17,15 +17,10 @@
 //      singleton) — defeats any per-instance cache the singleton might
 //      maintain across invocations on the same Vercel function instance
 //   6. Per-response Cache-Control: no-store header (CDN/browser layer)
-//
-// PLUS a diagnostic audit_log INSERT logging the response body so we can
-// verify what's actually being returned. Diagnostic block clearly marked
-// for revert in a follow-up PR.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { unstable_noStore as noStore } from 'next/cache';
-import { supabaseAdmin } from '@/lib/supabase-admin';
 import { rateLimit } from '@/lib/rate-limit';
 import { verifyAdmin } from '@/lib/verify-admin';
 import { PENDING_ITEM_COLUMNS } from '@/app/admin/pending/types';
@@ -94,44 +89,6 @@ export async function GET(request: NextRequest) {
   }
 
   const items = data ?? [];
-
-  // ─── TEMP DIAGNOSTIC v4 — REMOVE IN FOLLOW-UP PR ─────────────────
-  // Logs the response body to audit_log so we can read back what
-  // the route ACTUALLY returns under v4's anti-caching stack. Compare
-  // to PRs #30/31/32 v1/v2/v3 readings to confirm the cache defeat
-  // works. Cleanup after verification:
-  //   DELETE FROM audit_log WHERE action LIKE 'debug_%';
-  try {
-    interface ItemRow {
-      id?: unknown;
-      status?: unknown;
-      worker_id?: unknown;
-      ai_item_name?: unknown;
-      worker_submitted_at?: unknown;
-    }
-    await supabaseAdmin.from('audit_log').insert({
-      item_id: null,
-      action: 'debug_pending_list_call_v4',
-      actor_type: 'admin',
-      actor_id: admin,
-      metadata: {
-        deploy_sha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 8) ?? 'unknown',
-        x_vercel_id: request.headers.get('x-vercel-id'),
-        host: request.headers.get('host'),
-        response_count: items.length,
-        response_rows: (items as ItemRow[]).map((r) => ({
-          id: r.id ?? null,
-          status: r.status ?? null,
-          worker_id: r.worker_id ?? null,
-          ai_item_name: r.ai_item_name ?? null,
-          worker_submitted_at: r.worker_submitted_at ?? null,
-        })),
-      },
-    });
-  } catch (e) {
-    console.error('[v4 diagnostic] insert failed:', e);
-  }
-  // ─── END TEMP DIAGNOSTIC v4 ──────────────────────────────────────
 
   return NextResponse.json(
     { items, count: items.length },
