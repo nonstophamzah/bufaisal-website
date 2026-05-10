@@ -77,6 +77,48 @@ function getIp(req: NextRequest): string {
   return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
 }
 
+// ----- response-shape coercion helpers -----
+// Postgres `numeric` columns arrive as strings via PostgREST. These helpers
+// guarantee the API response matches the TypeScript contract regardless of
+// what Supabase actually hands us — no strings in number fields, no arrays
+// where objects are expected, no raw Date / Buffer / weird types.
+
+function toNum(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v === 'string') {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function asString(v: unknown): string {
+  if (typeof v === 'string') return v;
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  // Dates and other objects with .toISOString/.toString — best-effort only.
+  if (v instanceof Date) return v.toISOString();
+  try { return String(v); } catch { return ''; }
+}
+
+function asStringOrNull(v: unknown): string | null {
+  if (v === null || v === undefined || v === '') return null;
+  return asString(v);
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+// Flatten an embedded Supabase relation that may be { ... } or [{ ... }] or null.
+function pickEmbedded(v: unknown): Record<string, unknown> | null {
+  if (v === null || v === undefined) return null;
+  if (Array.isArray(v)) return (v[0] as Record<string, unknown> | undefined) ?? null;
+  if (typeof v === 'object') return v as Record<string, unknown>;
+  return null;
+}
+
 async function loadConfig(): Promise<LoadedConfig> {
   const { data } = await supabaseAdmin.from('diesel_config').select('*').limit(1).single();
   return {
@@ -909,6 +951,11 @@ export async function POST(request: NextRequest) {
     // -----------------------------------------------------------------
     // truck_detail — per-truck drill-down. Returns truck metadata,
     // aggregated stats in requested window, and full fill history.
+    //
+    // Response is built field-by-field with explicit type coercion. No spreads
+    // of raw Supabase rows, no Date objects, no array-shaped relations — every
+    // value is one of: string | number | boolean | null | array | plain object
+    // composed of the same. This is the contract the client relies on.
     // -----------------------------------------------------------------
     if (action === 'truck_detail') {
       const id = String(body.id || '').trim();
@@ -942,55 +989,112 @@ export async function POST(request: NextRequest) {
       if (truckRes.error) return NextResponse.json({ error: truckRes.error.message }, { status: 500 });
       if (!truckRes.data) return NextResponse.json({ error: 'Truck not found' }, { status: 404 });
 
-      type F = { id: string; logged_at: string; liters_filled: number | null; cost_aed: number | null; liters_per_100km: number | null; flagged: boolean | null; driver: { id: string; full_name: string } | { id: string; full_name: string }[] | null };
-      const fills = ((fillsRes.data || []) as unknown as F[]);
-      const l100 = fills.map((f) => f.liters_per_100km).filter((x): x is number => typeof x === 'number');
-      const totalLiters = fills.reduce((a, f) => a + (f.liters_filled || 0), 0);
-      const totalCost = fills.reduce((a, f) => a + (f.cost_aed || 0), 0);
-      const avgL100 = l100.length ? Math.round((l100.reduce((a, b) => a + b, 0) / l100.length) * 100) / 100 : null;
+      const rawFills = (fillsRes.data || []) as unknown as Record<string, unknown>[];
+
+      // Build the fill list explicitly. Every numeric field goes through
+      // toNum() — Postgres `numeric` columns come back as strings via
+      // PostgREST and we don't want strings leaking into a `number | null`
+      // contract. Every relation is flattened from possible-array to object.
+      const fills = rawFills.map((f) => {
+        const dr = pickEmbedded(f.driver);
+        return {
+          id:                      asString(f.id),
+          logged_at:               asString(f.logged_at),
+          odometer_km:             toNum(f.odometer_km),
+          liters_filled:           toNum(f.liters_filled),
+          km_since_last:           toNum(f.km_since_last),
+          liters_per_100km:        toNum(f.liters_per_100km),
+          cost_aed:                toNum(f.cost_aed),
+          price_per_liter_at_fill: toNum(f.price_per_liter_at_fill),
+          variance_percent:        toNum(f.variance_percent),
+          flagged:                 f.flagged === true,
+          flag_reason:             asStringOrNull(f.flag_reason),
+          photo_plate_url:         asStringOrNull(f.photo_plate_url),
+          photo_license_url:       asStringOrNull(f.photo_license_url),
+          photo_odometer_url:      asStringOrNull(f.photo_odometer_url),
+          photo_pump_url:          asStringOrNull(f.photo_pump_url),
+          driver: dr
+            ? {
+                id:        asString(dr.id),
+                full_name: asString(dr.full_name),
+                nickname:  asStringOrNull(dr.nickname),
+              }
+            : null,
+        };
+      });
+
+      // Aggregates over the now-clean numeric fields
+      const l100Vals      = fills.map((f) => f.liters_per_100km).filter((x): x is number => x !== null);
+      const totalLiters   = fills.reduce((a, f) => a + (f.liters_filled ?? 0), 0);
+      const totalCost     = fills.reduce((a, f) => a + (f.cost_aed ?? 0), 0);
+      const avgL100       = l100Vals.length
+        ? round2(l100Vals.reduce((a, b) => a + b, 0) / l100Vals.length)
+        : null;
 
       // Per-driver split inside window
       const byDriver = new Map<string, { name: string; fills: number; liters: number; l100_sum: number; l100_count: number }>();
       for (const f of fills) {
-        const dr = Array.isArray(f.driver) ? f.driver[0] : f.driver;
-        if (!dr?.id) continue;
-        let a = byDriver.get(dr.id);
-        if (!a) { a = { name: dr.full_name, fills: 0, liters: 0, l100_sum: 0, l100_count: 0 }; byDriver.set(dr.id, a); }
+        if (!f.driver?.id) continue;
+        let a = byDriver.get(f.driver.id);
+        if (!a) {
+          a = { name: f.driver.full_name, fills: 0, liters: 0, l100_sum: 0, l100_count: 0 };
+          byDriver.set(f.driver.id, a);
+        }
         a.fills += 1;
-        if (typeof f.liters_filled === 'number') a.liters += f.liters_filled;
-        if (typeof f.liters_per_100km === 'number') { a.l100_sum += f.liters_per_100km; a.l100_count += 1; }
+        if (f.liters_filled !== null) a.liters += f.liters_filled;
+        if (f.liters_per_100km !== null) { a.l100_sum += f.liters_per_100km; a.l100_count += 1; }
       }
-      const driverMix = Array.from(byDriver.entries()).map(([id, a]) => ({
-        driver_id: id,
-        name: a.name,
-        fills: a.fills,
-        liters: Math.round(a.liters * 100) / 100,
-        avg_l100: a.l100_count ? Math.round((a.l100_sum / a.l100_count) * 100) / 100 : null,
+      const driverMix = Array.from(byDriver.entries()).map(([driverId, a]) => ({
+        driver_id: driverId,
+        name:      a.name,
+        fills:     a.fills,
+        liters:    round2(a.liters),
+        avg_l100:  a.l100_count ? round2(a.l100_sum / a.l100_count) : null,
       })).sort((a, b) => b.fills - a.fills);
 
-      // Supabase's embedded-relation syntax can return `driver` as either an
-      // object or a single-element array depending on FK inference. Normalize
-      // to object-or-null before returning so the client never sees an array
-      // — every consumer (current and future) can safely do `f.driver?.x`.
-      const normalizedFills = fills.map((f) => ({
-        ...f,
-        driver: Array.isArray(f.driver) ? (f.driver[0] ?? null) : f.driver,
-      }));
+      // Build truck object explicitly
+      const t = truckRes.data as Record<string, unknown>;
+      const truckOut = {
+        id:            asString(t.id),
+        plate_number:  asString(t.plate_number),
+        plate_display: asString(t.plate_display),
+        nickname:      asStringOrNull(t.nickname),
+        active:        t.active === true,
+        needs_review:  t.needs_review === true,
+        notes:         asStringOrNull(t.notes),
+        created_at:    asString(t.created_at),
+      };
 
-      return NextResponse.json({
+      const responseBody = {
         window: win,
         since,
-        truck: truckRes.data,
+        truck: truckOut,
         stats: {
-          total_fills: fills.length,
-          total_liters: Math.round(totalLiters * 100) / 100,
-          total_cost_aed: Math.round(totalCost * 100) / 100,
-          avg_l100: avgL100,
-          flag_count: fills.filter((f) => f.flagged).length,
+          total_fills:    fills.length,
+          total_liters:   round2(totalLiters),
+          total_cost_aed: round2(totalCost),
+          avg_l100:       avgL100,
+          flag_count:     fills.filter((f) => f.flagged).length,
         },
         driver_mix: driverMix,
-        fills: normalizedFills,
-      });
+        fills,
+      };
+
+      // Server-side log of the exact shape — visible in Vercel function logs.
+      // Shows up as one line so you can grep. Truncated to 8KB to avoid bloat.
+      try {
+        const dump = JSON.stringify(responseBody);
+        // eslint-disable-next-line no-console
+        console.log(`[truck_detail] ${id} → ${dump.length}B response, fills=${fills.length}, sample=${dump.slice(0, 8000)}`);
+      } catch (e) {
+        // If our own response can't be JSON.stringified, that IS the bug —
+        // log loudly and refuse to send a corrupt response.
+        // eslint-disable-next-line no-console
+        console.error('[truck_detail] response failed JSON.stringify:', e);
+        return NextResponse.json({ error: 'Internal: response not serializable' }, { status: 500 });
+      }
+
+      return NextResponse.json(responseBody);
     }
 
     // -----------------------------------------------------------------
@@ -1028,53 +1132,105 @@ export async function POST(request: NextRequest) {
       if (driverRes.error) return NextResponse.json({ error: driverRes.error.message }, { status: 500 });
       if (!driverRes.data) return NextResponse.json({ error: 'Driver not found' }, { status: 404 });
 
-      type F = { id: string; logged_at: string; liters_filled: number | null; cost_aed: number | null; liters_per_100km: number | null; flagged: boolean | null; truck: { id: string; plate_display: string } | { id: string; plate_display: string }[] | null };
-      const fills = ((fillsRes.data || []) as unknown as F[]);
-      const l100 = fills.map((f) => f.liters_per_100km).filter((x): x is number => typeof x === 'number');
-      const totalLiters = fills.reduce((a, f) => a + (f.liters_filled || 0), 0);
-      const totalCost = fills.reduce((a, f) => a + (f.cost_aed || 0), 0);
-      const avgL100 = l100.length ? Math.round((l100.reduce((a, b) => a + b, 0) / l100.length) * 100) / 100 : null;
+      const rawFills = (fillsRes.data || []) as unknown as Record<string, unknown>[];
+
+      // Same explicit-construction discipline as truck_detail. See that
+      // handler for rationale.
+      const fills = rawFills.map((f) => {
+        const tr = pickEmbedded(f.truck);
+        return {
+          id:                      asString(f.id),
+          logged_at:               asString(f.logged_at),
+          odometer_km:             toNum(f.odometer_km),
+          liters_filled:           toNum(f.liters_filled),
+          km_since_last:           toNum(f.km_since_last),
+          liters_per_100km:        toNum(f.liters_per_100km),
+          cost_aed:                toNum(f.cost_aed),
+          price_per_liter_at_fill: toNum(f.price_per_liter_at_fill),
+          variance_percent:        toNum(f.variance_percent),
+          flagged:                 f.flagged === true,
+          flag_reason:             asStringOrNull(f.flag_reason),
+          photo_plate_url:         asStringOrNull(f.photo_plate_url),
+          photo_license_url:       asStringOrNull(f.photo_license_url),
+          photo_odometer_url:      asStringOrNull(f.photo_odometer_url),
+          photo_pump_url:          asStringOrNull(f.photo_pump_url),
+          truck: tr
+            ? {
+                id:            asString(tr.id),
+                plate_display: asString(tr.plate_display),
+                nickname:      asStringOrNull(tr.nickname),
+              }
+            : null,
+        };
+      });
+
+      const l100Vals    = fills.map((f) => f.liters_per_100km).filter((x): x is number => x !== null);
+      const totalLiters = fills.reduce((a, f) => a + (f.liters_filled ?? 0), 0);
+      const totalCost   = fills.reduce((a, f) => a + (f.cost_aed ?? 0), 0);
+      const avgL100     = l100Vals.length
+        ? round2(l100Vals.reduce((a, b) => a + b, 0) / l100Vals.length)
+        : null;
 
       // Per-truck split
       const byTruck = new Map<string, { plate: string; fills: number; liters: number; l100_sum: number; l100_count: number }>();
       for (const f of fills) {
-        const tr = Array.isArray(f.truck) ? f.truck[0] : f.truck;
-        if (!tr?.id) continue;
-        let a = byTruck.get(tr.id);
-        if (!a) { a = { plate: tr.plate_display, fills: 0, liters: 0, l100_sum: 0, l100_count: 0 }; byTruck.set(tr.id, a); }
+        if (!f.truck?.id) continue;
+        let a = byTruck.get(f.truck.id);
+        if (!a) {
+          a = { plate: f.truck.plate_display, fills: 0, liters: 0, l100_sum: 0, l100_count: 0 };
+          byTruck.set(f.truck.id, a);
+        }
         a.fills += 1;
-        if (typeof f.liters_filled === 'number') a.liters += f.liters_filled;
-        if (typeof f.liters_per_100km === 'number') { a.l100_sum += f.liters_per_100km; a.l100_count += 1; }
+        if (f.liters_filled !== null) a.liters += f.liters_filled;
+        if (f.liters_per_100km !== null) { a.l100_sum += f.liters_per_100km; a.l100_count += 1; }
       }
-      const truckMix = Array.from(byTruck.entries()).map(([id, a]) => ({
-        truck_id: id,
-        plate: a.plate,
-        fills: a.fills,
-        liters: Math.round(a.liters * 100) / 100,
-        avg_l100: a.l100_count ? Math.round((a.l100_sum / a.l100_count) * 100) / 100 : null,
+      const truckMix = Array.from(byTruck.entries()).map(([truckId, a]) => ({
+        truck_id: truckId,
+        plate:    a.plate,
+        fills:    a.fills,
+        liters:   round2(a.liters),
+        avg_l100: a.l100_count ? round2(a.l100_sum / a.l100_count) : null,
       })).sort((a, b) => b.fills - a.fills);
 
-      // Same normalization as truck_detail — flatten potentially-array `truck`
-      // relation to object-or-null so the client never has to defend against it.
-      const normalizedFills = fills.map((f) => ({
-        ...f,
-        truck: Array.isArray(f.truck) ? (f.truck[0] ?? null) : f.truck,
-      }));
+      const d = driverRes.data as Record<string, unknown>;
+      const driverOut = {
+        id:              asString(d.id),
+        full_name:       asString(d.full_name),
+        name_normalized: asString(d.name_normalized),
+        nickname:        asStringOrNull(d.nickname),
+        license_number:  asStringOrNull(d.license_number),
+        active:          d.active === true,
+        needs_review:    d.needs_review === true,
+        notes:           asStringOrNull(d.notes),
+        created_at:      asString(d.created_at),
+      };
 
-      return NextResponse.json({
+      const responseBody = {
         window: win,
         since,
-        driver: driverRes.data,
+        driver: driverOut,
         stats: {
-          total_fills: fills.length,
-          total_liters: Math.round(totalLiters * 100) / 100,
-          total_cost_aed: Math.round(totalCost * 100) / 100,
-          avg_l100: avgL100,
-          flag_count: fills.filter((f) => f.flagged).length,
+          total_fills:    fills.length,
+          total_liters:   round2(totalLiters),
+          total_cost_aed: round2(totalCost),
+          avg_l100:       avgL100,
+          flag_count:     fills.filter((f) => f.flagged).length,
         },
         truck_mix: truckMix,
-        fills: normalizedFills,
-      });
+        fills,
+      };
+
+      try {
+        const dump = JSON.stringify(responseBody);
+        // eslint-disable-next-line no-console
+        console.log(`[driver_detail] ${id} → ${dump.length}B response, fills=${fills.length}, sample=${dump.slice(0, 8000)}`);
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[driver_detail] response failed JSON.stringify:', e);
+        return NextResponse.json({ error: 'Internal: response not serializable' }, { status: 500 });
+      }
+
+      return NextResponse.json(responseBody);
     }
 
     // -----------------------------------------------------------------

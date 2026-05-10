@@ -14,8 +14,12 @@ import {
 
 const SESSION_KEY = 'diesel_mgr_pin_ok';
 
-export default function DriverDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function DriverDetailPage({ params }: { params: Promise<{ id: string }> | { id: string } }) {
+  // See truck detail page — same compatibility shim for Next.js 14 vs 15 params.
+  const resolvedParams = (typeof (params as { then?: unknown })?.then === 'function')
+    ? use(params as Promise<{ id: string }>)
+    : (params as { id: string });
+  const id = typeof resolvedParams?.id === 'string' ? resolvedParams.id : '';
   const router = useRouter();
   const sp = useSearchParams();
   const initialWindow = (sp?.get('window') as DashboardWindow) || 'month';

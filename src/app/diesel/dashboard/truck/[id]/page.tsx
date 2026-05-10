@@ -14,8 +14,15 @@ import {
 
 const SESSION_KEY = 'diesel_mgr_pin_ok';
 
-export default function TruckDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function TruckDetailPage({ params }: { params: Promise<{ id: string }> | { id: string } }) {
+  // Next.js 14.2 passes `params` as a plain object in client components;
+  // Next.js 15 passes a Promise that needs unwrapping via React's `use()`.
+  // Calling `use()` on a non-thenable throws a cryptic React error in prod,
+  // so detect the shape first. Either way, we end up with `{ id: string }`.
+  const resolvedParams = (typeof (params as { then?: unknown })?.then === 'function')
+    ? use(params as Promise<{ id: string }>)
+    : (params as { id: string });
+  const id = typeof resolvedParams?.id === 'string' ? resolvedParams.id : '';
   const router = useRouter();
   const sp = useSearchParams();
   const initialWindow = (sp?.get('window') as DashboardWindow) || 'month';
