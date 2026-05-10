@@ -1,6 +1,6 @@
 # Listing Generator Rebuild — Phase State
 
-**Last updated:** 2026-05-10 (after detail-page + visibility-refresh hardening; full Phase 5 + image fix + legacy Pending tab removal closed)
+**Last updated:** 2026-05-10 (Phase 5 VERIFIED end-to-end in production after a 6-hour cache-defeat debugging session)
 **Owner:** Hamzah Khan
 **Driver doc:** `docs/Bufaisal-Claude-Code-Implementation-Spec-v1_0_1.md`
 **Decisions log:** `docs/Bufaisal-Decisions-Log-v1_1-Addendum.docx`
@@ -92,9 +92,11 @@ The legacy admin-approve flow at `src/app/api/admin/items/route.ts:63` (and `:80
 ---
 
 ### Phase 5 — Admin pending dashboard
-**Status:** ✅ Complete (sidecar build alongside legacy `/admin`)
+**Status:** ✅ Complete AND verified end-to-end in production
 
-**Commit:** `7f14be2` on main (PR #26).
+**Commits:** `7f14be2` on main (PR #26 — initial build). Six follow-up PRs hardened the flow: #27 (image render fix), #28 (legacy Pending tab removed), #29 (detail status guard + visibility refresh + cleanup SQL), #30/#31/#32 (diagnostic infrastructure, all reverted), #33 (Cache-Control no-store middleware — incomplete), #34 (six-layer cache-defeat fix that actually worked).
+
+**Verification record (2026-05-10):** Hitachi Top-Mount Refrigerator (`4cea5546-1da6-48cb-b6c2-bf7a61232278`) approved through `/admin/pending` at 18:12:33 UTC. SQL confirmed all `published_*` columns populated correctly: `published_seo_title`, `published_description` (296 chars), `published_spec_table`, `published_faqs`, `published_trust_signals`, `published_brand`, `published_category`, `admin_approved_at`, `admin_approved_by="Admin"`. Audit_log entry written with `action='admin_approved'`, `via='detail_editor'` or `'quick_approve'`. Pipeline `processing → pending → published` works end-to-end through the new sidecar.
 
 **What shipped:**
 
@@ -171,12 +173,32 @@ WHERE id = '<approved_item_id>';
 
 ---
 
-## Phases 6–9 — Not yet started
+## Phases 6–9
 
-- **Phase 6:** Public site rendering switch to `published_*` columns + JSON-LD schemas. Will retire the "Phase 6 bridge" legacy-mirror block in `src/lib/admin-pending-publish.ts:97-117` and the `worker_photo_brand_url` fallback in `src/lib/item-image.ts` (or keep the latter — cheap insurance).
+### Carryforward from 2026-05-10 (handle BEFORE Phase 6 starts)
+
+1. **Revert v4 diagnostic in `src/app/api/admin/pending/route.ts`** — one follow-up PR. Drop the `debug_pending_list_call_v4` audit_log INSERT block (clearly marked "TEMP DIAGNOSTIC v4 — REMOVE IN FOLLOW-UP PR"). Keep the six cache-defeat layers — those are load-bearing, not diagnostic.
+2. **Run the two pending backfill SQLs in Supabase SQL Editor** (Hamzah-only):
+   - `supabase-backfill-published-columns.sql` — backfills the 2 MacBook rows that were legacy-approved before Option B closed that path.
+   - `supabase-cleanup-archived-sold-inconsistency.sql` — clears `is_sold=true` on the TV stand row.
+3. **Cleanup the diagnostic audit_log entries** when comfortable:
+   ```sql
+   DELETE FROM audit_log WHERE action LIKE 'debug_%';
+   ```
+4. **3 pending items still in the queue** (Yousuf's chest freezer + gas cooker, Hamzah's fridge) — can be approved through `/admin/pending` anytime. The flow is verified working.
+5. **Low-priority observation, deferred:** AI emitted "Since 2009 — UAE's largest used goods market" as off-whitelist when it IS on the universal whitelist. Possible duplicate detection bug in the trust-signals editor's whitelist match, possible em-dash vs hyphen vs spacing normalization issue. Punt to Phase 6 or 9.
+
+### Phase 6 — Public site rendering switch
+- Switch `src/app/shop`, `src/app/item/[id]`, `src/components/ItemCard`, `src/app/marketplace-client.tsx`, and `src/app/api/feed` to read from `published_*` columns directly.
+- Inject JSON-LD schema markup (`published_product_schema`, `published_faq_schema`) — note these columns DO NOT EXIST in the migration, so either add a migration or read from `ai_product_schema`/`ai_faq_schema` (Phase 6 owns this decision).
+- WhatsApp pre-fill format from spec §6C.
+- Retire the "Phase 6 bridge" legacy-mirror block in `src/lib/admin-pending-publish.ts:97-117` once all readers are switched.
+- The `worker_photo_brand_url` fallback in `src/lib/item-image.ts` is cheap insurance; can keep or drop.
+
+### Phases 7–9
 - **Phase 7:** Optional migration of legacy items (the 49 NULL-status rows still on the public site).
 - **Phase 8:** Daily summary endpoint + monitoring.
-- **Phase 9:** Cleanup — delete legacy `/api/jobs/generate-listing`, drop `JOBS_SECRET`, drop `agent_drafting` from the TS union, retire the legacy `/admin` Pending tab + its BETA link in the new nav, drop `supabase-backfill-image-columns.sql` (kept for reference, not used).
+- **Phase 9:** Cleanup — delete legacy `/api/jobs/generate-listing`, drop `JOBS_SECRET`, drop `agent_drafting` from the TS union, retire the legacy `/admin` Pending tab + its BETA link in the new nav, drop the diagnostic-reference SQL files (`supabase-backfill-image-columns.sql`, the v4 cleanup).
 
 ---
 
@@ -207,17 +229,54 @@ What to keep doing: Hamzah's "Investigate before fixing. Verify all three bugs i
 
 **Corollary added later same day**: when the screenshot symptom turns out to be REAL (the 12-hour-later report from a fresh device showing the same archived row), the investigation rule still applies — but the answer may be deeper than the route handler. In that case it was Vercel CDN serving a stale response without invoking the function. Diagnosis required deploying temporary diagnostic logging that wrote into `audit_log` (because we couldn't read Vercel runtime logs and couldn't mint a session token from this side). Three iterations of diagnostic — v1 captured the response, v2 returned zero entries (the function never fired), v3 added a heartbeat at the very top of the function plus explicit `Cache-Control: no-store` and the entries reappeared while the bug went away. Lesson: when reported symptoms reproduce on a fresh device after long elapsed time, suspect caching at every layer (CDN, browser, edge) — not just route logic.
 
-### Cache-Control rule: dynamic ≠ uncached
-**Added 2026-05-10 after the CDN cache-poisoning incident on `/api/admin/pending`.**
+### Cache-Control rule: dynamic ≠ uncached (and `force-dynamic` does NOT imply `fetchCache`)
+**Added 2026-05-10 after the CDN cache-poisoning incident, REVISED same day after PR #33 turned out to be incomplete.**
 
-`export const dynamic = 'force-dynamic'` only affects Next.js's internal route-segment behavior. It does NOT prevent Vercel's CDN edge or iOS Safari Mobile from caching responses based on the response's `Cache-Control` header. Next.js's default response header for dynamic routes is `Cache-Control: public, max-age=0, must-revalidate` — **caches interpret this permissively and DO cache.**
+There are TWO independent caches that can serve stale data on a Next.js App Router API route:
 
-The fix that actually works: explicit `Cache-Control: no-store, no-cache, must-revalidate, max-age=0` on the response. Set globally in `src/middleware.ts` for every `/api/*` path except `/api/feed` (which legitimately caches its Google Shopping XML for 1 hour). Sensitive routes also set the header explicitly on every response as belt-and-braces.
+**Cache layer 1 — CDN/browser** (response header). Next.js's default response header for dynamic routes is `Cache-Control: public, max-age=0, must-revalidate`. Vercel's CDN edge and iOS Safari Mobile interpret this permissively and DO cache. Fix: explicit `Cache-Control: no-store, no-cache, must-revalidate, max-age=0` on the response. Set globally in `src/middleware.ts` for every `/api/*` except `/api/feed`. (PR #33 fixed this layer.)
+
+**Cache layer 2 — Next.js Data Cache** (the supabase-js `fetch()` calls inside the handler). This one is the trap. Next.js docs claim `dynamic = 'force-dynamic'` implies uncached data fetching, but **in practice on Vercel that implication does NOT hold for fetches issued by third-party libraries (supabase-js)**. The route handler may receive cached PostgREST responses internally even though the OUTER response correctly has `Cache-Control: no-store`. Symptom is identical to a CDN cache: stale data served to fresh sessions across multiple devices/browsers. (PR #34 fixed this layer.)
+
+**The full belt-and-braces stack** required for an auth-gated dynamic API route that uses supabase-js (see `src/app/api/admin/pending/route.ts` for the canonical example):
+
+```ts
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
+
+import { unstable_noStore as noStore } from 'next/cache';
+
+export async function GET(request) {
+  noStore();  // runtime opt-out
+
+  // Build a fresh supabase client per-request (defeats singleton cache)
+  const client = createClient(url, key, {
+    auth: { persistSession: false },
+    global: {
+      // Belt-and-braces: pass cache:'no-store' to every fetch supabase makes
+      fetch: (input, init) =>
+        fetch(input, { ...init, cache: 'no-store' as RequestCache }),
+    },
+  });
+
+  const { data } = await client.from(...).select(...).eq(...);
+
+  return NextResponse.json(
+    { items: data },
+    { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' } }
+  );
+}
+```
+
+Six layers, all needed. Removing any one will cost hours of debugging.
 
 Three things to remember:
-1. **`dynamic = 'force-dynamic'` is necessary but not sufficient.** Always pair with explicit `Cache-Control: no-store` for any auth-gated or per-call-dynamic API response.
+1. **`dynamic = 'force-dynamic'` is necessary but not sufficient — for EITHER cache layer.** Trust the docs at your peril; verify empirically with the audit_log diagnostic technique (#9 in carryforward).
 2. **Route-handler response headers win over middleware-set headers** when the same key is set in both, so middleware gives the default and route handlers can override (this is how `/api/feed` keeps its 1-hour cache despite the middleware rule).
 3. **POST endpoints are technically less likely to be CDN-cached** per HTTP semantics, but defensive `no-store` is cheap and prevents future Vercel-edge-case surprises. The middleware applies it to every method by default.
+
+**The 6-hour debugging cost on 2026-05-10**: PR #33 was shipped and verified at the WIRE level (curl confirmed `Cache-Control: no-store` on responses). I extrapolated "wire-level fix is correct" → "bug is fixed". Wrong. The Next.js Data Cache (layer 2) was still serving stale data INSIDE the handler. Hamzah caught this when an incognito session on a different browser engine still showed stale data — different sessions ruling out client-side cache. Lesson: when claiming a cache fix works, verify the actual auth'd response BODY (via diagnostic audit_log INSERT or a session-token-equipped curl), not just response headers.
 
 ---
 
@@ -233,7 +292,8 @@ Three things to remember:
 
 ## Change log for this file
 
-- **2026-05-10 (later still):** Cache-Control fix shipped (PR #33) after a real production cache-poisoning incident on `/api/admin/pending`. Diagnosis required three iterations of temp diagnostic logging into `audit_log` because we couldn't read Vercel runtime logs from this side. Root cause: Vercel CDN serving stale responses without invoking the function. Fix: middleware-level `Cache-Control: no-store` on every `/api/*` except `/api/feed`. Reverted PRs #30/#31/#32 (the temp diagnostics). Added the **Cache-Control rule** above (dynamic ≠ uncached).
+- **2026-05-10 (latest):** Phase 5 VERIFIED end-to-end (PR #34). After PR #33's middleware fix turned out to be incomplete — symptom recurred for incognito sessions on a different browser engine, ruling out client cache — discovered Next.js Data Cache (layer 2) was still serving stale supabase-js responses inside the handler despite `dynamic='force-dynamic'`. PR #34 added five more cache-defeat layers: `revalidate=0`, `fetchCache='force-no-store'`, `unstable_noStore()`, fresh supabase client per-request, custom fetch wrapper with `cache:'no-store'`. Diagnostic confirmed the fix; refrigerator approval test passed. **Cache-Control rule above REVISED** to document both cache layers.
+- **2026-05-10 (later still):** Cache-Control fix shipped (PR #33) after a real production cache-poisoning incident on `/api/admin/pending`. Diagnosis required three iterations of temp diagnostic logging into `audit_log` because we couldn't read Vercel runtime logs from this side. Root cause believed at the time: Vercel CDN serving stale responses without invoking the function. Fix: middleware-level `Cache-Control: no-store` on every `/api/*` except `/api/feed`. Reverted PRs #30/#31/#32 (the temp diagnostics). Added the **Cache-Control rule** above. **Note: this turned out to be only ~half the fix; see PR #34 entry above for the full story.**
 - **2026-05-10 (later):** Three follow-up items shipped (PR #29):
   - Detail GET endpoint now returns 409 for non-pending rows so deep links to `/admin/pending/<archived-id>` show a clear "this item is in 'X', not 'pending'" message instead of an editor with silently-failing buttons.
   - List view auto-refreshes on `document.visibilitychange` so a switched-and-returned tab doesn't show stale state.
