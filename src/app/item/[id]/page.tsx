@@ -13,13 +13,18 @@ function getSupabase() {
   );
 }
 
-// React.cache deduplicates across generateMetadata + page component
+// React.cache deduplicates across generateMetadata + page component.
+// Phase 6.0: filter on is_published + is_hidden to stop UUID leaks of
+// processing/pending/archived rows. is_sold is intentionally NOT filtered
+// — sold items stay on the site (with the SOLD overlay) for SEO.
 const getItem = cache(async (id: string): Promise<ShopItem | null> => {
   const { data } = await getSupabase()
     .from('shop_items')
     .select('*')
     .eq('id', id)
-    .single();
+    .eq('is_published', true)
+    .eq('is_hidden', false)
+    .maybeSingle();
   return data;
 });
 
