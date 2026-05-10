@@ -1,6 +1,6 @@
 # Listing Generator Rebuild — Phase State
 
-**Last updated:** 2026-05-10 (after Phase 5 + sitewide image-optimizer fix)
+**Last updated:** 2026-05-10 (after Phase 5 + image-optimizer fix + legacy Pending tab removal)
 **Owner:** Hamzah Khan
 **Driver doc:** `docs/Bufaisal-Claude-Code-Implementation-Spec-v1_0_1.md`
 **Decisions log:** `docs/Bufaisal-Decisions-Log-v1_1-Addendum.docx`
@@ -144,6 +144,33 @@ The legacy admin-approve flow at `src/app/api/admin/items/route.ts:63` (and `:80
 
 ---
 
+### Phase 5 follow-up — legacy Pending tab removed
+**Status:** ✅ Complete
+
+**Bug found** (2026-05-10): two production rows had `status='published'` + `is_published=true` but ALL 12 `published_*` columns were NULL. Service-role row dump showed `admin_approved_at = NULL` and zero `admin_*` entries in `audit_log` for the rows — they had been approved through the LEGACY `/admin` Pending tab, not the new `/admin/pending` dashboard. The legacy approve flow at `/api/admin/items` (action='approve' / 'bulk_approve' / batch) only sets `is_published=true` + `approved_by`/`approved_at`; it never computed `published_*` or wrote `audit_log`. The public site fell back to legacy text columns and looked correct, masking the bug until we queried the data directly.
+
+**Fix shipped:**
+- `src/app/admin/page.tsx` — removed the `'pending'` entry from the `tabs` nav array, changed default state from `useState<Tab>('pending')` to `useState<Tab>('published')` so first load lands on Live, and dropped the `tab === 'pending'` branch from the render switch (defense in depth — even if state somehow becomes 'pending', it renders nothing). The `'pending'` value is kept in the `Tab` union and in `/api/admin/items` for backwards compat with any direct API callers (none in current code) until Phase 9.
+- `supabase-backfill-published-columns.sql` — backfill script for the 2 broken rows. Computes `published_X = COALESCE(admin_X, ai_X)` per spec §5C, populates the legacy mirror columns (only where they are empty/NULL — never overwrites a manually-edited value), backfills `admin_approved_*` from the legacy `approved_*` so the row has a Phase-5-shaped record. Idempotent. Run by Hamzah in Supabase SQL Editor after the code merges.
+
+**Verification before shipping** (the three leakage checks):
+1. `/admin?tab=pending` direct URL — confirmed not routable (no useSearchParams, no router → state sync). The default-tab change covers first-load; the render-switch removal covers any code path that flips state to 'pending'.
+2. Live / Sold / Hidden tab filters — they query by `is_published`/`is_sold`/`is_hidden` flags, not by `status`. Phase 4-generated pending rows have all three flags `false` so they only matched the (now-removed) Pending tab. No leakage.
+3. Other admin entrypoints — single-item Approve renders only inside `AdminItems` when `tab === 'pending'`; bulk approve only appears in `BULK_ACTIONS_BY_TAB.pending`. No other UI surface invokes the legacy approve action. The login page and back-buttons land on the new default tab (Live).
+
+**Known secondary paths NOT fixed:** `mark_live` (Hidden tab → "Move to Live") and `unmark_sold` (Sold tab → "Restore") both set `is_published=true` without computing `published_*`. They're legitimate workflows for already-published items returning to Live (customer cancels a sale, admin unhides). Not a way to publish a fresh pending row after Option B. Phase 9 closes these once the legacy admin route is fully retired.
+
+**How to verify the bug is gone after future approvals:**
+```sql
+SELECT id, status, published_description, published_seo_title,
+       admin_approved_at, admin_approved_by
+FROM shop_items
+WHERE id = '<approved_item_id>';
+-- All four columns should be non-NULL after a /admin/pending approval.
+```
+
+---
+
 ## Phases 6–9 — Not yet started
 
 - **Phase 6:** Public site rendering switch to `published_*` columns + JSON-LD schemas. Will retire the "Phase 6 bridge" legacy-mirror block in `src/lib/admin-pending-publish.ts:97-117` and the `worker_photo_brand_url` fallback in `src/lib/item-image.ts` (or keep the latter — cheap insurance).
@@ -178,5 +205,5 @@ Per memory `feedback_listing_generator_workflow.md`:
 
 ## Change log for this file
 
-- **2026-05-10:** Phase 5 marked complete (PR #26). Added sitewide image-optimizer hotfix record (PR #27 — Vercel Hobby 402 quota, switched to custom Cloudinary loader). Updated Phases 6/9 to reference the new "Phase 6 bridge" mirror in `admin-pending-publish.ts` and the BETA-link cleanup.
+- **2026-05-10:** Phase 5 marked complete (PR #26). Added sitewide image-optimizer hotfix record (PR #27 — Vercel Hobby 402 quota, switched to custom Cloudinary loader). Added Phase 5 follow-up: legacy /admin Pending tab removed after discovering two production rows had been approved through it without populating `published_*` columns. Backfill SQL written. Updated Phases 6/9 to reference the new "Phase 6 bridge" mirror in `admin-pending-publish.ts` and the BETA-link cleanup.
 - **2026-05-09:** Phase 4 marked complete. Added admin-approve bug record (PR #24). Added Phase 5 carryforward notes including the 49 legacy items.
