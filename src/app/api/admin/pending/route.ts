@@ -36,5 +36,67 @@ export async function GET(request: NextRequest) {
   }
 
   const items = data ?? [];
+
+  // ─────────────────────────────────────────────────────────────────
+  // TEMP DIAGNOSTIC — REMOVE BEFORE LANDING ANY OTHER PR
+  // ─────────────────────────────────────────────────────────────────
+  // 2026-05-10 bug: production /admin/pending UI is reporting the
+  // archived TV stand row showing where the 4 pending rows should be.
+  // Service-role replication of this exact query returns the 4 pending
+  // rows correctly; can't reproduce. Logging the actual response payload
+  // into audit_log so we can see what each real session receives via
+  // service-role read. Diagnostic-only — no behavior change.
+  //
+  // To clean up after diagnosis: delete this whole block AND
+  //   DELETE FROM audit_log WHERE action = 'debug_pending_list_call';
+  try {
+    interface ItemRow {
+      id?: unknown;
+      status?: unknown;
+      is_published?: unknown;
+      is_sold?: unknown;
+      is_hidden?: unknown;
+      worker_id?: unknown;
+      ai_item_name?: unknown;
+      worker_submitted_at?: unknown;
+    }
+    await supabaseAdmin.from('audit_log').insert({
+      item_id: null,
+      action: 'debug_pending_list_call',
+      actor_type: 'admin',
+      actor_id: admin,
+      metadata: {
+        deployment_sha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 8) ?? 'unknown',
+        deployment_url: process.env.VERCEL_URL ?? 'unknown',
+        request: {
+          host: request.headers.get('host'),
+          origin: request.headers.get('origin'),
+          referer: request.headers.get('referer'),
+          user_agent: request.headers.get('user-agent')?.slice(0, 200),
+          x_forwarded_for: request.headers.get('x-forwarded-for'),
+          x_vercel_id: request.headers.get('x-vercel-id'),
+        },
+        response: {
+          count: items.length,
+          ids: (items as ItemRow[]).map((r) => r.id ?? null),
+          rows: (items as ItemRow[]).map((r) => ({
+            id: r.id ?? null,
+            status: r.status ?? null,
+            is_published: r.is_published ?? null,
+            is_sold: r.is_sold ?? null,
+            is_hidden: r.is_hidden ?? null,
+            worker_id: r.worker_id ?? null,
+            ai_item_name: r.ai_item_name ?? null,
+            worker_submitted_at: r.worker_submitted_at ?? null,
+          })),
+        },
+      },
+    });
+  } catch (logErr) {
+    // Diagnostic write must NEVER break the actual response. Swallow.
+    console.error('[admin/pending] diagnostic insert failed:', logErr);
+  }
+  // ─── END TEMP DIAGNOSTIC ────────────────────────────────────────
+
   return NextResponse.json({ items, count: items.length });
 }
