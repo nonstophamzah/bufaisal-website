@@ -8,6 +8,7 @@ import ItemCard from '@/components/ItemCard';
 import { supabase, ShopItem } from '@/lib/supabase';
 import { CATEGORIES, CATEGORY_SLUG_MAP } from '@/lib/constants';
 import { resolveItemImageUrl } from '@/lib/item-image';
+import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
 
 const CATEGORY_INTROS: Record<string, string> = {
   'living-room-lounge':
@@ -165,26 +166,29 @@ export default function ShopClient({
       '@type': 'ItemList',
       name: `Used ${catName} for Sale`,
       numberOfItems: items.length,
-      itemListElement: items.slice(0, 10).map((item, i) => ({
-        '@type': 'ListItem',
-        position: i + 1,
-        item: {
-          '@type': 'Product',
-          name: item.item_name,
-          description: item.description || `Used ${item.item_name}`,
-          url: `https://bufaisal.ae/item/${item.id}`,
-          image: resolveItemImageUrl(item) ?? '',
-          brand: { '@type': 'Brand', name: item.brand || 'Bu Faisal' },
-          offers: {
-            '@type': 'Offer',
-            availability: 'https://schema.org/InStock',
-            priceCurrency: 'AED',
-            price: item.sale_price || 0,
-            seller: { '@type': 'Organization', name: 'Bu Faisal General Trading' },
+      itemListElement: items.slice(0, 10).map((item, i) => {
+        const f = resolvePublicItemFields(item);
+        return {
+          '@type': 'ListItem',
+          position: i + 1,
+          item: {
+            '@type': 'Product',
+            name: f.itemName,
+            description: f.description || `Used ${f.itemName}`,
+            url: `https://bufaisal.ae/item/${item.id}`,
+            image: resolveItemImageUrl(item) ?? '',
+            brand: { '@type': 'Brand', name: f.brand || 'Bu Faisal' },
+            offers: {
+              '@type': 'Offer',
+              availability: 'https://schema.org/InStock',
+              priceCurrency: 'AED',
+              price: item.sale_price || 0,
+              seller: { '@type': 'Organization', name: 'Bu Faisal General Trading' },
+            },
+            itemCondition: 'https://schema.org/UsedCondition',
           },
-          itemCondition: 'https://schema.org/UsedCondition',
-        },
-      })),
+        };
+      }),
     };
   }, [catName, items]);
 

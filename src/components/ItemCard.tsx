@@ -7,6 +7,7 @@ import { ShopItem } from '@/lib/supabase';
 import { buildWhatsAppUrl } from '@/lib/constants';
 import { trackWhatsAppClick } from '@/lib/fbpixel';
 import { getItemImageUrl } from '@/lib/item-image';
+import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
 
 function ConditionBadge({ condition }: { condition: string | null }) {
   if (!condition) return null;
@@ -36,6 +37,7 @@ function isJustArrived(createdAt: string) {
 export default function ItemCard({ item, priority = false }: { item: ShopItem; priority?: boolean }) {
   const imageUrl = getItemImageUrl(item);
   const justArrived = isJustArrived(item.created_at);
+  const f = resolvePublicItemFields(item);
 
   const handleWhatsAppClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -55,7 +57,7 @@ export default function ItemCard({ item, priority = false }: { item: ShopItem; p
         <div className="relative aspect-square bg-gray-100 overflow-hidden">
           <Image
             src={imageUrl}
-            alt={item.item_name}
+            alt={f.itemName ?? 'Product image'}
             fill
             className="object-cover group-hover:scale-105 transition-transform duration-300"
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
@@ -90,12 +92,12 @@ export default function ItemCard({ item, priority = false }: { item: ShopItem; p
       <div className="p-3">
         <Link href={`/item/${item.id}`}>
           <h3 className="font-semibold text-sm line-clamp-1 hover:text-yellow transition-colors">
-            {item.item_name}
+            {f.itemName}
           </h3>
         </Link>
         <div className="flex flex-wrap items-center gap-1.5 mt-1">
-          {item.brand && (
-            <span className="text-xs text-muted">{item.brand}</span>
+          {f.brand && (
+            <span className="text-xs text-muted">{f.brand}</span>
           )}
           <ConditionBadge condition={item.condition} />
         </div>

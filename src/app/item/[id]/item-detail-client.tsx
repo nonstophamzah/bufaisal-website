@@ -7,6 +7,7 @@ import { MessageCircle, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-reac
 import { ShopItem } from '@/lib/supabase';
 import { buildWhatsAppUrl } from '@/lib/constants';
 import { trackWhatsAppClick, trackViewContent } from '@/lib/fbpixel';
+import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
 
 function ConditionBadge({ condition }: { condition: string | null }) {
   if (!condition) return null;
@@ -30,8 +31,10 @@ function ConditionBadge({ condition }: { condition: string | null }) {
 
 export default function ItemDetailClient({ item }: { item: ShopItem }) {
   const [activeImage, setActiveImage] = useState(0);
+  const f = resolvePublicItemFields(item);
 
-  // Track ViewContent on mount
+  // Track ViewContent on mount. Analytics is non-display and stays on
+  // legacy fields per Phase 6.3 scope (separate consumer decision).
   useEffect(() => {
     trackViewContent({
       id: item.id,
@@ -81,7 +84,7 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
               {images.length > 0 ? (
                 <Image
                   src={images[activeImage]}
-                  alt={item.item_name}
+                  alt={f.itemName ?? 'Product image'}
                   fill
                   className="object-cover"
                   sizes="(max-width: 768px) 100vw, 50vw"
@@ -137,7 +140,7 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
                   >
                     <Image
                       src={url}
-                      alt={`${item.item_name} ${i + 1}`}
+                      alt={`${f.itemName ?? 'Product image'} ${i + 1}`}
                       fill
                       className="object-cover"
                       sizes="64px"
@@ -152,15 +155,15 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <span className="text-xs font-medium text-yellow bg-yellow/10 px-2 py-1 rounded">
-                {item.category}
+                {f.category}
               </span>
               <ConditionBadge condition={item.condition} />
             </div>
             <h1 className="font-heading text-3xl md:text-4xl mb-1">
-              {item.item_name}
+              {f.itemName}
             </h1>
-            {item.brand && (
-              <p className="text-muted text-sm mb-2">{item.brand}</p>
+            {f.brand && (
+              <p className="text-muted text-sm mb-2">{f.brand}</p>
             )}
 
             <div className="flex items-center gap-2 mb-4">
@@ -180,11 +183,11 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
               )}
             </div>
 
-            {item.description && (
+            {f.description && (
               <div className="mb-6">
                 <h3 className="font-semibold text-sm mb-2">Description</h3>
                 <p className="text-sm text-gray-600 leading-relaxed">
-                  {item.description}
+                  {f.description}
                 </p>
               </div>
             )}
@@ -215,10 +218,10 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
                   <p className="font-medium">{item.barcode}</p>
                 </div>
               )}
-              {item.product_type && (
+              {f.productType && (
                 <div className="bg-gray-50 p-3 rounded-lg">
                   <span className="text-muted">Type</span>
-                  <p className="font-medium">{item.product_type}</p>
+                  <p className="font-medium">{f.productType}</p>
                 </div>
               )}
             </div>
