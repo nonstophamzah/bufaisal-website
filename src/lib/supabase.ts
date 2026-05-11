@@ -70,6 +70,17 @@ export interface ShopItem {
   worker_photo_2_url: string | null;
   worker_photo_3_url: string | null;
   worker_photo_barcode_url: string | null;
+  // Phase 6.3 — public-text published_* columns consumed by
+  // `resolvePublicItemFields()` to prefer the publish-time snapshot over
+  // the legacy mirror. JSONB / layout-only published_* columns are added
+  // in Phase 6.4. NULL on pre-Phase-5 legacy rows.
+  published_item_name: string | null;
+  published_brand: string | null;
+  published_category: string | null;
+  published_product_type: string | null;
+  published_description: string | null;
+  published_seo_title: string | null;
+  published_meta_description: string | null;
 }
 
 export interface WebsiteConfig {

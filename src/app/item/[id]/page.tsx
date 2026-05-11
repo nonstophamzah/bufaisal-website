@@ -4,6 +4,7 @@ import { cache } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { ShopItem } from '@/lib/supabase';
 import { resolveItemImageUrl } from '@/lib/item-image';
+import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
 import ItemDetailClient from './item-detail-client';
 
 function getSupabase() {
@@ -35,11 +36,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const item = await getItem(id);
   if (!item) return { title: 'Item Not Found' };
 
-  const title = item.seo_title || `${item.item_name} — Bu Faisal`;
+  const f = resolvePublicItemFields(item);
+  const title = f.seoTitle || `${f.itemName} — Bu Faisal`;
   const description =
-    item.seo_description ||
-    item.description ||
-    `${item.item_name} available at Bu Faisal second-hand store in Ajman, UAE.`;
+    f.seoDescription ||
+    f.description ||
+    `${f.itemName} available at Bu Faisal second-hand store in Ajman, UAE.`;
   const image = resolveItemImageUrl(item);
 
   return {
@@ -48,7 +50,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       title,
       description,
-      ...(image && { images: [{ url: image, width: 1200, height: 630, alt: item.item_name }] }),
+      ...(image && { images: [{ url: image, width: 1200, height: 630, alt: f.itemName ?? 'Product image' }] }),
       type: 'website',
       url: `https://bufaisal.ae/item/${id}`,
     },
@@ -77,11 +79,12 @@ export default async function ItemDetailPage({ params }: Props) {
   // page description) so search results can hint at negotiability.
   // Schema.org has no official negotiable signal; this is the
   // simplest approach Google reliably surfaces.
+  const f = resolvePublicItemFields(item);
   const image = resolveItemImageUrl(item);
   const baseDescription =
-    item.seo_description ||
-    item.description ||
-    `${item.item_name} available at Bu Faisal second-hand store.`;
+    f.seoDescription ||
+    f.description ||
+    `${f.itemName} available at Bu Faisal second-hand store.`;
   const isNegotiable = item.negotiable !== false;
   const schemaDescription = isNegotiable
     ? `${baseDescription} Price is negotiable.`
@@ -90,11 +93,11 @@ export default async function ItemDetailPage({ params }: Props) {
   const productSchema = {
     '@context': 'https://schema.org',
     '@type': 'Product',
-    name: item.item_name,
+    name: f.itemName,
     description: schemaDescription,
     ...(image && { image: [image] }),
-    ...(item.brand && item.brand !== 'Other' && {
-      brand: { '@type': 'Brand', name: item.brand },
+    ...(f.brand && f.brand !== 'Other' && {
+      brand: { '@type': 'Brand', name: f.brand },
     }),
     ...(item.barcode && { sku: item.barcode }),
     url: `https://bufaisal.ae/item/${id}`,
@@ -113,7 +116,7 @@ export default async function ItemDetailPage({ params }: Props) {
         name: 'Bu Faisal General Trading',
       },
     },
-    ...(item.category && { category: item.category }),
+    ...(f.category && { category: f.category }),
   };
 
   // BreadcrumbList JSON-LD
