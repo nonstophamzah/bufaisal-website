@@ -150,6 +150,19 @@ Between `repaired` and `sent_to_shop`, every item must pass through cleaning. Cl
 ### Overdue Rule
 Items with location_status `sent_to_jurf` for >24 hours are flagged as overdue in the manager dashboard.
 
+## Sacred routes
+
+These routes are never modified without explicit user permission, even for tangential cleanup. They are operationally load-bearing, owned by other phases, or have non-obvious invariants that aren't fully captured in code.
+
+- `/team` — worker upload portal (Phase 3 locked pill design, mobile shop-floor flow)
+- `/admin` — legacy admin dashboard (settings, analytics, Live/Sold/Hidden tabs)
+- `/admin/pending` — Phase 5 admin pending dashboard
+- `/appliances` (and nested `/appliances/*`) — internal appliance ops system. Rename to `/appliance-tracker` is locked per Decisions Log 2026-05-01 but parked on branch `v2-migration-foundation`, not yet on main.
+- `/api/appliances` — internal API for the appliance tracker
+- `/api/gemini` — Claude Haiku image analysis (legacy name; serves appliance tracker barcode scan + diesel route OCR)
+
+If a task seems to require editing any of these, stop and ask first. "Stop and ask" includes type-safety knock-ons: even a `ShopItem` interface change that propagates into `/admin` is a touch that needs approval.
+
 ## Conventions
 
 - **UI Pattern:** Mobile-first, tap-heavy interface. Big buttons, minimal typing. Workers use phones on the shop floor.
@@ -159,6 +172,10 @@ Items with location_status `sent_to_jurf` for >24 hours are flagged as overdue i
 - **Auth Pattern:** No JWT/session cookies. PIN hashes in env vars (admin), bcrypt in DB (shop passwords), plain text codes (entry/manager — should migrate to bcrypt).
 - **Image Handling:** `browser-image-compression` in a Web Worker, target ~400KB max, max 1600px on long edge, JPEG output, uploaded directly to Cloudinary (cloud `df8y0k626`, preset `bufaisal_unsigned`). Self-hosted library at `/browser-image-compression.js`. CSP includes `worker-src 'self' blob:`.
 - **Error Handling:** ErrorFlash/SuccessFlash components for user feedback. Toast pattern in manager dashboard.
+- **Public-side field resolution:** Public-facing renders of `shop_items` text MUST go through `resolvePublicItemFields()` at `src/lib/resolve-public-item-fields.ts`. Never read `item.item_name`, `item.description`, `item.seo_title`, `item.brand`, `item.category`, `item.product_type`, or `item.seo_description` directly in code that ends up in the browser, OG tags, JSON-LD, or any other user-agent-visible output. The helper handles the `published_X ?? legacy_X` fallback with `??` (nullish coalescing — NEVER `||`, an empty string on `published_*` is an intentional admin blank, not "missing"). Helper retires in Phase 6.5.
+- **Alt-text fallback:** Product `<Image alt>` and OG `image.alt` use `alt={f.itemName ?? 'Product image'}`. Never empty string — `alt=""` is the HTML convention for *decorative* images and tells assistive tech to skip them. Product photos are primary content.
+- **"Display" includes everything any user-agent reads:** When deciding whether something is in-scope for a `published_*` cutover, treat *display* as: visible text, meta tags (`<title>`, description, OG, Twitter), JSON-LD, `alt` attributes, ARIA labels, screen-reader output. *Non-display* is: server-side filter/search columns (`where category=…`, `ilike` searches), analytics payloads (FB Pixel `trackViewContent` / `trackWhatsAppClick`), IDs, FK references, internal logs.
+- **Cutover-PR scope discipline:** Data-layer cutover PRs (legacy column → new column) must enumerate "in scope" and "out of scope" files in the PR body. Recurring out-of-scope buckets to call out by name: the legacy mirror block in `src/lib/admin-pending-publish.ts` (retires later), server-side `ilike` search columns, `buildWhatsAppUrl` outbound message body, `/api/feed` Facebook/Google catalog, analytics calls, breadcrumb JSON-LD when explicitly locked inline, and image-URL resolution when no `published_*` counterpart exists.
 
 ## Environment Variables
 
