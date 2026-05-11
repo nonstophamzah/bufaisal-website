@@ -38,10 +38,13 @@ interface PublishResult {
  *  - Status flip to 'published' + is_published=true
  *  - admin_approved_at / admin_approved_by audit metadata
  *
- * Skipped (per locked Phase 5 scope — Phase 6 owns these):
- *  - published_h1_title, published_geographic_anchor,
- *    published_image_alt_texts, published_product_schema,
- *    published_faq_schema — these columns do not exist in the migration.
+ * As of Phase 6.2, all 16 published_* columns are written by this helper
+ * (the 5 columns added in PR #38 — published_h1_title,
+ * published_geographic_anchor, published_image_alt_texts,
+ * published_product_schema, published_faq_schema — now have writes).
+ * published_h1_title mirrors pSeoTitle per the locked spec (H1 = SEO title).
+ * published_product_schema and published_faq_schema source only from
+ * ai_* — there is no admin override layer for these in the current type.
  */
 export function buildPublishUpdate(item: PendingItem, adminName: string): PublishResult {
   const now = new Date().toISOString();
@@ -58,6 +61,11 @@ export function buildPublishUpdate(item: PendingItem, adminName: string): Publis
   const pFaqs = pick(item.admin_faqs, item.ai_faqs);
   const pTrustSignals = pick(item.admin_trust_signals, item.ai_trust_signals);
   const pSlug = pick(item.admin_slug, item.ai_slug);
+  const pH1Title = pSeoTitle; // h1 always equals seo_title per locked spec
+  const pGeographicAnchor = pick(item.admin_geographic_anchor, item.ai_geographic_anchor);
+  const pImageAltTexts = pick(item.admin_image_alt_texts, item.ai_image_alt_texts);
+  const pProductSchema = item.ai_product_schema; // no admin override layer
+  const pFaqSchema = item.ai_faq_schema; // no admin override layer
 
   // Worker-grade fields: locked rule is "worker wins for condition", but
   // admin can override if the disagreement was flagged. Same pattern for
@@ -82,6 +90,11 @@ export function buildPublishUpdate(item: PendingItem, adminName: string): Publis
     published_faqs: pFaqs,
     published_trust_signals: pTrustSignals,
     published_slug: pSlug,
+    published_h1_title: pH1Title,
+    published_geographic_anchor: pGeographicAnchor,
+    published_image_alt_texts: pImageAltTexts,
+    published_product_schema: pProductSchema,
+    published_faq_schema: pFaqSchema,
     published_at: now,
 
     // ── State + admin audit ──
