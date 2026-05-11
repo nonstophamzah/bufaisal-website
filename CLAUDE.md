@@ -226,3 +226,8 @@ See `FULL-AUDIT-bufaisal-platform.md` for the complete 47-issue audit with prior
 - Don't skip rate limiting on new API routes
 - Don't create new Supabase tables without RLS policies
 - Don't use localStorage for auth state — use sessionStorage (clears on tab close)
+
+## Last session handoff
+
+- **2026-05-10** — Phase 6.0 (UUID leak fix on `/item/[id]`, PR #37) and Phase 6.1 (5 missing `published_*` columns on `shop_items`, PR #38) shipped to main. Diesel WIP parked on `diesel/wip-2026-05-10`.
+- Next session starts Phase 6.2 — see [`.claude/handoffs/2026-05-10-phase-6.2-start.md`](.claude/handoffs/2026-05-10-phase-6.2-start.md).

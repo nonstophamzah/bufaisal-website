@@ -36,4 +36,8 @@ yarn-error.log*
 next-env.d.ts
 
 # claude agent scratch (worktrees, local config, skills cache)
-.claude/
+# Use .claude/* (not .claude/) so the !.claude/handoffs/ negation below can
+# re-include that subdirectory — git refuses to recurse into a fully
+# excluded parent dir, so the bare .claude/ rule would mask the negation.
+.claude/*
+!.claude/handoffs/
