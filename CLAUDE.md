@@ -227,7 +227,32 @@ See `FULL-AUDIT-bufaisal-platform.md` for the complete 47-issue audit with prior
 - Don't create new Supabase tables without RLS policies
 - Don't use localStorage for auth state — use sessionStorage (clears on tab close)
 
+## Session discipline
+
+### Memory & handoff discipline
+
+Every session must maintain its own audit trail without being prompted:
+
+1. **At session start:** read `.claude/handoffs/` for the most recent handoff file. If one exists for an in-progress phase, follow it. If unclear, ask Hamzah before proceeding.
+
+2. **During the session:** after any significant change is shipped (PR merged, migration applied, configuration changed), update CLAUDE.md's relevant sections inline — don't wait until session end. Stale CLAUDE.md content is worse than missing content because it actively misleads future sessions.
+
+3. **At session end (or before context window gets risky):** write a new handoff file at `.claude/handoffs/YYYY-MM-DD-phase-X.Y-start.md` covering:
+   - Current branch and clean-state confirmation
+   - What shipped this session (commit SHAs)
+   - What the next sub-step will do
+   - Files the next session must read first
+   - Subtleties carried forward (deviations, gotchas, parked branches, anything non-obvious)
+
+   Replace the "## Last session handoff" section in CLAUDE.md with a pointer to the new handoff file.
+
+4. **Commit and push the handoff before closing.** An uncommitted handoff is useless — the next session won't have access to it unless it's on origin.
+
+5. **Anything that surprised you this session goes in the handoff.** Future you (or future Claude Code) will need that context. Examples from prior sessions: the `.maybeSingle()` deviation reasoning, the `.gitignore` `.claude/*` carve-out, the no-CLI migration workflow, the diesel WIP parked branch.
+
+The handoff convention is the load-bearing piece that keeps Phase 6 (and future multi-session work) coherent across context resets. Treat it like production code, not optional housekeeping.
+
 ## Last session handoff
 
-- **2026-05-10** — Phase 6.0 (UUID leak fix on `/item/[id]`, PR #37) and Phase 6.1 (5 missing `published_*` columns on `shop_items`, PR #38) shipped to main. Diesel WIP parked on `diesel/wip-2026-05-10`.
-- Next session starts Phase 6.2 — see [`.claude/handoffs/2026-05-10-phase-6.2-start.md`](.claude/handoffs/2026-05-10-phase-6.2-start.md).
+- **2026-05-10** — Phase 6.0 (UUID leak fix, PR #37), Phase 6.1 (5 missing `published_*` columns, PR #38), and Phase 6.2 (publish helper mirrors new columns, PR #39) shipped to main. Verified end-to-end with a fresh upload through `/team` → AI → `/admin/pending` → published. Test row archived. Database layer of Phase 6 complete. Next: 6.3 — switch public product page to read from `published_*` columns.
+- Next session starts Phase 6.3 — see [`.claude/handoffs/2026-05-11-phase-6.3-start.md`](.claude/handoffs/2026-05-11-phase-6.3-start.md).
