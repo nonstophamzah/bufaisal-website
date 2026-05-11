@@ -254,5 +254,5 @@ The handoff convention is the load-bearing piece that keeps Phase 6 (and future 
 
 ## Last session handoff
 
-- **2026-05-10** — Phase 6.0 (UUID leak fix, PR #37), Phase 6.1 (5 missing `published_*` columns, PR #38), and Phase 6.2 (publish helper mirrors new columns, PR #39) shipped to main. Verified end-to-end with a fresh upload through `/team` → AI → `/admin/pending` → published. Test row archived. Database layer of Phase 6 complete. Next: 6.3 — switch public product page to read from `published_*` columns.
-- Next session starts Phase 6.3 — see [`.claude/handoffs/2026-05-11-phase-6.3-start.md`](.claude/handoffs/2026-05-11-phase-6.3-start.md).
+- **2026-05-11** — Phase 6.3 (public site reads from `published_*` via resolver, PR #40) shipped to main (commit `67cbd29`) and verified live on bufaisal.ae. Resolver pattern locked: `item.published_X ?? item.legacy_X`. Legacy mirror in `admin-pending-publish.ts` remains until 6.5 cleanup.
+- Next session starts Phase 6.4 — see [`.claude/handoffs/2026-05-11-phase-6.4-start.md`](.claude/handoffs/2026-05-11-phase-6.4-start.md).
