@@ -9,6 +9,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { PendingItem } from '@/app/admin/pending/types';
+import { substituteSchemaImages } from '@/lib/resolve-schema-images';
 // Re-export from the shared (client-safe) location so callers can import
 // either from the publish helper or from the eligibility module.
 export {
@@ -64,7 +65,12 @@ export function buildPublishUpdate(item: PendingItem, adminName: string): Publis
   const pH1Title = pSeoTitle; // h1 always equals seo_title per locked spec
   const pGeographicAnchor = pick(item.admin_geographic_anchor, item.ai_geographic_anchor);
   const pImageAltTexts = pick(item.admin_image_alt_texts, item.ai_image_alt_texts);
-  const pProductSchema = item.ai_product_schema; // no admin override layer
+  // Substitute placeholder image[] tokens (e.g. "photo_1_url") with real
+  // Cloudinary URLs from worker_photo_*. See src/lib/resolve-schema-images.ts.
+  const pProductSchema = substituteSchemaImages(
+    item.ai_product_schema as Record<string, unknown> | null | undefined,
+    item
+  );
   const pFaqSchema = item.ai_faq_schema; // no admin override layer
 
   // Worker-grade fields: locked rule is "worker wins for condition", but
