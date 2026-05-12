@@ -1,6 +1,6 @@
 # Listing Generator Rebuild — Phase State
 
-**Last updated:** 2026-05-10 (Phase 5 VERIFIED end-to-end in production after a 6-hour cache-defeat debugging session)
+**Last updated:** 2026-05-12 (Phase 6.4 PR A + PR B SHIPPED — `/item/[id]` fully cut over to `published_*` columns)
 **Owner:** Hamzah Khan
 **Driver doc:** `docs/Bufaisal-Claude-Code-Implementation-Spec-v1_0_1.md`
 **Decisions log:** `docs/Bufaisal-Decisions-Log-v1_1-Addendum.docx`
@@ -189,11 +189,67 @@ WHERE id = '<approved_item_id>';
 5. **Low-priority observation, deferred:** AI emitted "Since 2009 — UAE's largest used goods market" as off-whitelist when it IS on the universal whitelist. Possible duplicate detection bug in the trust-signals editor's whitelist match, possible em-dash vs hyphen vs spacing normalization issue. Punt to Phase 6 or 9.
 
 ### Phase 6 — Public site rendering switch
-- Switch `src/app/shop`, `src/app/item/[id]`, `src/components/ItemCard`, `src/app/marketplace-client.tsx`, and `src/app/api/feed` to read from `published_*` columns directly.
-- Inject JSON-LD schema markup (`published_product_schema`, `published_faq_schema`) — note these columns DO NOT EXIST in the migration, so either add a migration or read from `ai_product_schema`/`ai_faq_schema` (Phase 6 owns this decision).
-- WhatsApp pre-fill format from spec §6C.
-- Retire the "Phase 6 bridge" legacy-mirror block in `src/lib/admin-pending-publish.ts:97-117` once all readers are switched.
-- The `worker_photo_brand_url` fallback in `src/lib/item-image.ts` is cheap insurance; can keep or drop.
+
+Subdivided in execution into sequential sub-phases. Sub-phases 6.0 → 6.4 are complete; 6.5 is next.
+
+#### Phase 6.0 — Visibility hygiene
+**Status:** ✅ Complete (rolled into earlier PRs). Public `/item/[id]` filters on `is_published=true AND is_hidden=false`, blocking processing/pending/archived UUID leaks. `is_sold` intentionally NOT filtered so sold rows keep their SEO surface with the SOLD overlay.
+
+#### Phase 6.1 — JSONB column additions
+**Status:** ✅ Complete. Migration `021_add-phase6-published-columns.sql` added `published_h1_title`, `published_geographic_anchor`, `published_image_alt_texts`, `published_product_schema`, `published_faq_schema`, `published_slug`. Phase 1B Skipped published_* note in §Phase 5 is now resolved.
+
+#### Phase 6.2 — Publish helper writes the new JSONB columns
+**Status:** ✅ Complete (PR #38). `src/lib/admin-pending-publish.ts` `buildPublishUpdate()` now writes all 16 published_* columns including the JSONB schema fields.
+
+#### Phase 6.3 — Public site reads text fields from `published_*`
+**Status:** ✅ Complete (PR #40, commit `67cbd29` on main, verified live).
+
+What shipped:
+- `src/lib/resolve-public-item-fields.ts` resolver introduced. Pattern: `item.published_X ?? item.legacy_X` (`??`, never `||`).
+- Consumers cut over: `src/app/item/[id]/page.tsx` (metadata + body), `src/app/item/[id]/item-detail-client.tsx`, `src/app/shop/shop-client.tsx`, `src/components/ItemCard.tsx`. Seven text fields covered.
+- Column-name mismatch documented: `published_meta_description` ↔ `seo_description` (Decisions Log v1.1).
+
+#### Phase 6.4 PR A — `/item/[id]` schema + data wiring
+**Status:** ✅ Shipped 2026-05-12 (PR #44, merged at `495e0b7` on main).
+
+What shipped:
+- Resolver extended with five JSONB fields: `productSchema`, `faqSchema`, `specTable`, `faqs`, `trustSignals`.
+- New `src/lib/augment-product-schema.ts` — render-time SEO augmentation of stored `published_product_schema` with page-level fields (sku, canonical URL, category, seller block with `legalName`, idempotent "Price is negotiable." description hint). Non-destructive — only fills gaps, never overwrites.
+- `src/app/item/[id]/page.tsx` — ripped out the hand-built inline Product JSON-LD. Two new `<script type="application/ld+json">` blocks: augmented `published_product_schema` + verbatim `published_faq_schema`. New `escapeJsonLd()` helper rewrites `</script>` to `<\/script>` for script-tag breakout safety.
+- `src/app/item/[id]/item-detail-client.tsx` — renders bullet trust signals, semantic `<table>` spec table with canonical key order, native `<details>` FAQ accordion with rotating chevron.
+- `ShopItem` interface: added `worker_negotiable`, `admin_negotiable`, `published_product_schema`, `published_faq_schema`, `published_spec_table`, `published_faqs`, `published_trust_signals`. All additive.
+- Breadcrumb position-3 + position-4 fixed to flow through resolver.
+- Seller block includes `legalName: "Bu Faisal General Trading LLC"` per Decisions Log 2026-05-01 brand lock.
+- Negotiable source: `item.admin_negotiable ?? item.worker_negotiable` (not legacy `item.negotiable` mirror — that retires in 6.5).
+
+**Verification:** All 5 currently-published rows have full `published_*` JSONB populated. Zero SEO regression risk for current inventory.
+
+#### Phase 6.4 PR B — `/item/[id]` layout & conversion polish
+**Status:** ✅ Shipped 2026-05-12 (PR #45, merged at `3e24686` on main).
+
+What shipped:
+- New `src/lib/shops.ts` — canonical shop config for the public site. Maps BF1–BF5 to display names + Google Maps GBP URLs. `getShop(workerShopId)` lookup. Imported ONLY by `/item/[id]` (NOT by `/admin`).
+- Spec-table Location row renders as clickable Google Maps GBP link with `ExternalLink` icon when shop has a `mapUrl`.
+- New Photos section between spec table and FAQ — 4-thumbnail responsive grid (2-col mobile, 4-col desktop) sourcing `worker_photo_*` columns directly. Click to open `yet-another-react-lightbox` (~30 KB, first image-display library in the repo). Accessible: focus trap, Escape, keyboard arrow nav.
+- New `src/lib/similar-items.ts` — three-tier query (brand+category → category+shop → category), freshness sort, dedupe across tiers, hide if <4 matches.
+- New `SimilarItemCard` co-located in `item-detail-client.tsx` for purely navigational cards (no per-card WhatsApp button — prevents cognitive split with main page CTA, Amazon/Noon/IKEA pattern). Site-wide `ItemCard` unchanged for homepage / shop feeds.
+- "WHATSAPP" → "NEGOTIATE" rename on desktop inline + mobile sticky buttons per Architecture doc 2.1. Floating green WhatsApp circle stays as generic site-wide contact CTA, NOT product-specific.
+- `ShopItem` interface: added `worker_shop_id`, `published_image_alt_texts`. Additive.
+
+**Verification:** Dev-mode visual check with threshold=2 on Hitachi page rendered Similar items with 2 cards (Chest Freezer + Siemens Gas Cooker), zero per-card WhatsApp/MessageCircle, each card a single `<a href="/item/UUID">`. Threshold restored to 4 before commit.
+
+#### Phase 6.5 — Retire the legacy mirror (NEXT)
+**Status:** ⏳ Design pending.
+
+What to do:
+- Delete the "Phase 6 bridge — remove when public site reads published_* directly" block in `src/lib/admin-pending-publish.ts` lines ~116–136. The mirror writes `item_name, brand, category, condition, sale_price, description, seo_title, seo_description, negotiable, product_type, barcode` alongside `published_*` at approve time. Public site no longer reads these; mirror is dead-code at the write path.
+- Retire `resolvePublicItemFields()` once the legacy columns are physically dropped (separate cleanup PR, destructive — needs explicit migration with rollback plan).
+- Keep the legacy columns in the table for now — mirror just stops receiving NEW writes. Column drops are deferred to a later cleanup PR.
+
+Considered alternatives recorded in Decisions Log 2026-05-12: keep mirror as safety net (rejected — two writers = drift risk we're eliminating), drop columns immediately (deferred — destructive, separate PR).
+
+#### Worker_photo_brand_url fallback in `src/lib/item-image.ts`
+Cheap insurance, keep through Phase 6.5. Re-evaluate during Phase 9 cleanup.
 
 ### Phases 7–9
 - **Phase 7:** Optional migration of legacy items (the 49 NULL-status rows still on the public site).
@@ -292,6 +348,8 @@ Three things to remember:
 
 ## Change log for this file
 
+- **2026-05-12 (latest):** Phase 6.4 PR A (#44 at `495e0b7`) and PR B (#45 at `3e24686`) both shipped to main. Public `/item/[id]` fully cut over to `published_*` columns for text + JSONB. Sub-phase ledger added (6.0 → 6.5) with explicit status per sub-phase. `src/lib/augment-product-schema.ts`, `src/lib/similar-items.ts`, `src/lib/shops.ts` documented. `yet-another-react-lightbox@^3` is the repo's first image-display library. Phase 6.5 (retire legacy mirror in `admin-pending-publish.ts`) is the next step — design pending.
+- **2026-05-11:** Phase 6.3 shipped (PR #40 at `67cbd29`). Resolver `src/lib/resolve-public-item-fields.ts` introduced. Public site reads text fields from `published_*` with `??` fallback to legacy.
 - **2026-05-10 (latest):** Phase 5 VERIFIED end-to-end (PR #34). After PR #33's middleware fix turned out to be incomplete — symptom recurred for incognito sessions on a different browser engine, ruling out client cache — discovered Next.js Data Cache (layer 2) was still serving stale supabase-js responses inside the handler despite `dynamic='force-dynamic'`. PR #34 added five more cache-defeat layers: `revalidate=0`, `fetchCache='force-no-store'`, `unstable_noStore()`, fresh supabase client per-request, custom fetch wrapper with `cache:'no-store'`. Diagnostic confirmed the fix; refrigerator approval test passed. **Cache-Control rule above REVISED** to document both cache layers.
 - **2026-05-10 (later still):** Cache-Control fix shipped (PR #33) after a real production cache-poisoning incident on `/api/admin/pending`. Diagnosis required three iterations of temp diagnostic logging into `audit_log` because we couldn't read Vercel runtime logs from this side. Root cause believed at the time: Vercel CDN serving stale responses without invoking the function. Fix: middleware-level `Cache-Control: no-store` on every `/api/*` except `/api/feed`. Reverted PRs #30/#31/#32 (the temp diagnostics). Added the **Cache-Control rule** above. **Note: this turned out to be only ~half the fix; see PR #34 entry above for the full story.**
 - **2026-05-10 (later):** Three follow-up items shipped (PR #29):

@@ -915,18 +915,25 @@ The project is complete when:
 
 ## Order of Execution Recap
 
-1. **Phase 0** — Audit + report findings to Hamzah, wait for approval
-2. **Phase 1** — Database migration (schema + audit_log)
-3. **Phase 2** — Photo upload optimization (compression, capture-time, Cloudinary persistence)
-4. **Phase 3** — Worker upload screen rebuild
-5. **Phase 4** — Background AI processor + new system prompt
-6. **Phase 5** — Admin pending dashboard
+1. **Phase 0** — Audit + report findings to Hamzah, wait for approval ✅
+2. **Phase 1** — Database migration (schema + audit_log) ✅
+3. **Phase 2** — Photo upload optimization (compression, capture-time, Cloudinary persistence) ✅
+4. **Phase 3** — Worker upload screen rebuild ✅
+5. **Phase 4** — Background AI processor + new system prompt ✅
+6. **Phase 5** — Admin pending dashboard ✅
 7. **Phase 6** — Public site rendering updates
+   - **6.0** Visibility hygiene ✅
+   - **6.1** JSONB column additions ✅ (migration `021_add-phase6-published-columns.sql`)
+   - **6.2** Publish helper writes new JSONB columns ✅ (PR #38)
+   - **6.3** Public site reads text fields from `published_*` ✅ (PR #40)
+   - **6.4 PR A** `/item/[id]` schema + data wiring ✅ (PR #44, 2026-05-12)
+   - **6.4 PR B** `/item/[id]` layout & conversion polish ✅ (PR #45, 2026-05-12)
+   - **6.5** Retire legacy mirror in `admin-pending-publish.ts` — next
 8. **Phase 7** — Existing items migration (optional, post-launch)
 9. **Phase 8** — Monitoring + daily summary
 10. **Phase 9** — Cleanup + documentation
 
-After each phase, Hamzah tests on real phones and approves before the next phase starts.
+After each phase, Hamzah tests on real phones and approves before the next phase starts. Canonical ledger of execution status is `docs/PHASE_STATE.md`.
 
 ---
 
@@ -945,6 +952,7 @@ But when in doubt about strategy or architecture: ask. Better to pause for 5 min
 
 ## Change Log
 
+- **v1.0.1-phase6.4-shipped (May 12, 2026):** Documentation refresh after Phase 6.4 PR A (#44) and PR B (#45) shipped to main. The Order of Execution Recap now shows sub-phase status for Phase 6 (6.0 → 6.5). Canonical ledger remains `docs/PHASE_STATE.md`. No structural changes to the build sections themselves — Phase 6.4 was executed against the spec as written. Companion external `.docx` docs (Bufaisal-Website-Architecture, Bufaisal-Decisions-Log) get their own entries out-of-band.
 - **v1.0.1 (May 7, 2026):** Patch update before first deploy.
   - Fixed Phase 4A: replaced "fire-and-forget" pattern (which silently fails on Vercel) with three viable options (waitUntil from @vercel/functions, Vercel cron polling, or Supabase webhook). Recommended waitUntil for v1 on Hobby tier.
   - Fixed Phase 4E: Anthropic SDK example now formats user message as readable structured text instead of raw JSON.stringify, and shows correct response parsing pattern using content array find by type.
