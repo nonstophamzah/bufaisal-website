@@ -269,6 +269,25 @@ Every session must maintain its own audit trail without being prompted:
 
 The handoff convention is the load-bearing piece that keeps Phase 6 (and future multi-session work) coherent across context resets. Treat it like production code, not optional housekeeping.
 
+## Documentation policy
+
+Significant changes (new features, architectural decisions, schema migrations, locked-in conventions, AI behavior changes) require documentation updates as part of the PR. Doc updates are part of "done."
+
+In-repo docs — update in the same PR:
+- CLAUDE.md — extends the inline-update rule from Session discipline
+- lib/prompts/*.md — when AI behavior changes
+- docs/Bufaisal-Claude-Code-Implementation-Spec-v1_0_1.md — when phase status or implementation details change
+- PR description itself — explain what changed and why
+
+External docs — out of repo, but noted in the PR description:
+- Bufaisal-Decisions-Log .docx — for locked strategy decisions
+- Bufaisal-Website-Architecture .docx — for architectural changes
+- Bufaisal-SEO-Agent .docx — for AI behavior / output rule changes
+
+When a PR triggers an external doc update, add a section to the PR description titled "External doc update required" listing which .docx files need updating and what to add. Hamzah maintains the .docx files in his next editing session.
+
+Tiny PRs (typo fixes, dependency bumps, formatting) skip doc updates. Use judgment: if the next Claude Code session would be confused by code that contradicts the docs, the docs need updating.
+
 ## Last session handoff
 
 - **2026-05-11** — Phase 6.3 (public site reads from `published_*` via resolver, PR #40) shipped to main (commit `67cbd29`) and verified live on bufaisal.ae. Resolver pattern locked: `item.published_X ?? item.legacy_X`. Legacy mirror in `admin-pending-publish.ts` remains until 6.5 cleanup.
