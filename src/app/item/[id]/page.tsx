@@ -99,7 +99,7 @@ export default async function ItemDetailPage({ params }: Props) {
   // Negotiable resolves via `admin_negotiable ?? worker_negotiable` per
   // the Phase 6A spec — the legacy `negotiable` mirror retires in Phase 6.5.
   const productSchema = augmentProductSchema(f.productSchema, {
-    sku: item.barcode,
+    sku: item.ai_barcode_extracted,
     url: canonicalUrl,
     category: f.category,
     negotiable: item.admin_negotiable ?? item.worker_negotiable,

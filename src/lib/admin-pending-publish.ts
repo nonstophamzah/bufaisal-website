@@ -2,10 +2,9 @@
 // approve and quick-approve routes.
 //
 // Computes the published_* values per the Phase 1B contract (admin_*
-// override if set, else ai_*) and mirrors them into the legacy columns
-// the public site still reads. Phase 6 will switch the public site to
-// read published_* directly; once that lands, the legacy mirror block
-// below can be deleted.
+// override if set, else ai_*). Writes target the published_* columns
+// exclusively; the legacy mirror block retired in Phase 6.6 after
+// the public site cut over to published_* in Phase 6.5b.
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { PendingItem } from '@/app/admin/pending/types';
@@ -26,7 +25,7 @@ function pick<T>(adminVal: T | null | undefined, aiVal: T | null | undefined): T
 interface PublishResult {
   /** The diff that was applied (admin overrides only) — for audit metadata. */
   overridesApplied: string[];
-  /** The full computed published_* + legacy-mirror update payload. */
+  /** The full computed published_* update payload. */
   update: Record<string, unknown>;
 }
 
@@ -35,7 +34,6 @@ interface PublishResult {
  *
  * Writes:
  *  - All published_* columns the migration created (per Phase 1B)
- *  - Legacy-column mirrors so bufaisal.ae keeps rendering until Phase 6
  *  - Status flip to 'published' + is_published=true
  *  - admin_approved_at / admin_approved_by audit metadata
  *
@@ -73,16 +71,6 @@ export function buildPublishUpdate(item: PendingItem, adminName: string): Publis
   );
   const pFaqSchema = item.ai_faq_schema; // no admin override layer
 
-  // Worker-grade fields: locked rule is "worker wins for condition", but
-  // admin can override if the disagreement was flagged. Same pattern for
-  // price + negotiable.
-  const finalConditionGrade = pick(item.admin_condition_grade, item.worker_condition_grade);
-  const finalPrice = pick(item.admin_price_aed, item.worker_price_aed);
-  const finalNegotiable =
-    item.admin_negotiable !== null
-      ? item.admin_negotiable
-      : item.worker_negotiable;
-
   const update: Record<string, unknown> = {
     // ── Phase 1B published_* columns (only the ones the migration created) ──
     published_brand: pBrand,
@@ -112,28 +100,6 @@ export function buildPublishUpdate(item: PendingItem, adminName: string): Publis
     // both in sync so the analytics tab shows the right approver.
     approved_at: now,
     approved_by: adminName,
-
-    // ── Phase 6 bridge — remove when public site reads published_* directly ──
-    // bufaisal.ae currently reads item_name, brand, category, condition,
-    // sale_price, description, seo_title, seo_description, negotiable,
-    // product_type, and barcode from the legacy columns. Without these
-    // mirrors, every Phase 5-published item would render as a blank card
-    // on the public site (worker submit inserts empty strings for
-    // item_name/category to satisfy the legacy NOT NULL constraints).
-    // Phase 6 owns the public-site rewrite to read published_* + worker_*
-    // directly; once that ships, this block can be deleted in one diff.
-    item_name: pItemName ?? '',
-    brand: pBrand,
-    category: pCategory ?? '',
-    description: pDescription,
-    seo_title: pSeoTitle,
-    seo_description: pMetaDescription,
-    product_type: pProductType,
-    sale_price: finalPrice,
-    negotiable: finalNegotiable,
-    condition: finalConditionGrade,
-    barcode: item.ai_barcode_extracted,
-    // ── End Phase 6 bridge ──
   };
 
   // List of admin override fields that were actually set — used in the
