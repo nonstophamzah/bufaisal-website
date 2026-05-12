@@ -442,7 +442,7 @@ Generate a valid JSON-LD object with these fields:
 - @context: "https://schema.org"
 - @type: "Product"
 - name: SEO_TITLE
-- image: array of all 4 photo URLs
+- image: OMIT this field entirely. Do not emit image, image: [], or image: null. The publish layer injects real Cloudinary URLs at approval time. The image field must be absent from the returned product_schema object.
 - description: DESCRIPTION (the 30–50 word body)
 - brand: { "@type": "Brand", "name": brand } — OMIT this field entirely for new custom-made items
 - itemCondition: "https://schema.org/UsedCondition" for Used items, "https://schema.org/NewCondition" for New custom-made items
