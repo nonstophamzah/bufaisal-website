@@ -79,6 +79,23 @@ export interface ShopItem {
   // pre-Phase-3 legacy rows.
   worker_negotiable: boolean | null;
   admin_negotiable: boolean | null;
+  // Phase 1B condition layer.
+  // `worker_condition_type` ('Used' | 'New') captures the new-vs-used
+  // signal that the legacy `condition` column encoded as 'Brand New'.
+  // No admin override column exists today — known gap; if admin needs
+  // to flip type at approve time, a future migration adds
+  // `admin_condition_type` and the public-side read pattern becomes
+  // `admin_condition_type ?? worker_condition_type`.
+  // `worker_condition_grade` carries the Used-only grade and is paired
+  // with `admin_condition_grade` via the standard admin?? worker rule;
+  // the legacy `condition` mirror retires in Phase 6.5.
+  worker_condition_type: 'Used' | 'New' | null;
+  worker_condition_grade: 'Excellent' | 'Good' | 'Fair' | null;
+  admin_condition_grade: 'Excellent' | 'Good' | 'Fair' | null;
+  // Phase 1B AI barcode extraction. Public-display canonical source;
+  // the legacy `barcode` mirror retires in Phase 6.5. NULL when the AI
+  // couldn't read the barcode photo or for pre-Phase-3 rows.
+  ai_barcode_extracted: string | null;
   // Phase 6.3 — public-text published_* columns consumed by
   // `resolvePublicItemFields()` to prefer the publish-time snapshot over
   // the legacy mirror. JSONB / layout-only published_* columns are added

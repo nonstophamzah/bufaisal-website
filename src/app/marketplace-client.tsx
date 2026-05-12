@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -9,6 +9,7 @@ import { ShopItem } from '@/lib/supabase';
 import { buildWhatsAppUrl, CATEGORIES } from '@/lib/constants';
 import { trackWhatsAppClick, trackSearch } from '@/lib/fbpixel';
 import { useLang } from '@/lib/lang';
+import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
 import TrustStrip from '@/components/TrustStrip';
 
 const CAT_PILLS = ['All', ...CATEGORIES.map((c) => c.name)];
@@ -36,15 +37,22 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Shop
     return () => clearTimeout(timeout);
   }, [search]);
 
+  // Resolve once per row so filter + map read the same published_*
+  // snapshot (legacy fallback handled inside resolvePublicItemFields).
+  const itemsWithResolved = useMemo(
+    () => items.map((item) => ({ item, f: resolvePublicItemFields(item) })),
+    [items]
+  );
+
   // Client-side filter
-  const filtered = items.filter((item) => {
-    if (cat !== 'All' && item.category !== cat) return false;
+  const filtered = itemsWithResolved.filter(({ f }) => {
+    if (cat !== 'All' && f.category !== cat) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
       return (
-        item.item_name?.toLowerCase().includes(q) ||
-        item.brand?.toLowerCase().includes(q) ||
-        item.category?.toLowerCase().includes(q)
+        f.itemName?.toLowerCase().includes(q) ||
+        f.brand?.toLowerCase().includes(q) ||
+        f.category?.toLowerCase().includes(q)
       );
     }
     return true;
@@ -150,14 +158,16 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Shop
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 px-3">
-            {filtered.slice(0, visible).map((item, idx) => {
+            {filtered.slice(0, visible).map(({ item, f }, idx) => {
               const img = item.thumbnail_url || item.image_urls?.[0];
               const hasPrice = !!(item.sale_price && item.sale_price > 0);
+              const isNegotiable =
+                (item.admin_negotiable ?? item.worker_negotiable) !== false;
               return (
                 <div key={item.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
                   <Link href={`/item/${item.id}`} className="block relative aspect-square bg-gray-100">
                     {img ? (
-                      <Image src={img} alt={item.item_name} fill className="object-cover" sizes="(max-width:640px) 50vw, 25vw" {...(idx < 4 ? { priority: true } : { loading: 'lazy' as const })} />
+                      <Image src={img} alt={f.itemName ?? 'Product image'} fill className="object-cover" sizes="(max-width:640px) 50vw, 25vw" {...(idx < 4 ? { priority: true } : { loading: 'lazy' as const })} />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-gray-300"><Zap size={32} /></div>
                     )}
@@ -167,20 +177,20 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Shop
                   </Link>
                   <div className="p-2.5">
                     <Link href={`/item/${item.id}`}>
-                      <p className="text-sm font-semibold line-clamp-2 leading-tight min-h-[2.5rem]">{item.item_name}</p>
+                      <p className="text-sm font-semibold line-clamp-2 leading-tight min-h-[2.5rem]">{f.itemName}</p>
                     </Link>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <p className="font-heading text-lg">
                         {hasPrice ? `AED ${item.sale_price}` : <span className="text-gray-400">Ask Price</span>}
                       </p>
                       {hasPrice && (
-                        item.negotiable === false ? (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-700">
-                            Starting Price
-                          </span>
-                        ) : (
+                        isNegotiable ? (
                           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-yellow text-black">
                             Negotiable
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-700">
+                            Starting Price
                           </span>
                         )
                       )}

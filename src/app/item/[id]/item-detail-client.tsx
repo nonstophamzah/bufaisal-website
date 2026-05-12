@@ -106,7 +106,7 @@ function SimilarItemCard({ item }: { item: ShopItem }) {
             {item.sale_price ? `AED ${item.sale_price}` : 'Ask Price'}
           </span>
           {!!item.sale_price &&
-            (item.negotiable === false ? (
+            ((item.admin_negotiable ?? item.worker_negotiable) === false ? (
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-700">
                 Starting Price
               </span>
@@ -134,6 +134,8 @@ export default function ItemDetailClient({
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const f = resolvePublicItemFields(item);
   const shop = getShop(item.worker_shop_id);
+  const conditionGrade =
+    item.admin_condition_grade ?? item.worker_condition_grade;
 
   // Gallery photo grid sources the four canonical worker_photo_* columns
   // (positionally aligned with published_image_alt_texts). Falls back to
@@ -272,7 +274,7 @@ export default function ItemDetailClient({
               <span className="text-xs font-medium text-yellow bg-yellow/10 px-2 py-1 rounded">
                 {f.category}
               </span>
-              <ConditionBadge condition={item.condition} />
+              <ConditionBadge condition={conditionGrade} />
             </div>
             <h1 className="font-heading text-3xl md:text-4xl mb-1">
               {f.itemName}
@@ -286,7 +288,7 @@ export default function ItemDetailClient({
                 {item.sale_price ? `AED ${item.sale_price}` : 'Ask Price'}
               </span>
               {!!item.sale_price && (
-                item.negotiable === false ? (
+                (item.admin_negotiable ?? item.worker_negotiable) === false ? (
                   <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-700">
                     Starting Price
                   </span>
@@ -420,22 +422,22 @@ export default function ItemDetailClient({
 
             {(!f.specTable || Object.keys(f.specTable).length === 0) && (
               <div className="grid grid-cols-2 gap-3 mb-6 text-sm">
-                {item.shop_source && (
+                {shop?.displayName && (
                   <div className="bg-gray-50 p-3 rounded-lg">
                     <span className="text-muted">Shop</span>
-                    <p className="font-medium">{item.shop_source}</p>
+                    <p className="font-medium">{shop.displayName}</p>
                   </div>
                 )}
-                {item.condition && (
+                {conditionGrade && (
                   <div className="bg-gray-50 p-3 rounded-lg">
                     <span className="text-muted">Condition</span>
-                    <p className="font-medium">{item.condition}</p>
+                    <p className="font-medium">{conditionGrade}</p>
                   </div>
                 )}
-                {item.barcode && (
+                {item.ai_barcode_extracted && (
                   <div className="bg-gray-50 p-3 rounded-lg">
                     <span className="text-muted">Barcode</span>
-                    <p className="font-medium">{item.barcode}</p>
+                    <p className="font-medium">{item.ai_barcode_extracted}</p>
                   </div>
                 )}
                 {f.productType && (
