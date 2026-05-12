@@ -62,6 +62,10 @@ export interface ShopItem {
   // Worker's explicit Used/New choice from /team upload. Drives the AI
   // prompt's title prefix. NULL on legacy rows — prompt falls back to "Used".
   listing_type: 'used' | 'new' | null;
+  // Phase 1B canonical shop identifier (BF1–BF5). Used by the SEO Agent
+  // prompt and by Phase 6.4 PR B for shop GBP links + similar-items
+  // shop-tier query. NULL on pre-Phase-3 legacy rows.
+  worker_shop_id: string | null;
   // Phase 1B worker_*_url canonical photo columns. Always set on Phase
   // 3+ rows. Used as a fallback by `getItemImageUrl()` when the legacy
   // image_urls / thumbnail_url columns are empty. NULL on pre-Phase-3
@@ -94,6 +98,9 @@ export interface ShopItem {
   published_spec_table: Record<string, string> | null;
   published_faqs: Array<{ question: string; answer: string }> | null;
   published_trust_signals: string[] | null;
+  // Phase 1B / 6.4 PR B — per-photo alt text array, aligned positionally
+  // with the four worker_photo_* columns. NULL on pre-Phase-5 rows.
+  published_image_alt_texts: string[] | null;
 }
 
 export interface WebsiteConfig {

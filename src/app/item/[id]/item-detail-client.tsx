@@ -3,11 +3,22 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { MessageCircle, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import {
+  MessageCircle,
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  ExternalLink,
+} from 'lucide-react';
+import Lightbox from 'yet-another-react-lightbox';
+import 'yet-another-react-lightbox/styles.css';
 import { ShopItem } from '@/lib/supabase';
 import { buildWhatsAppUrl } from '@/lib/constants';
 import { trackWhatsAppClick, trackViewContent } from '@/lib/fbpixel';
 import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
+import { getShop } from '@/lib/shops';
+import { getItemImageUrl } from '@/lib/item-image';
 
 // Spec table canonical order. Keys not in this list fall to the end in
 // insertion order. Matches Phase 6.4 PR A scope.
@@ -57,9 +68,85 @@ function ConditionBadge({ condition }: { condition: string | null }) {
   );
 }
 
-export default function ItemDetailClient({ item }: { item: ShopItem }) {
-  const [activeImage, setActiveImage] = useState(0);
+// Quieter card for the Similar items grid below /item/[id]. Purely
+// navigational — entire card is one <Link>, no per-card CTA buttons.
+// Co-located here (not promoted to /components) because it's only used
+// in this section; the shared ItemCard still owns homepage/shop feed.
+function SimilarItemCard({ item }: { item: ShopItem }) {
   const f = resolvePublicItemFields(item);
+  const imageUrl = getItemImageUrl(item);
+  return (
+    <Link
+      href={`/item/${item.id}`}
+      className="group flex flex-col bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md hover:border-gray-300 hover:-translate-y-0.5 transition-all"
+    >
+      <div className="relative aspect-square bg-gray-100 overflow-hidden">
+        <Image
+          src={imageUrl}
+          alt={f.itemName ?? 'Product image'}
+          fill
+          sizes="(max-width: 768px) 50vw, 25vw"
+          className="object-cover group-hover:scale-105 transition-transform duration-300"
+        />
+        {item.is_sold && (
+          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+            <span className="font-heading text-2xl text-white">SOLD</span>
+          </div>
+        )}
+      </div>
+      <div className="p-3">
+        <h3 className="font-semibold text-sm line-clamp-1 group-hover:text-yellow transition-colors">
+          {f.itemName}
+        </h3>
+        {f.brand && (
+          <p className="text-xs text-muted mt-0.5">{f.brand}</p>
+        )}
+        <div className="flex items-center gap-1.5 mt-1.5">
+          <span className="font-bold text-sm">
+            {item.sale_price ? `AED ${item.sale_price}` : 'Ask Price'}
+          </span>
+          {!!item.sale_price &&
+            (item.negotiable === false ? (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-700">
+                Starting Price
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-yellow text-black">
+                Negotiable
+              </span>
+            ))}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+interface ItemDetailClientProps {
+  item: ShopItem;
+  similarItems: ShopItem[];
+}
+
+export default function ItemDetailClient({
+  item,
+  similarItems,
+}: ItemDetailClientProps) {
+  const [activeImage, setActiveImage] = useState(0);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const f = resolvePublicItemFields(item);
+  const shop = getShop(item.worker_shop_id);
+
+  // Gallery photo grid sources the four canonical worker_photo_* columns
+  // (positionally aligned with published_image_alt_texts). Falls back to
+  // the legacy gallery chain when worker_* are all null.
+  const galleryPhotos: string[] = [
+    item.worker_photo_brand_url,
+    item.worker_photo_2_url,
+    item.worker_photo_3_url,
+    item.worker_photo_barcode_url,
+  ].filter((u): u is string => typeof u === 'string' && u.length > 0);
+
+  const altTextFor = (i: number): string =>
+    item.published_image_alt_texts?.[i] ?? `Product photo ${i + 1}`;
 
   // Track ViewContent on mount. Analytics is non-display and stays on
   // legacy fields per Phase 6.3 scope (separate consumer decision).
@@ -243,22 +330,64 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
                 <h2 className="font-semibold text-sm mb-2">Specifications</h2>
                 <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
                   <tbody>
-                    {orderSpecRows(f.specTable).map(([k, v], i) => (
-                      <tr
-                        key={k}
-                        className={i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
-                      >
-                        <th
-                          scope="row"
-                          className="text-left font-medium text-gray-600 px-3 py-2 align-top w-2/5"
+                    {orderSpecRows(f.specTable).map(([k, v], i) => {
+                      const linkable = k === 'Location' && shop && shop.mapUrl;
+                      return (
+                        <tr
+                          key={k}
+                          className={i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
                         >
-                          {k}
-                        </th>
-                        <td className="text-gray-900 px-3 py-2 align-top">{v}</td>
-                      </tr>
-                    ))}
+                          <th
+                            scope="row"
+                            className="text-left font-medium text-gray-600 px-3 py-2 align-top w-2/5"
+                          >
+                            {k}
+                          </th>
+                          <td className="text-gray-900 px-3 py-2 align-top">
+                            {linkable ? (
+                              <a
+                                href={shop!.mapUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline inline-flex items-center gap-1"
+                              >
+                                {shop!.displayName}
+                                <ExternalLink size={12} aria-hidden="true" />
+                              </a>
+                            ) : (
+                              v
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
+              </section>
+            )}
+
+            {galleryPhotos.length >= 2 && (
+              <section className="mb-6">
+                <h2 className="font-semibold text-sm mb-2">Photos</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {galleryPhotos.map((url, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setLightboxIndex(i)}
+                      className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-yellow"
+                      aria-label={`Open photo ${i + 1}`}
+                    >
+                      <Image
+                        src={url}
+                        alt={altTextFor(i)}
+                        fill
+                        sizes="(max-width: 768px) 50vw, 25vw"
+                        className="object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
               </section>
             )}
 
@@ -318,20 +447,33 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
               </div>
             )}
 
-            {/* Desktop WhatsApp CTA */}
+            {/* Desktop Negotiate CTA — text per Architecture doc 2.1
+                ("every product CTA is Negotiate"). Same href + prefilled
+                message body as before via buildWhatsAppUrl(). */}
             <button
               onClick={handleWhatsAppClick}
               disabled={item.is_sold}
               className="hidden md:flex w-full items-center justify-center gap-2 bg-yellow hover:bg-yellow/90 disabled:bg-gray-300 disabled:cursor-not-allowed text-black font-bold py-4 rounded-xl text-lg transition-colors active:scale-[0.98]"
             >
               <MessageCircle size={22} />
-              {item.is_sold ? 'Item Sold' : 'WHATSAPP'}
+              {item.is_sold ? 'Item Sold' : 'NEGOTIATE'}
             </button>
           </div>
         </div>
+
+        {similarItems.length > 0 && (
+          <section className="mt-12">
+            <h2 className="font-heading text-2xl mb-4">Similar items</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+              {similarItems.map((sim) => (
+                <SimilarItemCard key={sim.id} item={sim} />
+              ))}
+            </div>
+          </section>
+        )}
       </div>
 
-      {/* Mobile sticky WhatsApp CTA */}
+      {/* Mobile sticky Negotiate CTA */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 md:hidden z-40">
         <button
           onClick={handleWhatsAppClick}
@@ -339,7 +481,7 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
           className="w-full flex items-center justify-center gap-2 bg-yellow hover:bg-yellow/90 disabled:bg-gray-300 disabled:cursor-not-allowed text-black font-bold py-4 rounded-xl text-lg transition-colors active:scale-[0.98]"
         >
           <MessageCircle size={22} />
-          {item.is_sold ? 'Item Sold' : 'WHATSAPP'}
+          {item.is_sold ? 'Item Sold' : 'NEGOTIATE'}
         </button>
       </div>
 
@@ -363,6 +505,16 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
           <MessageCircle size={28} className="text-black" />
         </a>
       )}
+
+      <Lightbox
+        open={lightboxIndex !== null}
+        index={lightboxIndex ?? 0}
+        close={() => setLightboxIndex(null)}
+        slides={galleryPhotos.map((url, i) => ({
+          src: url,
+          alt: altTextFor(i),
+        }))}
+      />
     </div>
   );
 }

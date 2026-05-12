@@ -6,6 +6,7 @@ import { ShopItem } from '@/lib/supabase';
 import { resolveItemImageUrl } from '@/lib/item-image';
 import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
 import { augmentProductSchema } from '@/lib/augment-product-schema';
+import { fetchSimilarItems } from '@/lib/similar-items';
 import ItemDetailClient from './item-detail-client';
 
 function getSupabase() {
@@ -83,6 +84,11 @@ export default async function ItemDetailPage({ params }: Props) {
   // Increment views server-side (fire-and-forget)
   getSupabase().rpc('increment_views', { item_id: id }).then(() => {});
 
+  // Similar items run server-side so the cards land in initial HTML
+  // (SEO + LCP friendly). Returns [] when below the 4-row visibility
+  // threshold — the client component then suppresses the section.
+  const similarItems = await fetchSimilarItems(item);
+
   const f = resolvePublicItemFields(item);
   const canonicalUrl = `https://bufaisal.ae/item/${id}`;
 
@@ -135,7 +141,7 @@ export default async function ItemDetailPage({ params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: escapeJsonLd(breadcrumbSchema) }}
       />
-      <ItemDetailClient item={item} />
+      <ItemDetailClient item={item} similarItems={similarItems} />
     </>
   );
 }
