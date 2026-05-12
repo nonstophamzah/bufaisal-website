@@ -8,6 +8,7 @@ import { buildWhatsAppUrl } from '@/lib/constants';
 import { trackWhatsAppClick } from '@/lib/fbpixel';
 import { getItemImageUrl } from '@/lib/item-image';
 import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
+import { getShop } from '@/lib/shops';
 
 function ConditionBadge({ condition }: { condition: string | null }) {
   if (!condition) return null;
@@ -38,6 +39,11 @@ export default function ItemCard({ item, priority = false }: { item: ShopItem; p
   const imageUrl = getItemImageUrl(item);
   const justArrived = isJustArrived(item.created_at);
   const f = resolvePublicItemFields(item);
+  const shop = getShop(item.worker_shop_id);
+  const conditionGrade =
+    item.admin_condition_grade ?? item.worker_condition_grade;
+  const isNegotiable =
+    (item.admin_negotiable ?? item.worker_negotiable) !== false;
 
   const handleWhatsAppClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -71,9 +77,9 @@ export default function ItemCard({ item, priority = false }: { item: ShopItem; p
             </span>
           )}
           {/* Shop badge — show only if not overlapping with Just Arrived */}
-          {!justArrived && item.shop_source && (
+          {!justArrived && shop?.label && (
             <span className="absolute top-2 left-2 bg-black/70 text-white text-[10px] font-bold px-2 py-0.5 rounded">
-              {item.shop_source}
+              {shop.label}
             </span>
           )}
           {/* Featured star */}
@@ -99,20 +105,20 @@ export default function ItemCard({ item, priority = false }: { item: ShopItem; p
           {f.brand && (
             <span className="text-xs text-muted">{f.brand}</span>
           )}
-          <ConditionBadge condition={item.condition} />
+          <ConditionBadge condition={conditionGrade} />
         </div>
         <div className="flex items-center gap-1.5 mt-1.5">
           <span className="font-bold text-sm">
             {item.sale_price ? `AED ${item.sale_price}` : 'Ask Price'}
           </span>
           {!!item.sale_price && (
-            item.negotiable === false ? (
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-700">
-                Starting Price
-              </span>
-            ) : (
+            isNegotiable ? (
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-yellow text-black">
                 Negotiable
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-700">
+                Starting Price
               </span>
             )
           )}

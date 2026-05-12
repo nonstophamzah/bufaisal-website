@@ -1,4 +1,7 @@
 import { Sofa, Bed, UtensilsCrossed, Zap, TreePine, Baby, Briefcase, ShoppingBag } from 'lucide-react';
+import type { ShopItem } from './supabase';
+import { resolvePublicItemFields } from './resolve-public-item-fields';
+import { getShop } from './shops';
 
 export const CATEGORIES = [
   {
@@ -69,41 +72,38 @@ export const SHOPS = [
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '971585932499';
 
-// PR #12: prefill format depends on item.negotiable.
+// PR #12: prefill format depends on the negotiable flag.
 // - true (default): "and want to negotiate" — keeps the existing tone
 // - false: neutral "saw this on bufaisal.ae" opener
 // Then both versions append the same emoji block (item / price / shop /
 // barcode), with each line skipped if the underlying value is missing.
-// `category` is accepted for backwards compatibility with older callers
-// but is no longer included in the message body.
-export function buildWhatsAppUrl(item: {
-  id?: string;
-  item_name: string;
-  category?: string;
-  shop_source?: string | null;
-  sale_price?: number | null;
-  barcode?: string | null;
-  negotiable?: boolean | null;
-}) {
-  const isNegotiable = item.negotiable !== false;
+//
+// Phase 6.5b.1: takes a full ShopItem and routes text reads through
+// resolvePublicItemFields / canonical admin_*?? worker_* / ai_*
+// columns rather than the legacy mirrors.
+export function buildWhatsAppUrl(item: ShopItem) {
+  const f = resolvePublicItemFields(item);
+  const shop = getShop(item.worker_shop_id);
+  const negotiable = item.admin_negotiable ?? item.worker_negotiable;
+  const isNegotiable = negotiable !== false;
   const opener = isNegotiable
     ? 'Hi! I saw this on bufaisal.ae and want to negotiate. Is it still available?'
     : 'Hi! I saw this on bufaisal.ae. Is it still available?';
 
   const lines: string[] = [opener, ''];
-  lines.push(`📦 ${item.item_name}`);
+  if (f.itemName) {
+    lines.push(`📦 ${f.itemName}`);
+  }
   if (item.sale_price && item.sale_price > 0) {
     lines.push(`💰 ${item.sale_price} AED`);
   }
-  if (item.shop_source) {
-    lines.push(`📍 ${item.shop_source}`);
+  if (shop?.displayName) {
+    lines.push(`📍 ${shop.displayName}`);
   }
-  if (item.barcode) {
-    lines.push(`🔖 ${item.barcode}`);
+  if (item.ai_barcode_extracted) {
+    lines.push(`🔖 ${item.ai_barcode_extracted}`);
   }
-  if (item.id) {
-    lines.push('', `https://bufaisal.ae/item/${item.id}`);
-  }
+  lines.push('', `https://bufaisal.ae/item/${item.id}`);
 
   const message = lines.join('\n');
   return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;

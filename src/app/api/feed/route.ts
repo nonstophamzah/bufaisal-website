@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import type { ShopItem } from '@/lib/supabase';
+import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
 
 // Product feed for Facebook Catalog / Google Merchant Center
 // GET /api/feed?format=facebook|google (default: facebook)
@@ -17,9 +19,16 @@ export async function GET(request: NextRequest) {
 
   const supabase = createClient(url, key);
 
+  // Select both legacy text columns (resolver fallback for pre-Phase-5
+  // rows) and the canonical published_* / Phase 1B columns the feed
+  // emits going forward.
   const { data: items, error } = await supabase
     .from('shop_items')
-    .select('id, item_name, brand, category, sale_price, thumbnail_url, image_urls, condition, description, barcode, product_type, is_sold')
+    .select(
+      'id, item_name, brand, category, description, sale_price, thumbnail_url, image_urls, ' +
+      'published_item_name, published_brand, published_category, published_product_type, published_description, ' +
+      'worker_condition_type, admin_condition_grade, worker_condition_grade, ai_barcode_extracted, is_sold'
+    )
     .eq('is_published', true)
     .eq('is_sold', false)
     .eq('is_hidden', false)
@@ -29,50 +38,48 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  const rows = (items ?? []) as unknown as ShopItem[];
+
   if (format === 'google') {
-    return buildGoogleFeed(items || []);
+    return buildGoogleFeed(rows);
   }
 
-  return buildFacebookFeed(items || []);
+  return buildFacebookFeed(rows);
 }
 
-interface FeedItem {
-  id: string;
-  item_name: string;
-  brand: string | null;
-  category: string | null;
-  sale_price: number | null;
-  thumbnail_url: string | null;
-  image_urls: string[] | null;
-  condition: string | null;
-  description: string | null;
-  barcode: string | null;
-  product_type: string | null;
-  is_sold: boolean;
+// FB Catalog / Google Merchant `condition` is a new-vs-used enum,
+// driven by `worker_condition_type`. `grade` (Excellent/Good/Fair) is
+// passed in as a documented canonical input but doesn't affect the
+// mapping today — a separate `custom_label_0` carries the grade.
+function mapCondition(
+  type: 'Used' | 'New' | null,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  grade: 'Excellent' | 'Good' | 'Fair' | null
+): string {
+  return type === 'New' ? 'new' : 'used';
 }
 
-function mapCondition(condition: string | null): string {
-  if (!condition) return 'used';
-  if (condition === 'Brand New') return 'new';
-  return 'used';
-}
-
-function buildFacebookFeed(items: FeedItem[]) {
+function buildFacebookFeed(items: ShopItem[]) {
   // Facebook Product Catalog JSON format
-  const products = items.map(item => ({
-    id: item.id,
-    title: item.item_name,
-    description: item.description || item.item_name,
-    availability: 'in stock',
-    condition: mapCondition(item.condition),
-    price: `${item.sale_price || 0} AED`,
-    link: `https://bufaisal.ae/item/${item.id}`,
-    image_link: item.thumbnail_url || item.image_urls?.[0] || '',
-    brand: item.brand || 'Bu Faisal',
-    ...(item.barcode && { gtin: item.barcode }),
-    product_type: item.category || 'General',
-    custom_label_0: item.condition || 'Used',
-  }));
+  const products = items.map(item => {
+    const f = resolvePublicItemFields(item);
+    const conditionGrade =
+      item.admin_condition_grade ?? item.worker_condition_grade;
+    return {
+      id: item.id,
+      title: f.itemName ?? '',
+      description: f.description || f.itemName || '',
+      availability: 'in stock',
+      condition: mapCondition(item.worker_condition_type, conditionGrade),
+      price: `${item.sale_price || 0} AED`,
+      link: `https://bufaisal.ae/item/${item.id}`,
+      image_link: item.thumbnail_url || item.image_urls?.[0] || '',
+      brand: f.brand || 'Bu Faisal',
+      ...(item.ai_barcode_extracted && { gtin: item.ai_barcode_extracted }),
+      product_type: f.category || 'General',
+      custom_label_0: conditionGrade || 'Used',
+    };
+  });
 
   return NextResponse.json(products, {
     headers: {
@@ -82,22 +89,27 @@ function buildFacebookFeed(items: FeedItem[]) {
   });
 }
 
-function buildGoogleFeed(items: FeedItem[]) {
+function buildGoogleFeed(items: ShopItem[]) {
   // Google Merchant Center RSS/XML format
-  const xmlItems = items.map(item => `
+  const xmlItems = items.map(item => {
+    const f = resolvePublicItemFields(item);
+    const conditionGrade =
+      item.admin_condition_grade ?? item.worker_condition_grade;
+    return `
     <item>
       <g:id>${escapeXml(item.id)}</g:id>
-      <title>${escapeXml(item.item_name)}</title>
-      <description>${escapeXml(item.description || item.item_name)}</description>
+      <title>${escapeXml(f.itemName ?? '')}</title>
+      <description>${escapeXml(f.description || f.itemName || '')}</description>
       <link>https://bufaisal.ae/item/${item.id}</link>
       <g:image_link>${escapeXml(item.thumbnail_url || item.image_urls?.[0] || '')}</g:image_link>
       <g:availability>in_stock</g:availability>
       <g:price>${item.sale_price || 0} AED</g:price>
-      <g:condition>${mapCondition(item.condition)}</g:condition>
-      <g:brand>${escapeXml(item.brand || 'Bu Faisal')}</g:brand>
-      ${item.barcode ? `<g:gtin>${escapeXml(item.barcode)}</g:gtin>` : '<g:identifier_exists>false</g:identifier_exists>'}
-      <g:product_type>${escapeXml(item.category || 'General')}</g:product_type>
-    </item>`).join('');
+      <g:condition>${mapCondition(item.worker_condition_type, conditionGrade)}</g:condition>
+      <g:brand>${escapeXml(f.brand || 'Bu Faisal')}</g:brand>
+      ${item.ai_barcode_extracted ? `<g:gtin>${escapeXml(item.ai_barcode_extracted)}</g:gtin>` : '<g:identifier_exists>false</g:identifier_exists>'}
+      <g:product_type>${escapeXml(f.category || 'General')}</g:product_type>
+    </item>`;
+  }).join('');
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">
