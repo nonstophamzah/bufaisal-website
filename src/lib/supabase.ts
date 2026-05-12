@@ -70,6 +70,11 @@ export interface ShopItem {
   worker_photo_2_url: string | null;
   worker_photo_3_url: string | null;
   worker_photo_barcode_url: string | null;
+  // Phase 1B negotiable layer. Read via `admin_negotiable ?? worker_negotiable`;
+  // the legacy `negotiable` mirror retires in Phase 6.5. NULL on
+  // pre-Phase-3 legacy rows.
+  worker_negotiable: boolean | null;
+  admin_negotiable: boolean | null;
   // Phase 6.3 — public-text published_* columns consumed by
   // `resolvePublicItemFields()` to prefer the publish-time snapshot over
   // the legacy mirror. JSONB / layout-only published_* columns are added
@@ -81,6 +86,14 @@ export interface ShopItem {
   published_description: string | null;
   published_seo_title: string | null;
   published_meta_description: string | null;
+  // Phase 6.4 — JSONB layout/schema columns also consumed via
+  // `resolvePublicItemFields()`. No legacy mirror counterparts exist.
+  // NULL on pre-Phase-5 rows.
+  published_product_schema: Record<string, unknown> | null;
+  published_faq_schema: Record<string, unknown> | null;
+  published_spec_table: Record<string, string> | null;
+  published_faqs: Array<{ question: string; answer: string }> | null;
+  published_trust_signals: string[] | null;
 }
 
 export interface WebsiteConfig {
