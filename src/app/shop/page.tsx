@@ -86,12 +86,12 @@ async function getItems(category?: string, q?: string): Promise<ShopItem[]> {
     .eq('is_hidden', false);
 
   if (category && CATEGORY_SLUG_MAP[category]) {
-    query = query.eq('category', CATEGORY_SLUG_MAP[category]);
+    query = query.eq('published_category', CATEGORY_SLUG_MAP[category]);
   }
 
   if (q?.trim()) {
     query = query.or(
-      `item_name.ilike.%${q.trim()}%,brand.ilike.%${q.trim()}%,description.ilike.%${q.trim()}%`
+      `published_item_name.ilike.%${q.trim()}%,published_brand.ilike.%${q.trim()}%,published_description.ilike.%${q.trim()}%`
     );
   }
 

@@ -109,12 +109,12 @@ export default function ShopClient({
       .eq('is_hidden', false);
 
     if (activeCategory && CATEGORY_SLUG_MAP[activeCategory]) {
-      query = query.eq('category', CATEGORY_SLUG_MAP[activeCategory]);
+      query = query.eq('published_category', CATEGORY_SLUG_MAP[activeCategory]);
     }
 
     if (search.trim()) {
       query = query.or(
-        `item_name.ilike.%${search.trim()}%,brand.ilike.%${search.trim()}%,description.ilike.%${search.trim()}%`
+        `published_item_name.ilike.%${search.trim()}%,published_brand.ilike.%${search.trim()}%,published_description.ilike.%${search.trim()}%`
       );
     }
 
