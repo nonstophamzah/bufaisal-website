@@ -26,7 +26,7 @@ async function getCategoryCounts() {
         .select('*', { count: 'exact', head: true })
         .eq('is_published', true)
         .eq('is_sold', false)
-        .eq('category', cat.name)
+        .eq('published_category', cat.name)
     )
   );
   const counts: Record<string, number> = {};
