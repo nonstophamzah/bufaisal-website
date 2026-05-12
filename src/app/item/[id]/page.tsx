@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { ShopItem } from '@/lib/supabase';
 import { resolveItemImageUrl } from '@/lib/item-image';
 import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
+import { augmentProductSchema } from '@/lib/augment-product-schema';
 import ItemDetailClient from './item-detail-client';
 
 function getSupabase() {
@@ -66,6 +67,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
+// Rewriting `</script>` neutralizes the most common script-tag breakout;
+// the broader `<` escape is belt-and-braces.
+function escapeJsonLd(payload: unknown): string {
+  return JSON.stringify(payload)
+    .replace(/<\/(script)/gi, '<\\/$1')
+    .replace(/</g, '\\u003c');
+}
+
 export default async function ItemDetailPage({ params }: Props) {
   const { id } = await params;
   const item = await getItem(id);
@@ -74,76 +83,57 @@ export default async function ItemDetailPage({ params }: Props) {
   // Increment views server-side (fire-and-forget)
   getSupabase().rpc('increment_views', { item_id: id }).then(() => {});
 
-  // Product JSON-LD structured data for Google Shopping / rich results.
-  // PR #12: append a short note to the schema description (NOT the
-  // page description) so search results can hint at negotiability.
-  // Schema.org has no official negotiable signal; this is the
-  // simplest approach Google reliably surfaces.
   const f = resolvePublicItemFields(item);
-  const image = resolveItemImageUrl(item);
-  const baseDescription =
-    f.seoDescription ||
-    f.description ||
-    `${f.itemName} available at Bu Faisal second-hand store.`;
-  const isNegotiable = item.negotiable !== false;
-  const schemaDescription = isNegotiable
-    ? `${baseDescription} Price is negotiable.`
-    : baseDescription;
+  const canonicalUrl = `https://bufaisal.ae/item/${id}`;
 
-  const productSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'Product',
-    name: f.itemName,
-    description: schemaDescription,
-    ...(image && { image: [image] }),
-    ...(f.brand && f.brand !== 'Other' && {
-      brand: { '@type': 'Brand', name: f.brand },
-    }),
-    ...(item.barcode && { sku: item.barcode }),
-    url: `https://bufaisal.ae/item/${id}`,
-    itemCondition: 'https://schema.org/UsedCondition',
-    offers: {
-      '@type': 'Offer',
-      url: `https://bufaisal.ae/item/${id}`,
-      priceCurrency: 'AED',
-      ...(item.sale_price && { price: String(item.sale_price) }),
-      ...(!item.sale_price && { price: '0', priceValidUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] }),
-      availability: item.is_sold
-        ? 'https://schema.org/SoldOut'
-        : 'https://schema.org/InStock',
-      seller: {
-        '@type': 'Organization',
-        name: 'Bu Faisal General Trading',
-      },
-    },
-    ...(f.category && { category: f.category }),
-  };
+  // Product JSON-LD: source = stored `published_product_schema`, augmented
+  // at render time with page-level fields the AI doesn't know (sku, url,
+  // category, seller, negotiable hint). If the column is null (legacy /
+  // pre-Phase-5 rows), the helper returns null and we skip the script tag.
+  // Negotiable resolves via `admin_negotiable ?? worker_negotiable` per
+  // the Phase 6A spec — the legacy `negotiable` mirror retires in Phase 6.5.
+  const productSchema = augmentProductSchema(f.productSchema, {
+    sku: item.barcode,
+    url: canonicalUrl,
+    category: f.category,
+    negotiable: item.admin_negotiable ?? item.worker_negotiable,
+  });
 
-  // BreadcrumbList JSON-LD
+  // BreadcrumbList JSON-LD (unchanged shape from PR #12; Phase 6.4 only
+  // fixes the position-4 leaf to flow through the resolver per
+  // CLAUDE.md's public-display rule).
   const breadcrumbSchema = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: [
       { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://bufaisal.ae' },
       { '@type': 'ListItem', position: 2, name: 'Shop', item: 'https://bufaisal.ae/shop' },
-      ...(item.category ? [{
+      ...(f.category ? [{
         '@type': 'ListItem', position: 3,
-        name: item.category,
-        item: `https://bufaisal.ae/shop?category=${encodeURIComponent(item.category)}`,
+        name: f.category,
+        item: `https://bufaisal.ae/shop?category=${encodeURIComponent(f.category)}`,
       }] : []),
-      { '@type': 'ListItem', position: item.category ? 4 : 3, name: item.item_name },
+      { '@type': 'ListItem', position: f.category ? 4 : 3, name: f.itemName ?? item.item_name },
     ],
   };
 
   return (
     <>
+      {productSchema && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: escapeJsonLd(productSchema) }}
+        />
+      )}
+      {f.faqSchema && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: escapeJsonLd(f.faqSchema) }}
+        />
+      )}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema).replace(/</g, '\\u003c') }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema).replace(/</g, '\\u003c') }}
+        dangerouslySetInnerHTML={{ __html: escapeJsonLd(breadcrumbSchema) }}
       />
       <ItemDetailClient item={item} />
     </>

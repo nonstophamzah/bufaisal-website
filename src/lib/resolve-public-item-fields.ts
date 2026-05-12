@@ -33,6 +33,15 @@ export interface PublicItemFields {
   description: string | null;
   seoTitle: string | null;
   seoDescription: string | null;
+  // Phase 6.4 — JSONB layout/schema fields. No legacy mirror columns
+  // exist for these (they were never in the pre-Phase-5 schema), so the
+  // resolver degenerates to `?? null`. Still funneled through here for
+  // the single Phase 6.5 retirement point.
+  productSchema: Record<string, unknown> | null;
+  faqSchema: Record<string, unknown> | null;
+  specTable: Record<string, string> | null;
+  faqs: Array<{ question: string; answer: string }> | null;
+  trustSignals: string[] | null;
 }
 
 // `??` (not `||`) on every line: an empty string on a `published_*`
@@ -46,5 +55,10 @@ export function resolvePublicItemFields(item: ShopItem): PublicItemFields {
     description: item.published_description ?? item.description,
     seoTitle: item.published_seo_title ?? item.seo_title,
     seoDescription: item.published_meta_description ?? item.seo_description,
+    productSchema: item.published_product_schema ?? null,
+    faqSchema: item.published_faq_schema ?? null,
+    specTable: item.published_spec_table ?? null,
+    faqs: item.published_faqs ?? null,
+    trustSignals: item.published_trust_signals ?? null,
   };
 }

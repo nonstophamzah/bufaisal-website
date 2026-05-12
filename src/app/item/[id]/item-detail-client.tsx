@@ -3,11 +3,39 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { MessageCircle, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
+import { MessageCircle, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { ShopItem } from '@/lib/supabase';
 import { buildWhatsAppUrl } from '@/lib/constants';
 import { trackWhatsAppClick, trackViewContent } from '@/lib/fbpixel';
 import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
+
+// Spec table canonical order. Keys not in this list fall to the end in
+// insertion order. Matches Phase 6.4 PR A scope.
+const CANONICAL_SPEC_KEYS = [
+  'Brand',
+  'Condition',
+  'Item Type',
+  'Capacity',
+  'Configuration',
+  'Color',
+  'Location',
+  'Delivery',
+] as const;
+
+function orderSpecRows(table: Record<string, string>): Array<[string, string]> {
+  const seen = new Set<string>();
+  const ordered: Array<[string, string]> = [];
+  for (const key of CANONICAL_SPEC_KEYS) {
+    if (table[key] !== undefined) {
+      ordered.push([key, String(table[key])]);
+      seen.add(key);
+    }
+  }
+  for (const [k, v] of Object.entries(table)) {
+    if (!seen.has(k)) ordered.push([k, String(v)]);
+  }
+  return ordered;
+}
 
 function ConditionBadge({ condition }: { condition: string | null }) {
   if (!condition) return null;
@@ -183,6 +211,17 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
               )}
             </div>
 
+            {f.trustSignals && f.trustSignals.length > 0 && (
+              <ul className="mb-6 space-y-1.5 text-sm text-gray-700">
+                {f.trustSignals.map((sig, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="text-yellow font-bold leading-5">•</span>
+                    <span className="leading-5">{sig}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
             {f.description && (
               <div className="mb-6">
                 <h3 className="font-semibold text-sm mb-2">Description</h3>
@@ -199,32 +238,85 @@ export default function ItemDetailClient({ item }: { item: ShopItem }) {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3 mb-6 text-sm">
-              {item.shop_source && (
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <span className="text-muted">Shop</span>
-                  <p className="font-medium">{item.shop_source}</p>
+            {f.specTable && Object.keys(f.specTable).length > 0 && (
+              <section className="mb-6">
+                <h2 className="font-semibold text-sm mb-2">Specifications</h2>
+                <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                  <tbody>
+                    {orderSpecRows(f.specTable).map(([k, v], i) => (
+                      <tr
+                        key={k}
+                        className={i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
+                      >
+                        <th
+                          scope="row"
+                          className="text-left font-medium text-gray-600 px-3 py-2 align-top w-2/5"
+                        >
+                          {k}
+                        </th>
+                        <td className="text-gray-900 px-3 py-2 align-top">{v}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            )}
+
+            {f.faqs && f.faqs.length > 0 && (
+              <section className="mb-6">
+                <h2 className="font-semibold text-sm mb-2">FAQ</h2>
+                <div className="border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-200">
+                  {f.faqs.map((faq, i) => (
+                    <details
+                      key={i}
+                      className="group bg-white open:bg-gray-50"
+                    >
+                      <summary className="flex items-center justify-between gap-3 px-3 py-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden hover:bg-gray-50 transition-colors">
+                        <span className="text-sm font-medium text-gray-900">
+                          {faq.question}
+                        </span>
+                        <ChevronDown
+                          size={18}
+                          className="flex-shrink-0 text-gray-500 transition-transform duration-200 group-open:rotate-180"
+                        />
+                      </summary>
+                      <div className="px-3 pb-3 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                        {faq.answer}
+                      </div>
+                    </details>
+                  ))}
                 </div>
-              )}
-              {item.condition && (
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <span className="text-muted">Condition</span>
-                  <p className="font-medium">{item.condition}</p>
-                </div>
-              )}
-              {item.barcode && (
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <span className="text-muted">Barcode</span>
-                  <p className="font-medium">{item.barcode}</p>
-                </div>
-              )}
-              {f.productType && (
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <span className="text-muted">Type</span>
-                  <p className="font-medium">{f.productType}</p>
-                </div>
-              )}
-            </div>
+              </section>
+            )}
+
+            {(!f.specTable || Object.keys(f.specTable).length === 0) && (
+              <div className="grid grid-cols-2 gap-3 mb-6 text-sm">
+                {item.shop_source && (
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <span className="text-muted">Shop</span>
+                    <p className="font-medium">{item.shop_source}</p>
+                  </div>
+                )}
+                {item.condition && (
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <span className="text-muted">Condition</span>
+                    <p className="font-medium">{item.condition}</p>
+                  </div>
+                )}
+                {item.barcode && (
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <span className="text-muted">Barcode</span>
+                    <p className="font-medium">{item.barcode}</p>
+                  </div>
+                )}
+                {f.productType && (
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <span className="text-muted">Type</span>
+                    <p className="font-medium">{f.productType}</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Desktop WhatsApp CTA */}
             <button
