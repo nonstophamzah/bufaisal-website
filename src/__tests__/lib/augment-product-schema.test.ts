@@ -29,21 +29,47 @@ const baseSchema = (
 });
 
 describe('augmentProductSchema — Merchant Listings fields', () => {
-  it('1. Appliance product emits both shippingDetails and hasMerchantReturnPolicy', () => {
+  // Source of truth for per-emirate rates — keep in sync with
+  // EMIRATE_SHIPPING_RATES in src/lib/augment-product-schema.ts.
+  const EXPECTED_EMIRATE_RATES: Record<string, number> = {
+    Ajman: 85,
+    Sharjah: 145,
+    'Umm Al Quwain': 120,
+    Dubai: 240,
+    'Ras Al Khaimah': 240,
+    Fujairah: 265,
+    'Abu Dhabi': 300,
+  };
+
+  it('1. Appliance product emits both shippingDetails array and hasMerchantReturnPolicy', () => {
     const result = augmentProductSchema(baseSchema(), {
       ...baseContext,
       category: 'Appliances',
     });
     const offers = result?.offers as Record<string, unknown>;
 
-    expect(offers.shippingDetails).toBeDefined();
-    const shipping = offers.shippingDetails as Record<string, unknown>;
-    expect(shipping['@type']).toBe('OfferShippingDetails');
-    const rate = shipping.shippingRate as Record<string, unknown>;
-    expect(rate.value).toBe(50);
-    expect(rate.currency).toBe('AED');
-    const dest = shipping.shippingDestination as Record<string, unknown>;
-    expect(dest.addressCountry).toBe('AE');
+    expect(Array.isArray(offers.shippingDetails)).toBe(true);
+    const shipping = offers.shippingDetails as Array<Record<string, unknown>>;
+    expect(shipping).toHaveLength(7);
+
+    for (const entry of shipping) {
+      expect(entry['@type']).toBe('OfferShippingDetails');
+      const dest = entry.shippingDestination as Record<string, unknown>;
+      expect(dest.addressCountry).toBe('AE');
+      expect(typeof dest.addressRegion).toBe('string');
+    }
+
+    // Each emirate appears exactly once with its expected rate.
+    const byRegion = new Map<string, number>();
+    for (const entry of shipping) {
+      const dest = entry.shippingDestination as Record<string, unknown>;
+      const rate = entry.shippingRate as Record<string, unknown>;
+      byRegion.set(dest.addressRegion as string, rate.value as number);
+    }
+    expect(byRegion.size).toBe(7);
+    for (const [region, expectedRate] of Object.entries(EXPECTED_EMIRATE_RATES)) {
+      expect(byRegion.get(region)).toBe(expectedRate);
+    }
 
     expect(offers.hasMerchantReturnPolicy).toBeDefined();
     const policy = offers.hasMerchantReturnPolicy as Record<string, unknown>;
@@ -57,24 +83,44 @@ describe('augmentProductSchema — Merchant Listings fields', () => {
     expect(policy.returnFees).toBe('https://schema.org/FreeReturn');
   });
 
-  it('2. Non-appliance product (Bedroom & Sleep) emits shippingDetails only — no return policy', () => {
+  it('1b. All 7 shipping entries share the same deliveryTime and currency', () => {
+    const result = augmentProductSchema(baseSchema(), {
+      ...baseContext,
+      category: 'Appliances',
+    });
+    const offers = result?.offers as Record<string, unknown>;
+    const shipping = offers.shippingDetails as Array<Record<string, unknown>>;
+
+    const deliveryTimes = new Set(shipping.map((e) => JSON.stringify(e.deliveryTime)));
+    expect(deliveryTimes.size).toBe(1);
+
+    for (const entry of shipping) {
+      const rate = entry.shippingRate as Record<string, unknown>;
+      expect(rate.currency).toBe('AED');
+      expect(rate['@type']).toBe('MonetaryAmount');
+    }
+  });
+
+  it('2. Non-appliance product (Bedroom & Sleep) emits shippingDetails array only — no return policy', () => {
     const result = augmentProductSchema(baseSchema(), {
       ...baseContext,
       category: 'Bedroom & Sleep',
     });
     const offers = result?.offers as Record<string, unknown>;
-    expect(offers.shippingDetails).toBeDefined();
+    expect(Array.isArray(offers.shippingDetails)).toBe(true);
+    expect(offers.shippingDetails as unknown[]).toHaveLength(7);
     expect(offers.hasMerchantReturnPolicy).toBeUndefined();
   });
 
-  it('3. Idempotency — re-augmenting does not duplicate or mutate fields', () => {
+  it('3. Idempotency — re-augmenting does not duplicate the 7 shipping entries or mutate fields', () => {
     const ctx = { ...baseContext, category: 'Appliances' };
     const once = augmentProductSchema(baseSchema(), ctx);
     const twice = augmentProductSchema(once, ctx);
 
     expect(JSON.stringify(twice)).toEqual(JSON.stringify(once));
     const offers = twice?.offers as Record<string, unknown>;
-    expect(offers.shippingDetails).toBeDefined();
+    expect(Array.isArray(offers.shippingDetails)).toBe(true);
+    expect(offers.shippingDetails as unknown[]).toHaveLength(7);
     expect(offers.hasMerchantReturnPolicy).toBeDefined();
   });
 
@@ -124,13 +170,14 @@ describe('augmentProductSchema — Merchant Listings fields', () => {
     expect(offers.hasMerchantReturnPolicy).toEqual(existing);
   });
 
-  it('6. Missing/null category emits shippingDetails but no return policy', () => {
+  it('6. Missing/null category emits shippingDetails array but no return policy', () => {
     const result = augmentProductSchema(baseSchema(), {
       ...baseContext,
       category: null,
     });
     const offers = result?.offers as Record<string, unknown>;
-    expect(offers.shippingDetails).toBeDefined();
+    expect(Array.isArray(offers.shippingDetails)).toBe(true);
+    expect(offers.shippingDetails as unknown[]).toHaveLength(7);
     expect(offers.hasMerchantReturnPolicy).toBeUndefined();
   });
 
@@ -155,6 +202,9 @@ describe('augmentProductSchema — Merchant Listings fields', () => {
     expect(Array.isArray(result?.offers)).toBe(false);
     const offers = result?.offers as Record<string, unknown>;
     expect(offers['@type']).toBe('Offer');
+    // shippingDetails is itself an array (per-emirate), but the offer
+    // block remains a single object — never an array of Offers.
+    expect(Array.isArray(offers.shippingDetails)).toBe(true);
     // The new fields live under Offer, not Product top-level.
     expect((result as Record<string, unknown>).shippingDetails).toBeUndefined();
     expect(
