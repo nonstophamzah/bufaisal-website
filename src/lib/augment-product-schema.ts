@@ -23,6 +23,73 @@ export interface AugmentProductSchemaContext {
   negotiable: boolean | null;
 }
 
+// Shipping policy is invariant across product categories but varies by
+// destination emirate. Google's `MonetaryAmount.shippingRate` requires a
+// single `value` per entry — for variable rates we emit an ARRAY of
+// `OfferShippingDetails`, one per emirate, each carrying its own
+// `addressRegion` + `shippingRate`. All seven share the same `addressCountry`
+// (AE) and `deliveryTime` (same-day to 2 days).
+const EMIRATE_SHIPPING_RATES: ReadonlyArray<{ region: string; rate: number }> = [
+  { region: 'Ajman', rate: 85 },
+  { region: 'Sharjah', rate: 145 },
+  { region: 'Umm Al Quwain', rate: 120 },
+  { region: 'Dubai', rate: 240 },
+  { region: 'Ras Al Khaimah', rate: 240 },
+  { region: 'Fujairah', rate: 265 },
+  { region: 'Abu Dhabi', rate: 300 },
+];
+
+function buildDeliveryTime(): Record<string, unknown> {
+  return {
+    '@type': 'ShippingDeliveryTime',
+    handlingTime: {
+      '@type': 'QuantitativeValue',
+      minValue: 0,
+      maxValue: 0,
+      unitCode: 'DAY',
+    },
+    transitTime: {
+      '@type': 'QuantitativeValue',
+      minValue: 0,
+      maxValue: 2,
+      unitCode: 'DAY',
+    },
+  };
+}
+
+function buildShippingDetails(): Record<string, unknown>[] {
+  return EMIRATE_SHIPPING_RATES.map(({ region, rate }) => ({
+    '@type': 'OfferShippingDetails',
+    shippingRate: {
+      '@type': 'MonetaryAmount',
+      value: rate,
+      currency: 'AED',
+    },
+    shippingDestination: {
+      '@type': 'DefinedRegion',
+      addressCountry: 'AE',
+      addressRegion: region,
+    },
+    deliveryTime: buildDeliveryTime(),
+  }));
+}
+
+// Return policy is per-category. Only "Appliances" carries a 7-day finite
+// window; every other category is sold as-is (buyer inspects before
+// purchase), so we OMIT hasMerchantReturnPolicy entirely for non-Appliances
+// rather than emitting MerchantReturnNotPermitted. Per Hamzah's PR #53
+// decision.
+function buildAppliancesReturnPolicy(): Record<string, unknown> {
+  return {
+    '@type': 'MerchantReturnPolicy',
+    applicableCountry: ['AE'],
+    returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
+    merchantReturnDays: 7,
+    returnMethod: 'https://schema.org/ReturnInStore',
+    returnFees: 'https://schema.org/FreeReturn',
+  };
+}
+
 export function augmentProductSchema(
   schema: Record<string, unknown> | null | undefined,
   context: AugmentProductSchemaContext
@@ -62,6 +129,15 @@ export function augmentProductSchema(
     }
     if (offers.url === undefined) {
       offers.url = context.url;
+    }
+    if (offers.shippingDetails === undefined) {
+      offers.shippingDetails = buildShippingDetails();
+    }
+    if (
+      offers.hasMerchantReturnPolicy === undefined &&
+      context.category?.toLowerCase() === 'appliances'
+    ) {
+      offers.hasMerchantReturnPolicy = buildAppliancesReturnPolicy();
     }
     next.offers = offers;
   }
