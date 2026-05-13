@@ -23,6 +23,56 @@ export interface AugmentProductSchemaContext {
   negotiable: boolean | null;
 }
 
+// Shipping policy is invariant across categories. Google requires a single
+// `MonetaryAmount.value` — min/max ranges are not supported on shippingRate.
+// We publish AED 50 as the floor; the real per-item quote is negotiated via
+// WhatsApp (range AED 50–500 depending on size / distance / carpenter).
+function buildShippingDetails(): Record<string, unknown> {
+  return {
+    '@type': 'OfferShippingDetails',
+    shippingRate: {
+      '@type': 'MonetaryAmount',
+      value: 50,
+      currency: 'AED',
+    },
+    shippingDestination: {
+      '@type': 'DefinedRegion',
+      addressCountry: 'AE',
+    },
+    deliveryTime: {
+      '@type': 'ShippingDeliveryTime',
+      handlingTime: {
+        '@type': 'QuantitativeValue',
+        minValue: 0,
+        maxValue: 0,
+        unitCode: 'DAY',
+      },
+      transitTime: {
+        '@type': 'QuantitativeValue',
+        minValue: 0,
+        maxValue: 1,
+        unitCode: 'DAY',
+      },
+    },
+  };
+}
+
+// Return policy is per-category. Only "Appliances" carries a 7-day finite
+// window; every other category is sold as-is (buyer inspects before
+// purchase), so we OMIT hasMerchantReturnPolicy entirely for non-Appliances
+// rather than emitting MerchantReturnNotPermitted. Per Hamzah's PR #53
+// decision.
+function buildAppliancesReturnPolicy(): Record<string, unknown> {
+  return {
+    '@type': 'MerchantReturnPolicy',
+    applicableCountry: ['AE'],
+    returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
+    merchantReturnDays: 7,
+    returnMethod: 'https://schema.org/ReturnInStore',
+    returnFees: 'https://schema.org/FreeReturn',
+  };
+}
+
 export function augmentProductSchema(
   schema: Record<string, unknown> | null | undefined,
   context: AugmentProductSchemaContext
@@ -62,6 +112,15 @@ export function augmentProductSchema(
     }
     if (offers.url === undefined) {
       offers.url = context.url;
+    }
+    if (offers.shippingDetails === undefined) {
+      offers.shippingDetails = buildShippingDetails();
+    }
+    if (
+      offers.hasMerchantReturnPolicy === undefined &&
+      context.category?.toLowerCase() === 'appliances'
+    ) {
+      offers.hasMerchantReturnPolicy = buildAppliancesReturnPolicy();
     }
     next.offers = offers;
   }
