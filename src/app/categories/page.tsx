@@ -39,9 +39,28 @@ async function getCategoryCounts() {
 export default async function CategoriesPage() {
   const counts = await getCategoryCounts();
 
+  // 2-level BreadcrumbList for crawl-graph + rich-result eligibility. Final
+  // item (position 2 / current page) carries no `item` URL per Google's
+  // documented pattern — matches the leaf convention in /item/[id]/page.tsx.
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://bufaisal.ae' },
+      { '@type': 'ListItem', position: 2, name: 'Categories' },
+    ],
+  };
+
   return (
-    <div className="pt-24 pb-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbSchema).replace(/</g, '\\u003c'),
+        }}
+      />
+      <div className="pt-24 pb-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <h1 className="font-heading text-4xl md:text-5xl mb-2">
           ALL <span className="text-yellow">CATEGORIES</span>
         </h1>
@@ -62,6 +81,7 @@ export default async function CategoriesPage() {
           ))}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
