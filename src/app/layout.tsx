@@ -122,7 +122,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             description: "UAE's largest second-hand market since 2009. 5 showrooms in Ajman.",
             address: {
               '@type': 'PostalAddress',
+              streetAddress: 'Behind Safeer Hypermarket, Al Jurf 2 Askan Holding',
               addressLocality: 'Ajman',
+              addressRegion: 'Ajman',
+              postalCode: '00000',
               addressCountry: 'AE',
             },
             contactPoint: {
