@@ -1,14 +1,12 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Search, X, ChevronDown, ChevronRight } from 'lucide-react';
 import ItemCard from '@/components/ItemCard';
 import { supabase, ShopItem } from '@/lib/supabase';
 import { CATEGORIES, CATEGORY_SLUG_MAP } from '@/lib/constants';
-import { resolveItemImageUrl } from '@/lib/item-image';
-import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
 
 const CATEGORY_INTROS: Record<string, string> = {
   'living-room-lounge':
@@ -158,50 +156,8 @@ export default function ShopClient({
     writeUrl(activeCategory, search);
   };
 
-  // JSON-LD is now rendered server-side, so we only need the dynamic ItemList here
-  const dynamicSchema = useMemo(() => {
-    if (!catName || items.length === 0) return null;
-    return {
-      '@context': 'https://schema.org',
-      '@type': 'ItemList',
-      name: `Used ${catName} for Sale`,
-      numberOfItems: items.length,
-      itemListElement: items.slice(0, 10).map((item, i) => {
-        const f = resolvePublicItemFields(item);
-        return {
-          '@type': 'ListItem',
-          position: i + 1,
-          item: {
-            '@type': 'Product',
-            name: f.itemName,
-            description: f.description || `Used ${f.itemName}`,
-            url: `https://bufaisal.ae/item/${item.id}`,
-            image: resolveItemImageUrl(item) ?? '',
-            brand: { '@type': 'Brand', name: f.brand || 'Bu Faisal' },
-            offers: {
-              '@type': 'Offer',
-              availability: 'https://schema.org/InStock',
-              priceCurrency: 'AED',
-              price: item.sale_price || 0,
-              seller: { '@type': 'Organization', name: 'Bu Faisal General Trading' },
-            },
-            itemCondition: 'https://schema.org/UsedCondition',
-          },
-        };
-      }),
-    };
-  }, [catName, items]);
-
   return (
     <div className="pt-24 pb-16">
-      {/* Dynamic ItemList JSON-LD (depends on client-side filter state) */}
-      {dynamicSchema && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(dynamicSchema) }}
-        />
-      )}
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Breadcrumbs — hidden on /, visible on /shop and /shop?category=… */}
         {!isHome && (
