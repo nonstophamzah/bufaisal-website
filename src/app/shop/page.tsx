@@ -5,6 +5,8 @@ import { ShopItem } from '@/lib/supabase';
 import { CATEGORY_SLUG_MAP } from '@/lib/constants';
 import ShopClient from './shop-client';
 import { LOCAL_BUSINESS_SCHEMAS } from '@/lib/local-business-schema';
+import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
+import { resolveItemImageUrl } from '@/lib/item-image';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -110,6 +112,47 @@ export default async function ShopPage({ searchParams }: Props) {
 
   // Server-side JSON-LD schemas (rendered in initial HTML).
   // LocalBusiness comes from the shared 5-shop registry; FAQ stays inline.
+  // ItemList (category carousel signal) — same shape as the prior CSR
+  // version in shop-client.tsx, but emitted in the SSR HTML so Googlebot
+  // doesn't have to render JS to see it. Gated on `catName && items.length`
+  // (no schema on the unfiltered /shop view, matching prior behavior).
+  const catName = category ? CATEGORY_SLUG_MAP[category] : '';
+  const itemListSchema =
+    catName && items.length > 0
+      ? {
+          '@context': 'https://schema.org',
+          '@type': 'ItemList',
+          name: `Used ${catName} for Sale`,
+          numberOfItems: items.length,
+          itemListElement: items.slice(0, 10).map((item, i) => {
+            const f = resolvePublicItemFields(item);
+            return {
+              '@type': 'ListItem',
+              position: i + 1,
+              item: {
+                '@type': 'Product',
+                name: f.itemName,
+                description: f.description || `Used ${f.itemName}`,
+                url: `https://bufaisal.ae/item/${item.id}`,
+                image: resolveItemImageUrl(item) ?? '',
+                brand: { '@type': 'Brand', name: f.brand || 'Bu Faisal' },
+                offers: {
+                  '@type': 'Offer',
+                  availability: 'https://schema.org/InStock',
+                  priceCurrency: 'AED',
+                  price: item.sale_price || 0,
+                  seller: {
+                    '@type': 'Organization',
+                    name: 'Bu Faisal General Trading',
+                  },
+                },
+                itemCondition: 'https://schema.org/UsedCondition',
+              },
+            };
+          }),
+        }
+      : null;
+
   const faqSchema = {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
@@ -139,6 +182,14 @@ export default async function ShopPage({ searchParams }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
       />
+      {itemListSchema && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(itemListSchema).replace(/</g, '\\u003c'),
+          }}
+        />
+      )}
 
       <Suspense
         fallback={
