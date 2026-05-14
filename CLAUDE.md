@@ -70,6 +70,7 @@ src/
     ├── augment-product-schema.ts   # Phase 6.4 PR A: augmentProductSchema() — render-time SEO augmentation of stored published_product_schema with page-level fields the AI cannot know (sku, canonical url, category, seller block with legalName, "Price is negotiable." description hint when applicable). Non-destructive — only fills gaps, never overwrites existing keys. Pure function. Called by src/app/item/[id]/page.tsx.
     ├── similar-items.ts    # Phase 6.4 PR B: fetchSimilarItems() — three-tier query for related products. Tier 1 = same brand + same category, Tier 2 = same category + same worker_shop_id, Tier 3 = same category overall. Within each tier orders by published_at DESC (freshness). Dedupes across tiers by id, slices to 8. Returns [] if total < 4 (MIN_THRESHOLD) so the section hides. Filters on published_brand/published_category for Phase 6.5 forward-compat. Anon Supabase client, RLS reads published items only.
     ├── shops.ts            # Phase 6.4 PR B: canonical shop config for the public site. SHOPS record maps BF1–BF5 to display names + Google Maps GBP URLs for all 5 Ajman shops. getShop(workerShopId) lookup. Imported by /item/[id], ItemCard, and buildWhatsAppUrl (canonical shop name for WhatsApp drafts) after Phase 6.5b.1; NOT by /admin (legacy shop_source/shop_label reads in admin still work). The thin SHOPS in constants.ts remains unchanged and should retire in a future cleanup PR.
+    ├── local-business-schema.ts    # Phase 7 PR #53: LOCAL_BUSINESS_SCHEMAS — static array of 5 sibling LocalBusiness JSON-LD entities (one per shop) with per-shop geo + aggregateRating + sameAs GBP URLs, all cross-referenced to root Organization via parentOrganization. Imported by both /page.tsx and /shop/page.tsx; emitted as 5 sibling <script> tags. Shared fields (telephone, openingHours='Mo-Su 09:00-23:00', priceRange='AED 50 - AED 5000', image, parentOrg) live in two SHARED constants at the top of the file.
     ├── item-image.ts       # Image hotfix (PR #27): centralized fallback chain for the public site. getItemImageUrl() (with /og-image.png placeholder, for <img>) and resolveItemImageUrl() (without, for JSON-LD). Chain: thumbnail_url > image_urls[0] > worker_photo_brand_url > placeholder. Also exports getAllItemPhotos() used by resolve-schema-images.ts.
     ├── cloudinary-loader.ts        # Image hotfix (PR #27): custom next/image loader. For res.cloudinary.com URLs injects f_auto,q_<n>,w_<n>,c_limit; other URLs pass through. Wired via next.config.mjs `images.loader = 'custom'` so /_next/image is no longer in the path.
     ├── appliance-api.ts    # Client-side API wrapper for /api/appliances
@@ -107,7 +108,7 @@ lib/                        # ROOT-level (NOT src/lib). Phase 4 added this for f
 **appliance_audit_log** — Action tracking (user_name, action, item_id, details JSONB)
 **audit_log** — Cross-system action tracking added in Phase 1 of the listing-generator rebuild. RLS-locked, service_role only. Phase 4 writes `ai_completed` rows; the daily cleanup cron and piggyback rescue write `cleanup_stuck_processing` rows. Phase 5's new admin pending dashboard writes `admin_approved` (with `via=detail_editor` or `via=quick_approve` and `overrides_applied`), `admin_edited`, `admin_rejected`, `admin_regenerate_triggered`. Legacy `/admin` (action='approve' on /api/admin/items) still does NOT write here — that path retires in Phase 9 once the new dashboard handles all flows.
 
-## Listing Generator Pipeline (Phases 1–6.6 complete, verified May 2026)
+## Listing Generator Pipeline (Phases 1–7 complete, verified May 2026)
 
 The full pipeline turning a worker upload into a published listing on bufaisal.ae:
 
@@ -257,6 +258,47 @@ Google Rich Results Test on `/item/4cea5546-1da6-48cb-b6c2-bf7a61232278` returns
 
 See `.claude/handoffs/2026-05-12-post-6.6-seo-upgrades-start.md` for the full next-session brief.
 
+## Phase 7 — Complete (2026-05-14)
+
+Phase 7 widened the structured-data surface for SEO / AEO / GEO. Full context: [`docs/phase-7-handoff.md`](docs/phase-7-handoff.md). Per-PR audits: [`docs/phase-7-schema-audit.md`](docs/phase-7-schema-audit.md) (the inventory that opened the phase), plus one audit per PR (`docs/phase-7-pr53-audit.md` through `docs/phase-7-pr56-audit.md`).
+
+### 4 PRs merged
+
+- **PR [#52](https://github.com/nonstophamzah/bufaisal-website/pull/52) — Merchant Listings eligibility.** Added `shippingDetails` (array of 7 per-emirate entries) + `hasMerchantReturnPolicy` (Appliances-only, 7-day finite window, `ReturnInStore` + `FreeReturn`) to Product JSON-LD via `augmentProductSchema()`. Both nest under `Offer`. 11 vitest cases in `src/__tests__/lib/augment-product-schema.test.ts`. Per-emirate rates: Ajman 85 / Sharjah 145 / Umm Al Quwain 120 / Dubai 240 / Ras Al Khaimah 240 / Fujairah 265 / Abu Dhabi 300 AED.
+- **PR [#53](https://github.com/nonstophamzah/bufaisal-website/pull/53) — 5-shop LocalBusiness split + Organization address.** Replaced the single collapsed LocalBusiness with 5 sibling entities (per-shop geo + GBP-sourced `aggregateRating` for 1,442 / 281 / 582 / 47 / 49 reviews = **2,401 total**). Added missing `streetAddress` + `addressRegion` + `postalCode='00000'` to root Organization in `layout.tsx`. Fixed pre-existing bugs: `openingHours` 22:00 → 23:00, `priceRange` `'AED'` → `'AED 50 - AED 5000'`. Data lives in `src/lib/local-business-schema.ts`.
+- **PR [#54](https://github.com/nonstophamzah/bufaisal-website/pull/54) — ItemList SSR migration.** Moved `ItemList` JSON-LD on `/shop?category=*` from client-side to server-side; deleted the CSR `useMemo` in `shop-client.tsx` in the same commit. `/shop` only — homepage `?category=` no longer emits ItemList as a side effect of the shared `ShopClient` deletion (Hamzah-accepted). Shape is byte-identical to prior CSR.
+- **PR [#55](https://github.com/nonstophamzah/bufaisal-website/pull/55) — BreadcrumbList on /categories.** 2-level breadcrumb (Home → Categories). Position 2 carries `name` only, no `item` URL — matches the leaf convention in `/item/[id]/page.tsx`. Closes the schema gap the original Phase 7 inventory flagged.
+
+### 2 proposals rejected as vanity schema
+
+- **Organization-level `aggregateRating`** — Google doesn't honor self-declared aggregateRating on Organization for SERP rich results (pulls from its own GBP data). Per-shop aggregateRating on LocalBusiness handles the 2,401 reviews instead. Rejected in PR #53's audit (`docs/phase-7-pr54-audit.md` Section 3).
+- **CollectionPage on `/categories`** — not in Google's rich-results gallery, no documented SERP benefit, no measurable AEO/GEO impact. Rejected in PR #56's audit (`docs/phase-7-pr56-audit.md` Section 5 explicit SKIP verdict); BreadcrumbList shipped alone as the audit-approved minimum fix.
+
+### Schema emission map (post-Phase-7)
+
+All page-level schemas are server-side emitted. No client-side JSON-LD remains in the codebase.
+
+| Route | SSR JSON-LD blocks |
+|---|---|
+| `/` | Organization + WebSite (inherited from `layout.tsx`); FAQPage |
+| `/shop` | Organization + WebSite (inherited); 5× LocalBusiness; FAQPage |
+| `/shop?category=*` | Same as `/shop` + ItemList for the category |
+| `/categories` | Organization + WebSite (inherited); BreadcrumbList |
+| `/item/[id]` | Organization + WebSite (inherited); augmented Product (with sku, url, category, seller, shippingDetails[7], hasMerchantReturnPolicy if Appliances); FAQPage; BreadcrumbList |
+
+`/item/[id]` uses the locked `escapeJsonLd()` helper for script-tag breakout safety. Five other inline JSON-LD sites still use the simpler `replace(/</g, '\\u003c')` pattern (`layout.tsx`, `page.tsx`, `shop/page.tsx`, `categories/page.tsx`) — migrate when next touching those files; not urgent.
+
+### Sacred routes — unchanged from Phase 6.6
+
+Same list applies; reaffirmed for Phase 7. The Phase 7 PRs all stayed within the public-marketplace schema surface. `/team`, `/admin`, `/admin/pending`, `/appliances`, `/api/appliances`, `/api/gemini` were not touched.
+
+### Known operational state (Phase 7 carry-forward)
+
+- **3 of 49 visible rows have stored Product JSON-LD** — the 46 pre-Phase-5 legacy rows have `published_product_schema = NULL` and emit no Product block at all on `/item/[id]`. PR #52's shipping + return policy additions only land on rows that already have Product schema. Backfilling the 46 legacy rows (via `src/scripts/process-backlog.ts --force`) is the single biggest carry-forward SEO opportunity — see `docs/phase-7-handoff.md` Section 6.
+- **`admin_price_aed` and `admin_negotiable` overrides remain dormant** — public site renders worker-submitted price + negotiable flag. Carry-over from Phase 6.6's mirror deletion. Fix scoped when admin overrides become an active workflow.
+- **Legacy `/admin` Live/Sold/Hidden tabs still render new approvals with blank `item_name` / `category` / `condition`** — locked workflow is `/admin/pending`. Cleanup deferred to Phase 9.
+- **Shops D + E share GPS coordinates** (`25.3994663, 55.4993168`) in `local-business-schema.ts` — physically adjacent units; distinct names + `sameAs` GBP URLs disambiguate them for Google.
+
 ## Environment Variables
 
 ```
@@ -378,5 +420,5 @@ Tiny PRs (typo fixes, dependency bumps, formatting) skip doc updates. Use judgme
 
 ## Last session handoff
 
-- **2026-05-12** — Phase 6.5 COMPLETE. Three PRs shipped end-to-end in one session: PR #47 (6.5b.1, display canonicalization at commit `c8aa2c3`), PR #49 (6.5b.2, SSR filter cutover at commit `493f46d`), PR #50 (6.6, legacy mirror deletion at commit `3357e3d`). Public site reads `published_*` / canonical sources end-to-end; admin approvals write `published_*` exclusively. Pre/post-merge baselines (49 visible, 8-category map, 1 "hitachi" match) matched exactly.
-- Next session starts **Phase 6.7+ — schema upgrades for SEO / AEO / GEO**. Recommended first target: Organization-level `aggregateRating` (2,390+ Google reviews → store-level stars next to "Bufaisal" in search; unblocks both Product / Merchant snippet warnings simultaneously). See [`.claude/handoffs/2026-05-12-post-6.6-seo-upgrades-start.md`](.claude/handoffs/2026-05-12-post-6.6-seo-upgrades-start.md).
+- **2026-05-14** — Phase 7 COMPLETE. Four PRs merged in three days: PR #52 (Merchant Listings — shippingDetails[7] + hasMerchantReturnPolicy), PR #53 (5-shop LocalBusiness split + Org address completeness), PR #54 (ItemList SSR migration on `/shop`), PR #55 (BreadcrumbList on `/categories`). Two proposals explicitly rejected as vanity schema: Organization-level `aggregateRating` (Google doesn't honor it for SERP) and CollectionPage on `/categories` (not in rich-results gallery). 2,401 GBP reviews now surfaced via per-shop LocalBusiness aggregateRating.
+- Next session: passive — let Phase 7 land in Google Search Console for 30 days before adding more schema. Ranked post-Phase-7 options in [`docs/phase-7-handoff.md`](docs/phase-7-handoff.md) Section 6. Highest material lift is backfilling the 46 legacy rows that lack `published_product_schema` (3 → 49 rows with Product JSON-LD); easiest small win is fixing the WhatsApp emoji bug ([Issue #48](https://github.com/nonstophamzah/bufaisal-website/issues/48)).
