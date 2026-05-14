@@ -7,6 +7,7 @@ import ShopClient from './shop/shop-client';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import WhatsAppFloat from '@/components/WhatsAppFloat';
+import { LOCAL_BUSINESS_SCHEMAS } from '@/lib/local-business-schema';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -88,34 +89,6 @@ export default async function HomePage({ searchParams }: Props) {
   const { category, q } = await searchParams;
   const items = await getItems(category, q);
 
-  const localBusiness = {
-    '@context': 'https://schema.org',
-    '@type': 'LocalBusiness',
-    name: 'Bu Faisal General Trading',
-    description:
-      "UAE's biggest used goods souq. Quality second-hand furniture, appliances & home goods since 2009.",
-    url: 'https://bufaisal.ae',
-    telephone: '+971585932499',
-    address: {
-      '@type': 'PostalAddress',
-      addressLocality: 'Ajman',
-      addressCountry: 'AE',
-    },
-    geo: {
-      '@type': 'GeoCoordinates',
-      latitude: 25.4052,
-      longitude: 55.5136,
-    },
-    openingHours: 'Mo-Su 09:00-22:00',
-    priceRange: 'AED',
-    image: 'https://bufaisal.ae/og-image.png',
-    sameAs: [
-      'https://www.instagram.com/bufaisal.ae',
-      'https://www.tiktok.com/@bufaisal.ae',
-      'https://www.facebook.com/bufaisal.ae',
-    ],
-  };
-
   const faqSchema = {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
@@ -130,10 +103,15 @@ export default async function HomePage({ searchParams }: Props) {
     <>
       <Navbar />
       <main className="min-h-screen">
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusiness) }}
-        />
+        {LOCAL_BUSINESS_SCHEMAS.map((schema) => (
+          <script
+            key={(schema.sameAs as string[])[0]}
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify(schema).replace(/</g, '\\u003c'),
+            }}
+          />
+        ))}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
