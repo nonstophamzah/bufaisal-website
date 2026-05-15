@@ -92,6 +92,13 @@ export interface ShopItem {
   worker_condition_type: 'Used' | 'New' | null;
   worker_condition_grade: 'Excellent' | 'Good' | 'Fair' | null;
   admin_condition_grade: 'Excellent' | 'Good' | 'Fair' | null;
+  // Phase 1B price + negotiable layer. Read via the effective-fields
+  // helpers: `getEffectivePrice()` chains `admin_price_aed ??
+  // worker_price_aed ?? sale_price`, and the public-side negotiable
+  // pill reads `admin_negotiable ?? worker_negotiable`. NULL on
+  // pre-Phase-3 legacy rows; sale_price stays as the final fallback.
+  worker_price_aed: number | null;
+  admin_price_aed: number | null;
   // Phase 1B AI barcode extraction. Public-display canonical source;
   // the legacy `barcode` mirror retires in Phase 6.5. NULL when the AI
   // couldn't read the barcode photo or for pre-Phase-3 rows.
