@@ -7,6 +7,7 @@ import ShopClient from './shop-client';
 import { LOCAL_BUSINESS_SCHEMAS } from '@/lib/local-business-schema';
 import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
 import { resolveItemImageUrl } from '@/lib/item-image';
+import { getEffectivePrice } from '@/lib/effective-fields';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -140,7 +141,7 @@ export default async function ShopPage({ searchParams }: Props) {
                   '@type': 'Offer',
                   availability: 'https://schema.org/InStock',
                   priceCurrency: 'AED',
-                  price: item.sale_price || 0,
+                  price: getEffectivePrice(item) || 0,
                   seller: {
                     '@type': 'Organization',
                     name: 'Bu Faisal General Trading',

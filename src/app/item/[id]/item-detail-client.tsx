@@ -19,6 +19,7 @@ import { trackWhatsAppClick, trackViewContent } from '@/lib/fbpixel';
 import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
 import { getShop } from '@/lib/shops';
 import { getItemImageUrl } from '@/lib/item-image';
+import { getEffectivePrice } from '@/lib/effective-fields';
 
 // Spec table canonical order. Keys not in this list fall to the end in
 // insertion order. Matches Phase 6.4 PR A scope.
@@ -75,6 +76,8 @@ function ConditionBadge({ condition }: { condition: string | null }) {
 function SimilarItemCard({ item }: { item: ShopItem }) {
   const f = resolvePublicItemFields(item);
   const imageUrl = getItemImageUrl(item);
+  const price = getEffectivePrice(item);
+  const hasPrice = !!price && price > 0;
   return (
     <Link
       href={`/item/${item.id}`}
@@ -103,9 +106,9 @@ function SimilarItemCard({ item }: { item: ShopItem }) {
         )}
         <div className="flex items-center gap-1.5 mt-1.5">
           <span className="font-bold text-sm">
-            {item.sale_price ? `AED ${item.sale_price}` : 'Ask Price'}
+            {hasPrice ? `AED ${price}` : 'Ask Price'}
           </span>
-          {!!item.sale_price &&
+          {hasPrice &&
             ((item.admin_negotiable ?? item.worker_negotiable) === false ? (
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-700">
                 Starting Price
@@ -136,6 +139,8 @@ export default function ItemDetailClient({
   const shop = getShop(item.worker_shop_id);
   const conditionGrade =
     item.admin_condition_grade ?? item.worker_condition_grade;
+  const effectivePrice = getEffectivePrice(item);
+  const hasPrice = !!effectivePrice && effectivePrice > 0;
 
   // Gallery photo grid sources the four canonical worker_photo_* columns
   // (positionally aligned with published_image_alt_texts). Falls back to
@@ -285,9 +290,9 @@ export default function ItemDetailClient({
 
             <div className="flex items-center gap-2 mb-4">
               <span className="font-heading text-2xl">
-                {item.sale_price ? `AED ${item.sale_price}` : 'Ask Price'}
+                {hasPrice ? `AED ${effectivePrice}` : 'Ask Price'}
               </span>
-              {!!item.sale_price && (
+              {hasPrice && (
                 (item.admin_negotiable ?? item.worker_negotiable) === false ? (
                   <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-700">
                     Starting Price

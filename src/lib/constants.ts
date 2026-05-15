@@ -2,6 +2,7 @@ import { Sofa, Bed, UtensilsCrossed, Zap, TreePine, Baby, Briefcase, ShoppingBag
 import type { ShopItem } from './supabase';
 import { resolvePublicItemFields } from './resolve-public-item-fields';
 import { getShop } from './shops';
+import { getEffectivePrice } from './effective-fields';
 
 export const CATEGORIES = [
   {
@@ -94,8 +95,9 @@ export function buildWhatsAppUrl(item: ShopItem) {
   if (f.itemName) {
     lines.push(`📦 ${f.itemName}`);
   }
-  if (item.sale_price && item.sale_price > 0) {
-    lines.push(`💰 ${item.sale_price} AED`);
+  const effectivePrice = getEffectivePrice(item);
+  if (effectivePrice && effectivePrice > 0) {
+    lines.push(`💰 ${effectivePrice} AED`);
   }
   if (shop?.displayName) {
     lines.push(`📍 ${shop.displayName}`);

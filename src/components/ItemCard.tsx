@@ -9,6 +9,7 @@ import { trackWhatsAppClick } from '@/lib/fbpixel';
 import { getItemImageUrl } from '@/lib/item-image';
 import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
 import { getShop } from '@/lib/shops';
+import { getEffectivePrice } from '@/lib/effective-fields';
 
 function ConditionBadge({ condition }: { condition: string | null }) {
   if (!condition) return null;
@@ -44,6 +45,8 @@ export default function ItemCard({ item, priority = false }: { item: ShopItem; p
     item.admin_condition_grade ?? item.worker_condition_grade;
   const isNegotiable =
     (item.admin_negotiable ?? item.worker_negotiable) !== false;
+  const effectivePrice = getEffectivePrice(item);
+  const hasPrice = !!effectivePrice && effectivePrice > 0;
 
   const handleWhatsAppClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -109,9 +112,9 @@ export default function ItemCard({ item, priority = false }: { item: ShopItem; p
         </div>
         <div className="flex items-center gap-1.5 mt-1.5">
           <span className="font-bold text-sm">
-            {item.sale_price ? `AED ${item.sale_price}` : 'Ask Price'}
+            {hasPrice ? `AED ${effectivePrice}` : 'Ask Price'}
           </span>
-          {!!item.sale_price && (
+          {hasPrice && (
             isNegotiable ? (
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-yellow text-black">
                 Negotiable

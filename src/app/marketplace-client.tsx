@@ -10,6 +10,7 @@ import { buildWhatsAppUrl, CATEGORIES } from '@/lib/constants';
 import { trackWhatsAppClick, trackSearch } from '@/lib/fbpixel';
 import { useLang } from '@/lib/lang';
 import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
+import { getEffectivePrice } from '@/lib/effective-fields';
 import TrustStrip from '@/components/TrustStrip';
 
 const CAT_PILLS = ['All', ...CATEGORIES.map((c) => c.name)];
@@ -160,7 +161,8 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Shop
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 px-3">
             {filtered.slice(0, visible).map(({ item, f }, idx) => {
               const img = item.thumbnail_url || item.image_urls?.[0];
-              const hasPrice = !!(item.sale_price && item.sale_price > 0);
+              const effectivePrice = getEffectivePrice(item);
+              const hasPrice = !!(effectivePrice && effectivePrice > 0);
               const isNegotiable =
                 (item.admin_negotiable ?? item.worker_negotiable) !== false;
               return (
@@ -181,7 +183,7 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Shop
                     </Link>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <p className="font-heading text-lg">
-                        {hasPrice ? `AED ${item.sale_price}` : <span className="text-gray-400">Ask Price</span>}
+                        {hasPrice ? `AED ${effectivePrice}` : <span className="text-gray-400">Ask Price</span>}
                       </p>
                       {hasPrice && (
                         isNegotiable ? (

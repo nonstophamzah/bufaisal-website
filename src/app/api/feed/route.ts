@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { ShopItem } from '@/lib/supabase';
 import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
+import { getEffectivePrice } from '@/lib/effective-fields';
 
 // Product feed for Facebook Catalog / Google Merchant Center
 // GET /api/feed?format=facebook|google (default: facebook)
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
   const { data: items, error } = await supabase
     .from('shop_items')
     .select(
-      'id, item_name, brand, category, description, sale_price, thumbnail_url, image_urls, ' +
+      'id, item_name, brand, category, description, sale_price, worker_price_aed, admin_price_aed, thumbnail_url, image_urls, ' +
       'published_item_name, published_brand, published_category, published_product_type, published_description, ' +
       'worker_condition_type, admin_condition_grade, worker_condition_grade, ai_barcode_extracted, is_sold'
     )
@@ -71,7 +72,7 @@ function buildFacebookFeed(items: ShopItem[]) {
       description: f.description || f.itemName || '',
       availability: 'in stock',
       condition: mapCondition(item.worker_condition_type, conditionGrade),
-      price: `${item.sale_price || 0} AED`,
+      price: `${getEffectivePrice(item) || 0} AED`,
       link: `https://bufaisal.ae/item/${item.id}`,
       image_link: item.thumbnail_url || item.image_urls?.[0] || '',
       brand: f.brand || 'Bu Faisal',
@@ -103,7 +104,7 @@ function buildGoogleFeed(items: ShopItem[]) {
       <link>https://bufaisal.ae/item/${item.id}</link>
       <g:image_link>${escapeXml(item.thumbnail_url || item.image_urls?.[0] || '')}</g:image_link>
       <g:availability>in_stock</g:availability>
-      <g:price>${item.sale_price || 0} AED</g:price>
+      <g:price>${getEffectivePrice(item) || 0} AED</g:price>
       <g:condition>${mapCondition(item.worker_condition_type, conditionGrade)}</g:condition>
       <g:brand>${escapeXml(f.brand || 'Bu Faisal')}</g:brand>
       ${item.ai_barcode_extracted ? `<g:gtin>${escapeXml(item.ai_barcode_extracted)}</g:gtin>` : '<g:identifier_exists>false</g:identifier_exists>'}

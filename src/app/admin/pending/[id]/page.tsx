@@ -131,9 +131,20 @@ interface FieldShellProps {
   hasOverride: boolean;
   onReset: () => void;
   children: React.ReactNode;
+  // Defaults to "AI suggested" — the body text fields fall back to ai_*.
+  // Phase 8 price/negotiable/grade fall back to worker_*, so they pass
+  // "Worker submitted" here.
+  sourceLabel?: string;
 }
 
-function FieldShell({ label, aiValue, hasOverride, onReset, children }: FieldShellProps) {
+function FieldShell({
+  label,
+  aiValue,
+  hasOverride,
+  onReset,
+  children,
+  sourceLabel = 'AI suggested',
+}: FieldShellProps) {
   return (
     <div className="flex flex-col gap-1">
       <label className="text-xs font-bold uppercase tracking-wider text-gray-600">
@@ -145,21 +156,55 @@ function FieldShell({ label, aiValue, hasOverride, onReset, children }: FieldShe
           type="button"
           onClick={onReset}
           className="self-start text-[11px] text-yellow-700 hover:underline flex items-center gap-1"
-          title="Discard your edit and use the AI suggestion"
+          title="Discard your edit and use the default value"
         >
           <RefreshCw size={10} />
-          AI suggested:{' '}
+          {sourceLabel}:{' '}
           <span className="text-gray-600 truncate max-w-[200px]">
             {aiValue === null || aiValue === undefined || aiValue === ''
               ? '(empty)'
               : typeof aiValue === 'string'
                 ? aiValue
-                : JSON.stringify(aiValue).slice(0, 60)}
+                : typeof aiValue === 'boolean'
+                  ? aiValue
+                    ? 'Yes'
+                    : 'No'
+                  : typeof aiValue === 'number'
+                    ? `${aiValue}`
+                    : JSON.stringify(aiValue).slice(0, 60)}
           </span>{' '}
           — Reset
         </button>
       )}
     </div>
+  );
+}
+
+// Phase 8 PR 1 — small pill button used by the Negotiable + Condition
+// Grade selectors. Same visual language as the /team worker upload
+// pills but scaled down for the admin editor.
+function AdminPill({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`py-2 rounded-lg font-semibold text-sm border-2 active:scale-95 transition-transform ${
+        active
+          ? 'bg-yellow text-black border-yellow'
+          : 'bg-white text-gray-700 border-gray-300'
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -575,6 +620,105 @@ export default function PendingDetailPage() {
             />
           </FieldShell>
 
+          {/* Phase 8 PR 1 — admin can override the worker-submitted price,
+              negotiable flag, and (for Used items) condition grade. These
+              fields fall back to worker_* rather than ai_*, so the reset
+              link says "Worker submitted: X" instead of "AI suggested". */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <FieldShell
+              label="Price (AED)"
+              aiValue={item.worker_price_aed}
+              hasOverride={hasOverride('admin_price_aed')}
+              onReset={() => resetField('admin_price_aed')}
+              sourceLabel="Worker submitted"
+            >
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                step={1}
+                value={(() => {
+                  const v = valueOf('admin_price_aed', 'worker_price_aed');
+                  return v === null || v === undefined ? '' : String(v);
+                })()}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (raw === '') {
+                    setField('admin_price_aed', null);
+                    return;
+                  }
+                  const n = Number.parseInt(raw, 10);
+                  if (Number.isInteger(n) && n >= 1) {
+                    setField('admin_price_aed', n);
+                  }
+                }}
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
+                placeholder="(empty)"
+              />
+            </FieldShell>
+
+            <FieldShell
+              label="Negotiable"
+              aiValue={item.worker_negotiable}
+              hasOverride={hasOverride('admin_negotiable')}
+              onReset={() => resetField('admin_negotiable')}
+              sourceLabel="Worker submitted"
+            >
+              {(() => {
+                const current = valueOf('admin_negotiable', 'worker_negotiable') as
+                  | boolean
+                  | null
+                  | undefined;
+                return (
+                  <div className="grid grid-cols-2 gap-2">
+                    <AdminPill
+                      active={current === true}
+                      onClick={() => setField('admin_negotiable', true)}
+                    >
+                      Yes
+                    </AdminPill>
+                    <AdminPill
+                      active={current === false}
+                      onClick={() => setField('admin_negotiable', false)}
+                    >
+                      No
+                    </AdminPill>
+                  </div>
+                );
+              })()}
+            </FieldShell>
+          </div>
+
+          {item.worker_condition_type === 'Used' && (
+            <FieldShell
+              label={`Condition Grade (worker said: ${item.worker_condition_grade ?? '—'})`}
+              aiValue={item.worker_condition_grade}
+              hasOverride={hasOverride('admin_condition_grade')}
+              onReset={() => resetField('admin_condition_grade')}
+              sourceLabel="Worker submitted"
+            >
+              {(() => {
+                const current = valueOf(
+                  'admin_condition_grade',
+                  'worker_condition_grade'
+                ) as 'Excellent' | 'Good' | 'Fair' | null | undefined;
+                return (
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['Excellent', 'Good', 'Fair'] as const).map((g) => (
+                      <AdminPill
+                        key={g}
+                        active={current === g}
+                        onClick={() => setField('admin_condition_grade', g)}
+                      >
+                        {g}
+                      </AdminPill>
+                    ))}
+                  </div>
+                );
+              })()}
+            </FieldShell>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <FieldShell
               label="Category"
@@ -693,30 +837,6 @@ export default function PendingDetailPage() {
               className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm font-mono"
             />
           </FieldShell>
-
-          {item.worker_condition_type === 'Used' && (
-            <FieldShell
-              label={`Condition Grade (worker said: ${item.worker_condition_grade ?? '—'})`}
-              aiValue={item.worker_condition_grade}
-              hasOverride={hasOverride('admin_condition_grade')}
-              onReset={() => resetField('admin_condition_grade')}
-            >
-              <select
-                value={
-                  (valueOf('admin_condition_grade', 'worker_condition_grade') as
-                    | string
-                    | null) ?? ''
-                }
-                onChange={(e) => setField('admin_condition_grade', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
-              >
-                <option value="">(use worker grade)</option>
-                <option value="Excellent">Excellent</option>
-                <option value="Good">Good</option>
-                <option value="Fair">Fair</option>
-              </select>
-            </FieldShell>
-          )}
 
           {/* Spec table editor */}
           <SpecTableEditor
