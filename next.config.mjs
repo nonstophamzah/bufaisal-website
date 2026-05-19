@@ -62,7 +62,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob: https://res.cloudinary.com https://*.supabase.co https://*.supabase.in https://images.unsplash.com https://www.facebook.com https://www.google-analytics.com https://maps.googleapis.com https://maps.gstatic.com",
-              "connect-src 'self' https://*.supabase.co https://*.supabase.in https://api.cloudinary.com https://generativelanguage.googleapis.com https://www.google-analytics.com https://www.facebook.com https://sheets.googleapis.com",
+              "connect-src 'self' https://*.supabase.co https://*.supabase.in https://api.cloudinary.com https://www.google-analytics.com https://www.facebook.com https://sheets.googleapis.com",
               "frame-src 'self' https://www.google.com https://maps.google.com",
               "media-src 'self' blob:",
               "object-src 'none'",
