@@ -7,8 +7,8 @@
 // prompt and response shape ({title, description}) are unchanged — only the
 // transport switched.
 //
-// The old src/lib/gemini.ts is left in place for one week as a rollback
-// path: switching the imports back is a one-line revert.
+// (The original src/lib/gemini.ts was removed 2026-05-18 once the
+// migration was stable; the rollback-window kept it through end-of-May.)
 
 import Anthropic from '@anthropic-ai/sdk';
 
