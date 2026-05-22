@@ -25,9 +25,11 @@ function compress(file: File, maxW = 800, quality = 0.7): Promise<Blob> {
 export default function CameraCapture({
   onDone,
   onBack,
+  allowGallery = false,
 }: {
   onDone: (url: string) => void;
   onBack: () => void;
+  allowGallery?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
