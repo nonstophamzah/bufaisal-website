@@ -84,7 +84,7 @@ export default function CameraCapture({
             {uploading ? 'Uploading...' : 'Use Photo'}
           </button>
         </div>
-        <input ref={inputRef} type="file" accept="image/*" capture="environment" onChange={handleCapture} className="hidden" />
+        <input ref={inputRef} type="file" accept="image/*" capture={allowGallery ? undefined : 'environment'} onChange={handleCapture} className="hidden" />
       </div>
     );
   }
@@ -101,7 +101,7 @@ export default function CameraCapture({
       <p className="text-gray-500 text-sm mb-4">Tap to open camera</p>
       <button onClick={onBack} className="text-gray-500 text-base py-3 px-6 min-h-[48px]">Cancel</button>
       {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
-      <input ref={inputRef} type="file" accept="image/*" capture="environment" onChange={handleCapture} className="hidden" />
+      <input ref={inputRef} type="file" accept="image/*" capture={allowGallery ? undefined : 'environment'} onChange={handleCapture} className="hidden" />
     </div>
   );
 }
