@@ -16,9 +16,12 @@ export interface CarpenterWorker {
   active: boolean;
 }
 
+export type JobType = 'USED' | 'NEW';
+
 export interface CarpenterRate {
   id: string;
   item_type: string;
+  job_type: JobType;
   rate_aed: number;
   active: boolean;
   updated_at: string;
@@ -30,6 +33,7 @@ export interface CarpenterItem {
   worker_name: string;
   shop: string;
   item_type: string;
+  job_type: JobType;
   rate_at_log: number;
   before_photo_url: string;
   after_photo_url: string;
@@ -51,8 +55,11 @@ export async function getWorkers(): Promise<CarpenterWorker[]> {
   return data.workers || [];
 }
 
-export async function getRates(): Promise<CarpenterRate[]> {
-  const data = await carpenterApi<{ rates: CarpenterRate[] }>({ action: 'get_rates' });
+export async function getRates(jobType?: JobType): Promise<CarpenterRate[]> {
+  const data = await carpenterApi<{ rates: CarpenterRate[] }>({
+    action: 'get_rates',
+    ...(jobType ? { job_type: jobType } : {}),
+  });
   return data.rates || [];
 }
 
@@ -64,6 +71,7 @@ export async function getAllRates(): Promise<CarpenterRate[]> {
 export async function insertItem(item: {
   worker_id: string;
   item_type: string;
+  job_type: JobType;
   before_photo_url: string;
   after_photo_url: string;
 }): Promise<{ success?: boolean; error?: string }> {
@@ -75,6 +83,10 @@ export async function getItems(opts?: { since?: string; limit?: number }): Promi
   return data.items || [];
 }
 
-export async function updateRate(item_type: string, rate_aed: number): Promise<{ success?: boolean; error?: string }> {
-  return carpenterApi({ action: 'update_rate', item_type, rate_aed });
+export async function updateRate(
+  item_type: string,
+  job_type: JobType,
+  rate_aed: number,
+): Promise<{ success?: boolean; error?: string }> {
+  return carpenterApi({ action: 'update_rate', item_type, job_type, rate_aed });
 }

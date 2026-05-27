@@ -14,8 +14,14 @@ import {
 // Note: worker_name, shop, rate_at_log are derived SERVER-SIDE from the
 // worker_id + item_type lookups, never trusted from the client.
 const ALLOWED_INSERT_FIELDS = [
-  'worker_id', 'item_type', 'before_photo_url', 'after_photo_url',
+  'worker_id', 'item_type', 'job_type', 'before_photo_url', 'after_photo_url',
 ];
+
+const VALID_JOB_TYPES = ['USED', 'NEW'] as const;
+type JobType = (typeof VALID_JOB_TYPES)[number];
+function isJobType(v: unknown): v is JobType {
+  return typeof v === 'string' && (VALID_JOB_TYPES as readonly string[]).includes(v);
+}
 
 function sanitizeFields(obj: Record<string, unknown>, allowedKeys: string[]): Record<string, unknown> {
   const safe: Record<string, unknown> = {};
@@ -107,11 +113,16 @@ export async function POST(request: NextRequest) {
 
     // ── Rates (active only — for the log/page tap tiles) ────────────
     if (action === 'get_rates') {
-      const { data, error } = await supabaseAdmin
+      let query = supabaseAdmin
         .from('carpenter_rates')
-        .select('id, item_type, rate_aed, active, updated_at')
+        .select('id, item_type, job_type, rate_aed, active, updated_at')
         .eq('active', true)
+        .order('job_type')
         .order('item_type');
+      if (isJobType(body.job_type)) {
+        query = query.eq('job_type', body.job_type);
+      }
+      const { data, error } = await query;
       if (error) {
         void logApiError(request, 500, { route: '/api/carpenter-tracker', error_message: error.message });
         return NextResponse.json({ error: error.message }, { status: 500 });
@@ -123,7 +134,8 @@ export async function POST(request: NextRequest) {
     if (action === 'get_all_rates') {
       const { data, error } = await supabaseAdmin
         .from('carpenter_rates')
-        .select('id, item_type, rate_aed, active, updated_at')
+        .select('id, item_type, job_type, rate_aed, active, updated_at')
+        .order('job_type')
         .order('item_type');
       if (error) {
         void logApiError(request, 500, { route: '/api/carpenter-tracker', error_message: error.message });
@@ -137,6 +149,7 @@ export async function POST(request: NextRequest) {
       const safe = sanitizeFields(body.item || {}, ALLOWED_INSERT_FIELDS);
       const worker_id = safe.worker_id as string | undefined;
       const item_type = safe.item_type as string | undefined;
+      const job_type_raw = safe.job_type;
       const before_photo_url = safe.before_photo_url as string | undefined;
       const after_photo_url = safe.after_photo_url as string | undefined;
 
@@ -146,6 +159,10 @@ export async function POST(request: NextRequest) {
       if (!item_type || typeof item_type !== 'string') {
         return NextResponse.json({ error: 'Missing item_type' }, { status: 400 });
       }
+      if (!isJobType(job_type_raw)) {
+        return NextResponse.json({ error: 'Missing or invalid job_type' }, { status: 400 });
+      }
+      const job_type: JobType = job_type_raw;
       if (!before_photo_url || typeof before_photo_url !== 'string' || !before_photo_url.startsWith('http')) {
         return NextResponse.json({ error: 'Before photo is required' }, { status: 400 });
       }
@@ -166,10 +183,11 @@ export async function POST(request: NextRequest) {
       if (!worker) return NextResponse.json({ error: 'Worker not found' }, { status: 404 });
       if (!worker.active) return NextResponse.json({ error: 'Worker is inactive' }, { status: 403 });
 
-      // Look up current rate — snapshot into rate_at_log
+      // Look up current rate by (job_type, item_type) — snapshot into rate_at_log
       const { data: rate, error: rErr } = await supabaseAdmin
         .from('carpenter_rates')
         .select('rate_aed, active')
+        .eq('job_type', job_type)
         .eq('item_type', item_type)
         .maybeSingle();
       if (rErr) {
@@ -184,6 +202,7 @@ export async function POST(request: NextRequest) {
         worker_name: worker.name,
         shop: worker.shop,
         item_type,
+        job_type,
         rate_at_log: rate.rate_aed,
         before_photo_url,
         after_photo_url,
@@ -199,7 +218,7 @@ export async function POST(request: NextRequest) {
         ip,
         user_name: worker.name,
         route: '/api/carpenter-tracker',
-        details: { action: 'insert_item', item_type, shop: worker.shop },
+        details: { action: 'insert_item', item_type, job_type, shop: worker.shop },
       });
 
       return NextResponse.json({ success: true });
@@ -227,9 +246,13 @@ export async function POST(request: NextRequest) {
     // ── Update a single rate (manager only) ──────────────────────────
     if (action === 'update_rate') {
       const item_type = body.item_type;
+      const job_type = body.job_type;
       const rate_aed = body.rate_aed;
       if (!item_type || typeof item_type !== 'string') {
         return NextResponse.json({ error: 'Missing item_type' }, { status: 400 });
+      }
+      if (!isJobType(job_type)) {
+        return NextResponse.json({ error: 'Missing or invalid job_type' }, { status: 400 });
       }
       if (!Number.isInteger(rate_aed) || (rate_aed as number) < 0 || (rate_aed as number) > 10000) {
         return NextResponse.json({ error: 'Invalid rate' }, { status: 400 });
@@ -237,6 +260,7 @@ export async function POST(request: NextRequest) {
       const { error } = await supabaseAdmin
         .from('carpenter_rates')
         .update({ rate_aed })
+        .eq('job_type', job_type)
         .eq('item_type', item_type);
       if (error) {
         void logApiError(request, 500, { route: '/api/carpenter-tracker', error_message: error.message });
@@ -247,7 +271,7 @@ export async function POST(request: NextRequest) {
         severity: 'info',
         ip,
         route: '/api/carpenter-tracker',
-        details: { action: 'update_rate', item_type, rate_aed },
+        details: { action: 'update_rate', item_type, job_type, rate_aed },
       });
       return NextResponse.json({ success: true });
     }

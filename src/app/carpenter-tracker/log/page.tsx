@@ -6,9 +6,9 @@ import { ArrowLeft, ArrowRight, Check, Loader2, Camera as CameraIcon, RotateCcw 
 import CameraCapture from '@/app/appliances/components/Camera';
 import SuccessFlash from '@/app/appliances/components/SuccessFlash';
 import ErrorFlash from '@/app/appliances/components/ErrorFlash';
-import { getRates, insertItem, type CarpenterRate } from '@/lib/carpenter-tracker-api';
+import { getRates, insertItem, type CarpenterRate, type JobType } from '@/lib/carpenter-tracker-api';
 
-type Screen = 'item' | 'photos' | 'confirm';
+type Screen = 'jobType' | 'item' | 'photos' | 'confirm';
 type Slot = 'before' | 'after';
 
 interface WorkerSession {
@@ -20,7 +20,7 @@ interface WorkerSession {
 export default function CarpenterLogPage() {
   const router = useRouter();
   const [worker, setWorker] = useState<WorkerSession | null>(null);
-  const [screen, setScreen] = useState<Screen>('item');
+  const [screen, setScreen] = useState<Screen>('jobType');
   const [activeSlot, setActiveSlot] = useState<Slot | null>(null);
   const [saving, setSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -30,6 +30,7 @@ export default function CarpenterLogPage() {
   const [ratesLoading, setRatesLoading] = useState(true);
 
   // Form
+  const [jobType, setJobType] = useState<JobType | ''>('');
   const [itemType, setItemType] = useState('');
   const [beforeUrl, setBeforeUrl] = useState('');
   const [afterUrl, setAfterUrl] = useState('');
@@ -49,8 +50,9 @@ export default function CarpenterLogPage() {
   }, []);
 
   const reset = useCallback(() => {
-    setScreen('item');
+    setScreen('jobType');
     setActiveSlot(null);
+    setJobType('');
     setItemType('');
     setBeforeUrl('');
     setAfterUrl('');
@@ -58,16 +60,18 @@ export default function CarpenterLogPage() {
     setErrorMsg('');
   }, []);
 
-  const currentRate = rates.find((r) => r.item_type === itemType)?.rate_aed ?? 0;
+  const filteredRates = rates.filter((r) => r.job_type === jobType);
+  const currentRate = filteredRates.find((r) => r.item_type === itemType)?.rate_aed ?? 0;
 
   const handleConfirm = useCallback(async () => {
-    if (!worker) return;
+    if (!worker || !jobType) return;
     setSaving(true);
     setErrorMsg('');
 
     const result = await insertItem({
       worker_id: worker.id,
       item_type: itemType,
+      job_type: jobType,
       before_photo_url: beforeUrl,
       after_photo_url: afterUrl,
     });
@@ -80,7 +84,7 @@ export default function CarpenterLogPage() {
 
     setSaving(false);
     setShowSuccess(true);
-  }, [worker, itemType, beforeUrl, afterUrl]);
+  }, [worker, jobType, itemType, beforeUrl, afterUrl]);
 
   if (!worker) return null;
 
@@ -141,6 +145,7 @@ export default function CarpenterLogPage() {
           {[
             ['Carpenter', worker.name],
             ['Shop', worker.shop],
+            ['Job', jobType],
             ['Item', itemType],
             ['Earned', `AED ${currentRate}`],
           ].map(([label, val]) => (
@@ -202,15 +207,62 @@ export default function CarpenterLogPage() {
     );
   }
 
+  // ── SCREEN 0: Job type (USED / NEW) ──
+  if (screen === 'jobType') {
+    return (
+      <div className="px-4 pt-4 pb-24 min-h-[calc(100vh-56px)] max-w-full overflow-x-hidden">
+        <div className="flex items-baseline justify-between mb-4">
+          <p className="font-heading text-2xl text-gray-400">{worker.name.toUpperCase()}</p>
+          <p className="font-heading text-base text-gray-400">SHOP {worker.shop}</p>
+        </div>
+
+        <h1 className="font-heading text-3xl mb-6">WHAT DID YOU MAKE?</h1>
+
+        <div className="grid grid-cols-2 gap-3">
+          {(['USED', 'NEW'] as JobType[]).map((j) => {
+            const selected = jobType === j;
+            return (
+              <button
+                key={j}
+                onClick={() => {
+                  setJobType(j);
+                  setItemType('');
+                  setScreen('item');
+                }}
+                className={`py-10 px-3 rounded-xl active:scale-95 transition-all flex flex-col items-center justify-center gap-1 min-h-[160px] ${
+                  selected ? 'bg-black ring-2 ring-yellow' : 'bg-gray-200'
+                }`}
+              >
+                <span className={`font-heading text-3xl ${selected ? 'text-yellow' : ''}`}>
+                  {j}
+                </span>
+                <span className={`text-xs font-bold ${selected ? 'text-yellow/80' : 'text-gray-600'}`}>
+                  {j === 'USED' ? 'REMAKE WORK' : 'BUILT FROM SCRATCH'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   // ── SCREEN 1: Item type ──
   return (
     <div className="px-4 pt-4 pb-44 min-h-[calc(100vh-56px)] max-w-full overflow-x-hidden">
+      <button
+        onClick={() => setScreen('jobType')}
+        className="flex items-center gap-1 text-gray-500 mb-4 min-h-[48px]"
+      >
+        <ArrowLeft size={20} /> Back
+      </button>
+
       <div className="flex items-baseline justify-between mb-4">
         <p className="font-heading text-2xl text-gray-400">{worker.name.toUpperCase()}</p>
         <p className="font-heading text-base text-gray-400">SHOP {worker.shop}</p>
       </div>
 
-      <h1 className="font-heading text-3xl mb-6">LOG ITEM — <span className="text-green-500">NEW</span></h1>
+      <h1 className="font-heading text-3xl mb-6">LOG ITEM — <span className="text-green-500">{jobType}</span></h1>
 
       {ratesLoading ? (
         <div className="flex-1 flex items-center justify-center py-20">
@@ -218,7 +270,7 @@ export default function CarpenterLogPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3">
-          {rates.map((r) => {
+          {filteredRates.map((r) => {
             const selected = itemType === r.item_type;
             return (
               <button

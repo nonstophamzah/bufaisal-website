@@ -17,7 +17,10 @@ import {
   updateRate,
   type CarpenterItem,
   type CarpenterRate,
+  type JobType,
 } from '@/lib/carpenter-tracker-api';
+
+const JOB_TYPES: JobType[] = ['USED', 'NEW'];
 
 type DateFilter = 'Today' | 'Yesterday' | 'This Week' | 'All Time';
 const DATE_FILTERS: DateFilter[] = ['Today', 'Yesterday', 'This Week', 'All Time'];
@@ -42,14 +45,24 @@ function endFor(filter: DateFilter): Date | null {
   return null;
 }
 
+interface JobTypeSlice {
+  count: number;
+  total: number;
+  by_type: Record<string, { count: number; total: number }>;
+}
+
 interface WorkerSummary {
   worker_id: string;
   worker_name: string;
   shop: string;
   count: number;
   total_aed: number;
-  by_type: Record<string, { count: number; total: number }>;
+  by_job_type: Record<JobType, JobTypeSlice>;
   items: CarpenterItem[];
+}
+
+function emptySlice(): JobTypeSlice {
+  return { count: 0, total: 0, by_type: {} };
 }
 
 export default function CarpenterManagerDashboard() {
@@ -61,7 +74,7 @@ export default function CarpenterManagerDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateFilter>('Today');
   const [expandedWorker, setExpandedWorker] = useState<string | null>(null);
-  const [editRateFor, setEditRateFor] = useState<string | null>(null);
+  const [editRateFor, setEditRateFor] = useState<{ item_type: string; job_type: JobType } | null>(null);
   const [editRateValue, setEditRateValue] = useState('');
   const [savingRate, setSavingRate] = useState(false);
   const [toast, setToast] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
@@ -110,7 +123,7 @@ export default function CarpenterManagerDashboard() {
     });
   }, [items, dateFilter]);
 
-  // ── Group by worker ──
+  // ── Group by worker, then by job_type ──
   const summaries: WorkerSummary[] = useMemo(() => {
     const byWorker = new Map<string, WorkerSummary>();
     for (const it of filteredItems) {
@@ -122,17 +135,22 @@ export default function CarpenterManagerDashboard() {
           shop: it.shop,
           count: 0,
           total_aed: 0,
-          by_type: {},
+          by_job_type: { USED: emptySlice(), NEW: emptySlice() },
           items: [],
         };
         byWorker.set(it.worker_id, s);
       }
+      // Legacy rows with NULL job_type (shouldn't exist post-migration, but defend).
+      const jt: JobType = it.job_type === 'NEW' ? 'NEW' : 'USED';
       s.count += 1;
       s.total_aed += it.rate_at_log;
-      const t = s.by_type[it.item_type] || { count: 0, total: 0 };
+      const slice = s.by_job_type[jt];
+      slice.count += 1;
+      slice.total += it.rate_at_log;
+      const t = slice.by_type[it.item_type] || { count: 0, total: 0 };
       t.count += 1;
       t.total += it.rate_at_log;
-      s.by_type[it.item_type] = t;
+      slice.by_type[it.item_type] = t;
       s.items.push(it);
     }
     return Array.from(byWorker.values()).sort((a, b) => b.total_aed - a.total_aed);
@@ -144,7 +162,7 @@ export default function CarpenterManagerDashboard() {
   );
 
   const startEditRate = (rate: CarpenterRate) => {
-    setEditRateFor(rate.item_type);
+    setEditRateFor({ item_type: rate.item_type, job_type: rate.job_type });
     setEditRateValue(String(rate.rate_aed));
   };
 
@@ -153,14 +171,14 @@ export default function CarpenterManagerDashboard() {
     setEditRateValue('');
   };
 
-  const saveRate = async (item_type: string) => {
+  const saveRate = async (item_type: string, job_type: JobType) => {
     const n = parseInt(editRateValue, 10);
     if (!Number.isInteger(n) || n < 0 || n > 10000) {
       showToast('err', 'Enter a number between 0 and 10000');
       return;
     }
     setSavingRate(true);
-    const result = await updateRate(item_type, n);
+    const result = await updateRate(item_type, job_type, n);
     setSavingRate(false);
     if (result.error) {
       showToast('err', result.error);
@@ -263,20 +281,36 @@ export default function CarpenterManagerDashboard() {
 
                 {isOpen && (
                   <div className="border-t border-gray-800 px-4 py-4 space-y-4 bg-[#141414]">
-                    {/* Breakdown */}
+                    {/* Breakdown — split by job_type */}
                     <div>
                       <p className="text-xs uppercase font-bold text-gray-500 mb-2">BREAKDOWN</p>
-                      <div className="space-y-1.5">
-                        {Object.entries(s.by_type)
-                          .sort((a, b) => b[1].total - a[1].total)
-                          .map(([type, agg]) => (
-                            <div key={type} className="flex justify-between text-sm">
-                              <span className="text-gray-300">
-                                {type} <span className="text-gray-500">× {agg.count}</span>
-                              </span>
-                              <span className="font-bold text-white">AED {agg.total}</span>
+                      <div className="space-y-3">
+                        {JOB_TYPES.map((jt) => {
+                          const slice = s.by_job_type[jt];
+                          if (slice.count === 0) return null;
+                          return (
+                            <div key={jt}>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="font-heading text-xs text-yellow tracking-wider">{jt}</span>
+                                <span className="text-xs font-bold text-white">
+                                  {slice.count} item{slice.count === 1 ? '' : 's'} · AED {slice.total}
+                                </span>
+                              </div>
+                              <div className="space-y-1 pl-3 border-l-2 border-gray-800">
+                                {Object.entries(slice.by_type)
+                                  .sort((a, b) => b[1].total - a[1].total)
+                                  .map(([type, agg]) => (
+                                    <div key={type} className="flex justify-between text-sm">
+                                      <span className="text-gray-300">
+                                        {type} <span className="text-gray-500">× {agg.count}</span>
+                                      </span>
+                                      <span className="font-bold text-white">AED {agg.total}</span>
+                                    </div>
+                                  ))}
+                              </div>
                             </div>
-                          ))}
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -287,8 +321,13 @@ export default function CarpenterManagerDashboard() {
                         {s.items.map((it) => (
                           <div key={it.id} className="bg-[#1a1a1a] rounded-xl p-3">
                             <div className="flex justify-between items-baseline mb-2">
-                              <p className="font-bold text-sm text-white">{it.item_type}</p>
-                              <p className="text-yellow font-bold text-sm">AED {it.rate_at_log}</p>
+                              <div className="flex items-baseline gap-2 min-w-0">
+                                <span className="font-heading text-[10px] text-yellow tracking-wider flex-shrink-0">
+                                  {it.job_type === 'NEW' ? 'NEW' : 'USED'}
+                                </span>
+                                <p className="font-bold text-sm text-white truncate">{it.item_type}</p>
+                              </div>
+                              <p className="text-yellow font-bold text-sm flex-shrink-0">AED {it.rate_at_log}</p>
                             </div>
                             <p className="text-xs text-gray-500 mb-2">
                               {new Date(it.created_at).toLocaleString('en-GB', {
@@ -314,63 +353,79 @@ export default function CarpenterManagerDashboard() {
         )}
       </div>
 
-      {/* Rates section */}
-      <div className="px-4 mt-8">
-        <h2 className="font-heading text-xl text-white mb-2">RATES</h2>
-        <p className="text-xs text-gray-500 mb-3">
-          Changing a rate does NOT affect past items — they keep the rate they were logged at.
-        </p>
-        <div className="bg-[#1a1a1a] rounded-2xl overflow-hidden">
-          {rates.map((r, idx) => (
-            <div
-              key={r.id}
-              className={`px-4 py-3 flex items-center justify-between ${
-                idx > 0 ? 'border-t border-gray-800' : ''
-              }`}
-            >
-              <span className="font-bold text-sm text-white flex-1">{r.item_type}</span>
-
-              {editRateFor === r.item_type ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    value={editRateValue}
-                    onChange={(e) => setEditRateValue(e.target.value)}
-                    className="w-20 px-2 py-2 text-base text-center bg-[#0d0d0d] border-2 border-yellow rounded-lg text-white focus:outline-none"
-                    autoFocus
-                  />
-                  <button
-                    onClick={() => saveRate(r.item_type)}
-                    disabled={savingRate}
-                    className="p-2 rounded-lg bg-green-500 text-white active:scale-95 disabled:opacity-50"
-                    aria-label="Save"
-                  >
-                    {savingRate ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} strokeWidth={3} />}
-                  </button>
-                  <button
-                    onClick={cancelEditRate}
-                    className="p-2 rounded-lg bg-gray-700 text-white active:scale-95"
-                    aria-label="Cancel"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <span className="font-heading text-lg text-yellow">AED {r.rate_aed}</span>
-                  <button
-                    onClick={() => startEditRate(r)}
-                    className="p-2 rounded-lg bg-[#0d0d0d] text-gray-400 active:scale-95"
-                    aria-label="Edit rate"
-                  >
-                    <Pencil size={14} />
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
+      {/* Rates section — grouped by job_type */}
+      <div className="px-4 mt-8 space-y-6">
+        <div>
+          <h2 className="font-heading text-xl text-white mb-2">RATES</h2>
+          <p className="text-xs text-gray-500">
+            Changing a rate does NOT affect past items — they keep the rate they were logged at.
+          </p>
         </div>
+
+        {JOB_TYPES.map((jt) => {
+          const rows = rates.filter((r) => r.job_type === jt);
+          if (rows.length === 0) return null;
+          return (
+            <div key={jt}>
+              <p className="font-heading text-sm text-yellow tracking-wider mb-2">{jt}</p>
+              <div className="bg-[#1a1a1a] rounded-2xl overflow-hidden">
+                {rows.map((r, idx) => {
+                  const isEditing =
+                    editRateFor?.item_type === r.item_type && editRateFor?.job_type === r.job_type;
+                  return (
+                    <div
+                      key={r.id}
+                      className={`px-4 py-3 flex items-center justify-between ${
+                        idx > 0 ? 'border-t border-gray-800' : ''
+                      }`}
+                    >
+                      <span className="font-bold text-sm text-white flex-1">{r.item_type}</span>
+
+                      {isEditing ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            value={editRateValue}
+                            onChange={(e) => setEditRateValue(e.target.value)}
+                            className="w-20 px-2 py-2 text-base text-center bg-[#0d0d0d] border-2 border-yellow rounded-lg text-white focus:outline-none"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => saveRate(r.item_type, r.job_type)}
+                            disabled={savingRate}
+                            className="p-2 rounded-lg bg-green-500 text-white active:scale-95 disabled:opacity-50"
+                            aria-label="Save"
+                          >
+                            {savingRate ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} strokeWidth={3} />}
+                          </button>
+                          <button
+                            onClick={cancelEditRate}
+                            className="p-2 rounded-lg bg-gray-700 text-white active:scale-95"
+                            aria-label="Cancel"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <span className="font-heading text-lg text-yellow">AED {r.rate_aed}</span>
+                          <button
+                            onClick={() => startEditRate(r)}
+                            className="p-2 rounded-lg bg-[#0d0d0d] text-gray-400 active:scale-95"
+                            aria-label="Edit rate"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
