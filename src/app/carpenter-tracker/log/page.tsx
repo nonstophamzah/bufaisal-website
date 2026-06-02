@@ -49,18 +49,6 @@ export default function CarpenterLogPage() {
     })();
   }, []);
 
-  const reset = useCallback(() => {
-    setScreen('jobType');
-    setActiveSlot(null);
-    setJobType('');
-    setItemType('');
-    setBeforeUrl('');
-    setAfterUrl('');
-    setReceiptId(null);
-    setSubmittedAt(null);
-    setErrorMsg('');
-  }, []);
-
   const filteredRates = rates.filter((r) => r.job_type === jobType);
   const currentRate = filteredRates.find((r) => r.item_type === itemType)?.rate_aed ?? 0;
 
