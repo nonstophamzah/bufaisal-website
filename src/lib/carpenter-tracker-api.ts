@@ -74,7 +74,7 @@ export async function insertItem(item: {
   job_type: JobType;
   before_photo_url: string;
   after_photo_url: string;
-}): Promise<{ success?: boolean; error?: string }> {
+}): Promise<{ success?: boolean; error?: string; id?: string }> {
   return carpenterApi({ action: 'insert_item', item });
 }
 

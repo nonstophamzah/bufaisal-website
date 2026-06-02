@@ -197,16 +197,20 @@ export async function POST(request: NextRequest) {
       if (!rate) return NextResponse.json({ error: 'Item type not found' }, { status: 404 });
       if (!rate.active) return NextResponse.json({ error: 'Item type is inactive' }, { status: 403 });
 
-      const { error: insErr } = await supabaseAdmin.from('carpenter_items').insert({
-        worker_id: worker.id,
-        worker_name: worker.name,
-        shop: worker.shop,
-        item_type,
-        job_type,
-        rate_at_log: rate.rate_aed,
-        before_photo_url,
-        after_photo_url,
-      });
+      const { data: inserted, error: insErr } = await supabaseAdmin
+        .from('carpenter_items')
+        .insert({
+          worker_id: worker.id,
+          worker_name: worker.name,
+          shop: worker.shop,
+          item_type,
+          job_type,
+          rate_at_log: rate.rate_aed,
+          before_photo_url,
+          after_photo_url,
+        })
+        .select('id')
+        .single();
       if (insErr) {
         void logApiError(request, 500, { route: '/api/carpenter-tracker', error_message: insErr.message });
         return NextResponse.json({ error: insErr.message }, { status: 500 });
@@ -221,7 +225,7 @@ export async function POST(request: NextRequest) {
         details: { action: 'insert_item', item_type, job_type, shop: worker.shop },
       });
 
-      return NextResponse.json({ success: true });
+      return NextResponse.json({ success: true, id: inserted.id });
     }
 
     // ── Items list (manager dashboard) ───────────────────────────────
