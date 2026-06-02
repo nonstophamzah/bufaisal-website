@@ -29,9 +29,12 @@ export default function CameraCapture({
 }: {
   onDone: (url: string) => void;
   onBack: () => void;
+  /** When true, shows a secondary "Choose from gallery" button. The primary
+   *  flow is always the live rear camera; gallery is only a fallback. */
   allowGallery?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -84,7 +87,7 @@ export default function CameraCapture({
             {uploading ? 'Uploading...' : 'Use Photo'}
           </button>
         </div>
-        <input ref={inputRef} type="file" accept="image/*" capture={allowGallery ? undefined : 'environment'} onChange={handleCapture} className="hidden" />
+        <input ref={inputRef} type="file" accept="image/*" capture="environment" onChange={handleCapture} className="hidden" />
       </div>
     );
   }
@@ -99,9 +102,22 @@ export default function CameraCapture({
         <CameraIcon size={64} className="text-black" />
       </button>
       <p className="text-gray-500 text-sm mb-4">Tap to open camera</p>
+      {allowGallery && (
+        <button
+          onClick={() => galleryInputRef.current?.click()}
+          className="text-gray-500 text-sm underline py-2 px-4 min-h-[44px]"
+        >
+          Choose from gallery
+        </button>
+      )}
       <button onClick={onBack} className="text-gray-500 text-base py-3 px-6 min-h-[48px]">Cancel</button>
       {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
-      <input ref={inputRef} type="file" accept="image/*" capture={allowGallery ? undefined : 'environment'} onChange={handleCapture} className="hidden" />
+      {/* Primary: live rear camera */}
+      <input ref={inputRef} type="file" accept="image/*" capture="environment" onChange={handleCapture} className="hidden" />
+      {/* Secondary fallback: gallery picker (no capture attribute) */}
+      {allowGallery && (
+        <input ref={galleryInputRef} type="file" accept="image/*" onChange={handleCapture} className="hidden" />
+      )}
     </div>
   );
 }

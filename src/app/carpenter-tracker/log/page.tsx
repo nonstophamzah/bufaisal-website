@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Check, Loader2, Camera as CameraIcon, RotateCcw } from 'lucide-react';
 import CameraCapture from '@/app/appliances/components/Camera';
-import SuccessFlash from '@/app/appliances/components/SuccessFlash';
 import ErrorFlash from '@/app/appliances/components/ErrorFlash';
 import { getRates, insertItem, type CarpenterRate, type JobType } from '@/lib/carpenter-tracker-api';
 
@@ -23,7 +22,8 @@ export default function CarpenterLogPage() {
   const [screen, setScreen] = useState<Screen>('jobType');
   const [activeSlot, setActiveSlot] = useState<Slot | null>(null);
   const [saving, setSaving] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [receiptId, setReceiptId] = useState<string | null>(null);
+  const [submittedAt, setSubmittedAt] = useState<Date | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
   const [rates, setRates] = useState<CarpenterRate[]>([]);
@@ -56,7 +56,8 @@ export default function CarpenterLogPage() {
     setItemType('');
     setBeforeUrl('');
     setAfterUrl('');
-    setShowSuccess(false);
+    setReceiptId(null);
+    setSubmittedAt(null);
     setErrorMsg('');
   }, []);
 
@@ -82,14 +83,29 @@ export default function CarpenterLogPage() {
       return;
     }
 
+    setReceiptId(result.id ?? '');
+    setSubmittedAt(new Date());
     setSaving(false);
-    setShowSuccess(true);
   }, [worker, jobType, itemType, beforeUrl, afterUrl]);
 
   if (!worker) return null;
 
-  if (showSuccess) {
-    return <SuccessFlash message="Item logged!" onDone={reset} />;
+  // ── RECEIPT: shown after a successful submit, until carpenter taps Done ──
+  if (submittedAt) {
+    return (
+      <Receipt
+        workerName={worker.name}
+        shop={worker.shop}
+        submittedAt={submittedAt}
+        itemType={itemType}
+        jobType={jobType || ''}
+        rate={currentRate}
+        itemId={receiptId ?? ''}
+        beforeUrl={beforeUrl}
+        afterUrl={afterUrl}
+        onDone={() => router.replace('/carpenter-tracker/select')}
+      />
+    );
   }
 
   if (errorMsg) {
@@ -310,6 +326,105 @@ export default function CarpenterLogPage() {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// "2 Jun 2026, 3:45 PM"
+function formatReceiptDate(d: Date): string {
+  const day = d.getDate();
+  const month = d.toLocaleString('en-US', { month: 'short' });
+  const year = d.getFullYear();
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const ampm = d.getHours() >= 12 ? 'PM' : 'AM';
+  let hour = d.getHours() % 12;
+  if (hour === 0) hour = 12;
+  return `${day} ${month} ${year}, ${hour}:${minutes} ${ampm}`;
+}
+
+function Receipt({
+  workerName,
+  shop,
+  submittedAt,
+  itemType,
+  jobType,
+  rate,
+  itemId,
+  beforeUrl,
+  afterUrl,
+  onDone,
+}: {
+  workerName: string;
+  shop: string;
+  submittedAt: Date;
+  itemType: string;
+  jobType: string;
+  rate: number;
+  itemId: string;
+  beforeUrl: string;
+  afterUrl: string;
+  onDone: () => void;
+}) {
+  const jobRef = itemId ? itemId.slice(-8).toUpperCase() : '—';
+  const photos = [
+    { label: 'BEFORE', url: beforeUrl },
+    { label: 'AFTER', url: afterUrl },
+  ].filter((p) => p.url);
+
+  return (
+    <div className="px-4 pt-6 pb-24 min-h-[calc(100vh-56px)] max-w-full overflow-x-hidden flex flex-col items-center">
+      {/* Receipt card — the carpenter screenshots this */}
+      <div className="w-full max-w-sm bg-white rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm">
+        {/* Header bar */}
+        <div className="px-5 py-4 text-center" style={{ backgroundColor: '#F9D923' }}>
+          <p className="font-heading text-2xl font-bold text-black tracking-wide">BU FAISAL RECEIPT</p>
+        </div>
+
+        <div className="px-5 py-5 space-y-2">
+          {[
+            ['Carpenter', workerName],
+            ['Shop', shop],
+            ['Date', formatReceiptDate(submittedAt)],
+            ['Item', itemType],
+            ['Job', jobType],
+            ['Earned', `${rate} AED`],
+            ['Job ref', jobRef],
+          ].map(([label, val]) => (
+            <div key={label} className="flex justify-between gap-3 py-2 border-b border-gray-100">
+              <span className="text-sm text-gray-500">{label}</span>
+              <span className="text-sm font-semibold text-right">{val}</span>
+            </div>
+          ))}
+
+          {photos.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 pt-3">
+              {photos.map((p) => (
+                <div key={p.label}>
+                  <p className="text-xs text-gray-500 mb-1 font-bold">{p.label}</p>
+                  <div className="aspect-square rounded-xl overflow-hidden bg-gray-200">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={p.url} alt={p.label} className="w-full h-full object-cover" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-3 border-t border-gray-100 text-center">
+          <p className="text-xs text-gray-500">Bu Faisal General Trading — Ajman</p>
+        </div>
+      </div>
+
+      <p className="text-xs text-gray-400 mt-4 text-center">Press and hold to save to your photos.</p>
+
+      <button
+        onClick={onDone}
+        className="w-full max-w-sm mt-6 py-5 rounded-2xl bg-black text-white font-heading text-2xl flex items-center justify-center gap-2 active:scale-95 transition-transform"
+      >
+        DONE
+      </button>
     </div>
   );
 }
