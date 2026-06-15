@@ -24,9 +24,11 @@ function pastTenseLabel(action: BulkAction, count: number): string {
         ? 'rejected'
         : action === 'hide'
           ? 'hidden'
-          : action === 'mark_sold'
-            ? 'marked as sold'
-            : action === 'mark_live'
+          : action === 'mark_sold_online'
+            ? 'marked as sold online'
+            : action === 'mark_sold_shop'
+              ? 'marked as sold in shop'
+              : action === 'mark_live'
               ? 'moved to Live'
               : 'deleted';
   return `${count} item${count === 1 ? '' : 's'} ${verb}`;
@@ -90,12 +92,12 @@ export function useAdminItems(tab: Tab, onToast: ToastFn) {
     }
   }, [fetchItems, onToast]);
 
-  const markSold = useCallback(async (id: string) => {
-    const result = await adminApi.markSold(id);
+  const markSold = useCallback(async (id: string, channel: 'online' | 'shop') => {
+    const result = await adminApi.markSold(id, channel);
     if (result.error) {
       onToast('err', result.error);
     } else {
-      onToast('ok', 'Marked as sold');
+      onToast('ok', channel === 'online' ? 'Marked as sold online' : 'Marked as sold in shop');
       fetchItems();
     }
   }, [fetchItems, onToast]);

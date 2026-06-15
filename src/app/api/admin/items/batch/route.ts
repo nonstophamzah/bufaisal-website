@@ -20,13 +20,14 @@ import { verifyAdmin } from '@/lib/verify-admin';
 // the change. The client uses this to power the Undo toast.
 
 const MAX_BATCH = 200;
-const ALLOWED_DELETERS = ['Hamzah', 'Yousuf', 'Ahmed'];
+const ALLOWED_DELETERS = ['Hamzah', 'Yousuf', 'Ahmed', 'Admin'];
 
 type BulkAction =
   | 'approve'
   | 'reject'
   | 'hide'
-  | 'mark_sold'
+  | 'mark_sold_online'
+  | 'mark_sold_shop'
   | 'mark_live'
   | 'delete';
 
@@ -34,7 +35,8 @@ const VALID_ACTIONS: BulkAction[] = [
   'approve',
   'reject',
   'hide',
-  'mark_sold',
+  'mark_sold_online',
+  'mark_sold_shop',
   'mark_live',
   'delete',
 ];
@@ -77,8 +79,10 @@ function updatesForAction(action: BulkAction, adminName: string): Record<string,
       return { is_published: false, is_hidden: true };
     case 'hide':
       return { is_published: false, is_hidden: true };
-    case 'mark_sold':
-      return { is_sold: true };
+    case 'mark_sold_online':
+      return { is_sold: true, sold_channel: 'online' };
+    case 'mark_sold_shop':
+      return { is_sold: true, sold_channel: 'shop' };
     case 'mark_live':
       // Bulk "Move to Live" from the Hidden tab. Force-publish to
       // match the button label; admins who want a soft-unhide can use

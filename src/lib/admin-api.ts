@@ -87,8 +87,14 @@ export async function bulkRejectItems(ids: string[]): Promise<{ error?: string }
   return adminItemsApi({ action: 'bulk_reject', ids });
 }
 
-export async function markSold(id: string): Promise<{ error?: string }> {
-  return adminItemsApi({ action: 'mark_sold', id });
+export async function markSold(
+  id: string,
+  channel: 'online' | 'shop'
+): Promise<{ error?: string }> {
+  return adminItemsApi({
+    action: channel === 'online' ? 'mark_sold_online' : 'mark_sold_shop',
+    id,
+  });
 }
 
 export async function unmarkSold(id: string): Promise<{ error?: string }> {
@@ -121,7 +127,8 @@ export type BulkAction =
   | 'approve'
   | 'reject'
   | 'hide'
-  | 'mark_sold'
+  | 'mark_sold_online'
+  | 'mark_sold_shop'
   | 'mark_live'
   | 'delete';
 

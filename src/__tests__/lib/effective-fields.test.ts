@@ -26,6 +26,7 @@ function row(overrides: Partial<ShopItem> = {}): ShopItem {
     thumbnail_url: null,
     is_published: true,
     is_sold: false,
+    sold_channel: null,
     uploaded_by: null,
     approved_by: null,
     approved_at: null,

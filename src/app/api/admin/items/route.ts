@@ -107,13 +107,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    // ── MARK SOLD ──
-    if (action === 'mark_sold') {
+    // ── MARK SOLD ONLINE ──
+    if (action === 'mark_sold_online') {
       const { id } = body;
       if (!id) return NextResponse.json({ error: 'Missing item id' }, { status: 400 });
       const { error } = await supabaseAdmin
         .from('shop_items')
-        .update({ is_sold: true })
+        .update({ is_sold: true, sold_channel: 'online' })
+        .eq('id', id);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ success: true });
+    }
+
+    // ── MARK SOLD IN SHOP ──
+    if (action === 'mark_sold_shop') {
+      const { id } = body;
+      if (!id) return NextResponse.json({ error: 'Missing item id' }, { status: 400 });
+      const { error } = await supabaseAdmin
+        .from('shop_items')
+        .update({ is_sold: true, sold_channel: 'shop' })
         .eq('id', id);
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json({ success: true });
