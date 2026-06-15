@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Check,
   X,
@@ -13,6 +13,9 @@ import {
   MousePointerClick,
   Sparkles,
   Loader2,
+  Search,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { ShopItem } from '@/lib/supabase';
 import type { BulkAction } from '@/lib/admin-api';
@@ -37,7 +40,8 @@ const BULK_ACTIONS_BY_TAB: Record<ItemsTab, ReadonlyArray<BulkActionSpec>> = {
     { action: 'hide', label: 'Hide', tone: 'neutral' },
   ],
   published: [
-    { action: 'mark_sold', label: 'Mark as Sold', tone: 'primary' },
+    { action: 'mark_sold_online', label: 'Sold Online', tone: 'primary' },
+    { action: 'mark_sold_shop', label: 'Sold in Shop', tone: 'primary' },
     { action: 'hide', label: 'Hide', tone: 'neutral' },
     { action: 'delete', label: 'Delete', tone: 'destructive' },
   ],
@@ -92,7 +96,7 @@ export function AdminItems({
   bulkBusy: BulkAction | null;
   onApprove: (id: string) => Promise<void>;
   onReject: (id: string) => Promise<void>;
-  onMarkSold: (id: string) => Promise<void>;
+  onMarkSold: (id: string, channel: 'online' | 'shop') => Promise<void>;
   onUnsell: (id: string) => Promise<void>;
   onHide: (id: string) => Promise<void>;
   onUnhide: (id: string) => Promise<void>;
@@ -107,22 +111,67 @@ export function AdminItems({
   onRunBulkAction: (action: BulkAction) => Promise<void>;
 }) {
   const [pendingAction, setPendingAction] = useState<BulkActionSpec | null>(null);
+  const [query, setQuery] = useState('');
+  const q = query.trim().toLowerCase();
+
+  // Client-side filter: partial, case-insensitive match on barcode or
+  // item name. No query → the full list passes through unchanged.
+  const filteredItems = useMemo(
+    () =>
+      q
+        ? items.filter(
+            (i) =>
+              (i.item_name ?? '').toLowerCase().includes(q) ||
+              (i.barcode ?? '').toLowerCase().includes(q)
+          )
+        : items,
+    [items, q]
+  );
+
+  // Reset the search when switching tabs.
+  useEffect(() => {
+    setQuery('');
+  }, [tab]);
+
+  // Clear any selection when the search term changes so bulk actions
+  // can never operate on rows hidden by the current filter.
+  useEffect(() => {
+    onClearSelection();
+  }, [q, onClearSelection]);
 
   if (loading) return <Spinner />;
   if (items.length === 0) {
     return <EmptyState text={emptyText(tab)} />;
   }
 
-  const selectedItems = items.filter((i) => selected.has(i.id));
+  const selectedItems = filteredItems.filter((i) => selected.has(i.id));
   const totalValue = selectedItems.reduce(
     (sum, item) => sum + (item.sale_price || 0),
     0
   );
   const actions = BULK_ACTIONS_BY_TAB[tab];
+  const allFilteredSelected =
+    filteredItems.length > 0 && filteredItems.every((i) => selected.has(i.id));
 
   const requestBulk = (spec: BulkActionSpec) => {
     if (selected.size === 0) return;
     setPendingAction(spec);
+  };
+
+  // Select-all is scoped to the filtered view. With no active search
+  // this defers to the parent's original select-all behavior.
+  const handleSelectAll = () => {
+    if (!q) {
+      onToggleSelectAll();
+      return;
+    }
+    if (allFilteredSelected) {
+      onClearSelection();
+    } else {
+      filteredItems.forEach((i) => {
+        if (!selected.has(i.id)) onToggleSelect(i.id);
+      });
+    }
   };
 
   const confirmBulk = async () => {
@@ -134,20 +183,50 @@ export function AdminItems({
 
   return (
     <>
-      <BulkToolbar
-        items={items}
-        selectedCount={selected.size}
-        totalValue={totalValue}
-        allSelected={selected.size === items.length && items.length > 0}
-        actions={actions}
-        bulkBusy={bulkBusy}
-        onToggleSelectAll={onToggleSelectAll}
-        onClearSelection={onClearSelection}
-        onRequestAction={requestBulk}
-      />
+      <div className="relative mb-4">
+        <Search
+          size={16}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+        />
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search by barcode or item name..."
+          aria-label="Search items by barcode or item name"
+          className="w-full pl-9 pr-10 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-yellow"
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => setQuery('')}
+            aria-label="Clear search"
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-black hover:bg-gray-100"
+          >
+            <X size={16} />
+          </button>
+        )}
+      </div>
 
-      <div className="space-y-3">
-        {items.map((item) => (
+      {filteredItems.length > 0 && (
+        <BulkToolbar
+          items={filteredItems}
+          selectedCount={selected.size}
+          totalValue={totalValue}
+          allSelected={allFilteredSelected}
+          actions={actions}
+          bulkBusy={bulkBusy}
+          onToggleSelectAll={handleSelectAll}
+          onClearSelection={onClearSelection}
+          onRequestAction={requestBulk}
+        />
+      )}
+
+      {filteredItems.length === 0 ? (
+        <EmptyState text={`No items match “${query.trim()}”`} />
+      ) : (
+        <div className="space-y-3">
+          {filteredItems.map((item) => (
           <ItemRow
             key={item.id}
             tab={tab}
@@ -169,8 +248,9 @@ export function AdminItems({
             onSaveEdit={onSaveEdit}
             onCancelEdit={onCancelEdit}
           />
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {pendingAction && (
         <BulkConfirmModal
@@ -412,6 +492,117 @@ function BulkConfirmModal({
   );
 }
 
+// Gather the distinct photo URLs already on the item record, best
+// quality first. Drives the row thumbnail's click-to-zoom lightbox.
+function collectPhotos(item: ShopItem): string[] {
+  const urls = [
+    ...(item.image_urls ?? []),
+    item.worker_photo_brand_url,
+    item.worker_photo_2_url,
+    item.worker_photo_3_url,
+    item.worker_photo_barcode_url,
+    item.thumbnail_url,
+  ].filter((u): u is string => typeof u === 'string' && u.length > 0);
+  return Array.from(new Set(urls));
+}
+
+// ────────────────────────────────────────────────────────────────
+// Lightbox — dependency-free full-image overlay. Click backdrop or ✕
+// to close, Escape to close, arrow keys / chevrons to step through
+// multiple photos. Plain <img> (not next/image) so the full-res
+// Cloudinary URL loads unconstrained inside the modal.
+// ────────────────────────────────────────────────────────────────
+
+function PhotoLightbox({
+  photos,
+  index,
+  alt,
+  onClose,
+  onIndexChange,
+}: {
+  photos: string[];
+  index: number;
+  alt: string;
+  onClose: () => void;
+  onIndexChange: (next: number) => void;
+}) {
+  const count = photos.length;
+  const hasMultiple = count > 1;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      else if (e.key === 'ArrowRight' && hasMultiple) {
+        onIndexChange((index + 1) % count);
+      } else if (e.key === 'ArrowLeft' && hasMultiple) {
+        onIndexChange((index - 1 + count) % count);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [index, count, hasMultiple, onClose, onIndexChange]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Item photo"
+      onClick={onClose}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close photo"
+        className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+      >
+        <X size={22} />
+      </button>
+
+      {hasMultiple && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onIndexChange((index - 1 + count) % count);
+          }}
+          aria-label="Previous photo"
+          className="absolute left-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+        >
+          <ChevronLeft size={24} />
+        </button>
+      )}
+
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={photos[index]}
+        alt={alt}
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg"
+      />
+
+      {hasMultiple && (
+        <>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onIndexChange((index + 1) % count);
+            }}
+            aria-label="Next photo"
+            className="absolute right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+          >
+            <ChevronRight size={24} />
+          </button>
+          <span className="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs font-semibold text-white bg-black/50 rounded-full px-3 py-1">
+            {index + 1} / {count}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ────────────────────────────────────────────────────────────────
 // Per-item row. Same per-tab content as before, plus a checkbox
 // column on every tab and a yellow tint when selected.
@@ -446,7 +637,7 @@ function ItemRow({
   onToggleSelect: (id: string) => void;
   onApprove: (id: string) => Promise<void>;
   onReject: (id: string) => Promise<void>;
-  onMarkSold: (id: string) => Promise<void>;
+  onMarkSold: (id: string, channel: 'online' | 'shop') => Promise<void>;
   onUnsell: (id: string) => Promise<void>;
   onHide: (id: string) => Promise<void>;
   onUnhide: (id: string) => Promise<void>;
@@ -457,6 +648,8 @@ function ItemRow({
   onCancelEdit: () => void;
 }) {
   const showEdit = tab === 'pending' || tab === 'published';
+  const photos = collectPhotos(item);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   return (
     <div>
       <div
@@ -471,7 +664,18 @@ function ItemRow({
           aria-label={`Select ${item.item_name}`}
           className="w-4 h-4 accent-yellow flex-shrink-0"
         />
-        <Thumb item={item} />
+        {photos.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => setLightboxIndex(0)}
+            aria-label={`View photo of ${item.item_name}`}
+            className="flex-shrink-0 rounded-lg hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-yellow"
+          >
+            <Thumb item={item} />
+          </button>
+        ) : (
+          <Thumb item={item} />
+        )}
 
         {/* Body — varies by tab */}
         {tab === 'pending' && <PendingBody item={item} />}
@@ -515,11 +719,18 @@ function ItemRow({
                 <Star size={16} />
               </button>
               <button
-                onClick={() => onMarkSold(item.id)}
-                className="px-2.5 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700"
-                title="Mark Sold"
+                onClick={() => onMarkSold(item.id, 'online')}
+                className="px-2.5 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700"
+                title="Mark Sold Online"
               >
-                Sold
+                Sold Online
+              </button>
+              <button
+                onClick={() => onMarkSold(item.id, 'shop')}
+                className="px-2.5 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700"
+                title="Mark Sold in Shop"
+              >
+                Sold in Shop
               </button>
               <button
                 onClick={() => onHide(item.id)}
@@ -585,8 +796,29 @@ function ItemRow({
           showPrice
         />
       )}
+
+      {lightboxIndex !== null && (
+        <PhotoLightbox
+          photos={photos}
+          index={lightboxIndex}
+          alt={item.item_name || 'Item photo'}
+          onClose={() => setLightboxIndex(null)}
+          onIndexChange={setLightboxIndex}
+        />
+      )}
     </div>
   );
+}
+
+// Created-at date shown subtly on each item row, e.g. "09 Apr 2026"
+// (DD MMM YYYY, zero-padded day — distinct from the non-padded fmtDate).
+function fmtCreated(d: string | null) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
 }
 
 function PendingBody({ item }: { item: ShopItem }) {
@@ -635,6 +867,7 @@ function PublishedBody({ item }: { item: ShopItem }) {
       </div>
       <p className="font-heading text-lg leading-tight">AED {item.sale_price}</p>
       <div className="flex items-center gap-3 text-xs text-muted mt-0.5">
+        <span>Added {fmtCreated(item.created_at)}</span>
         {(item.duty_manager || item.uploaded_by) && (
           <span>by {item.duty_manager || item.uploaded_by}</span>
         )}
@@ -661,7 +894,19 @@ function PublishedBody({ item }: { item: ShopItem }) {
 function SoldBody({ item }: { item: ShopItem }) {
   return (
     <div className="flex-1 min-w-0">
-      <h3 className="font-semibold text-sm truncate">{item.item_name}</h3>
+      <div className="flex items-center gap-2 min-w-0">
+        <h3 className="font-semibold text-sm truncate">{item.item_name}</h3>
+        {item.sold_channel === 'online' && (
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 flex-shrink-0">
+            Online
+          </span>
+        )}
+        {item.sold_channel === 'shop' && (
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-100 text-green-700 flex-shrink-0">
+            In Shop
+          </span>
+        )}
+      </div>
       <p className="font-heading text-lg leading-tight">AED {item.sale_price}</p>
       <p className="text-xs text-muted mt-0.5">
         {item.duty_manager || item.uploaded_by
@@ -669,6 +914,7 @@ function SoldBody({ item }: { item: ShopItem }) {
           : ''}
         Sold · {fmtDate(item.updated_at)}
       </p>
+      <p className="text-[11px] text-muted mt-0.5">Added {fmtCreated(item.created_at)}</p>
     </div>
   );
 }
@@ -680,6 +926,7 @@ function HiddenBody({ item }: { item: ShopItem }) {
       <p className="text-xs text-muted">
         {item.category} · {item.shop_source || '—'}
       </p>
+      <p className="text-[11px] text-muted mt-0.5">Added {fmtCreated(item.created_at)}</p>
     </div>
   );
 }

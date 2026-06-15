@@ -31,6 +31,9 @@ export interface ShopItem {
   thumbnail_url: string | null;
   is_published: boolean;
   is_sold: boolean;
+  // Migration 022: how a sold item left — 'online' (marketplace/WhatsApp)
+  // or 'shop' (in-store). NULL on rows sold before the column existed.
+  sold_channel: 'online' | 'shop' | null;
   uploaded_by: string | null;
   approved_by: string | null;
   approved_at: string | null;
