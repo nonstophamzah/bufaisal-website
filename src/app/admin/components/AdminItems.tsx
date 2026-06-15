@@ -114,15 +114,21 @@ export function AdminItems({
   const [query, setQuery] = useState('');
   const q = query.trim().toLowerCase();
 
-  // Client-side filter: partial, case-insensitive match on barcode or
-  // item name. No query → the full list passes through unchanged.
+  // Client-side filter: partial, case-insensitive match on any name
+  // source (published → ai → admin → legacy item_name) or barcode. Most
+  // rows have an empty legacy item_name, so the published_*/ai_*/admin_*
+  // sources are what actually surface a match. No query → full list.
   const filteredItems = useMemo(
     () =>
       q
-        ? items.filter(
-            (i) =>
-              (i.item_name ?? '').toLowerCase().includes(q) ||
-              (i.barcode ?? '').toLowerCase().includes(q)
+        ? items.filter((i) =>
+            [
+              i.published_item_name,
+              i.ai_item_name,
+              i.admin_item_name,
+              i.item_name,
+              i.barcode,
+            ].some((f) => (f ?? '').toLowerCase().includes(q))
           )
         : items,
     [items, q]

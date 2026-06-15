@@ -106,6 +106,11 @@ export interface ShopItem {
   // the legacy `barcode` mirror retires in Phase 6.5. NULL when the AI
   // couldn't read the barcode photo or for pre-Phase-3 rows.
   ai_barcode_extracted: string | null;
+  // AI- and admin-supplied item-name sources (feed the published_* /
+  // worker resolution chain). Columns exist on shop_items; typed here so
+  // the /admin search can match them. NULL when that stage didn't run.
+  ai_item_name: string | null;
+  admin_item_name: string | null;
   // Phase 6.3 — public-text published_* columns consumed by
   // `resolvePublicItemFields()` to prefer the publish-time snapshot over
   // the legacy mirror. JSONB / layout-only published_* columns are added

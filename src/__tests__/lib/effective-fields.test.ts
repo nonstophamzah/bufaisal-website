@@ -58,6 +58,8 @@ function row(overrides: Partial<ShopItem> = {}): ShopItem {
     worker_price_aed: 1000,
     admin_price_aed: null,
     ai_barcode_extracted: null,
+    ai_item_name: null,
+    admin_item_name: null,
     published_item_name: null,
     published_brand: null,
     published_category: null,
