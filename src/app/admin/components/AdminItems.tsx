@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import { ShopItem } from '@/lib/supabase';
+import { getEffectivePrice } from '@/lib/effective-fields';
 import type { BulkAction } from '@/lib/admin-api';
 import {
   Thumb,
@@ -152,7 +153,7 @@ export function AdminItems({
 
   const selectedItems = filteredItems.filter((i) => selected.has(i.id));
   const totalValue = selectedItems.reduce(
-    (sum, item) => sum + (item.sale_price || 0),
+    (sum, item) => sum + (getEffectivePrice(item) || 0),
     0
   );
   const actions = BULK_ACTIONS_BY_TAB[tab];
@@ -704,7 +705,7 @@ function ItemRow({
                 <ConditionBadge condition={item.condition} />
               </div>
               <p className="font-heading text-lg leading-tight">
-                AED {item.sale_price}
+                {fmtPrice(item)}
               </p>
               <p className="text-xs text-muted mt-0.5">
                 Added {fmtCreated(item.created_at)}
@@ -930,6 +931,16 @@ function ItemRow({
   );
 }
 
+// Effective price for display: admin_price_aed ?? worker_price_aed ??
+// sale_price (via getEffectivePrice). null or 0 → "Ask Price" rather
+// than "AED 0" — matches public-side semantics. The raw legacy
+// sale_price column is a placeholder on Phase 3+ rows (often 1), so it
+// must never be displayed directly.
+function fmtPrice(item: ShopItem): string {
+  const price = getEffectivePrice(item);
+  return price ? `AED ${price}` : 'Ask Price';
+}
+
 // Created-at date shown subtly on each item row, e.g. "09 Apr 2026"
 // (DD MMM YYYY, zero-padded day — distinct from the non-padded fmtDate).
 function fmtCreated(d: string | null) {
@@ -992,7 +1003,7 @@ function SoldBody({ item }: { item: ShopItem }) {
           </span>
         )}
       </div>
-      <p className="font-heading text-lg leading-tight">AED {item.sale_price}</p>
+      <p className="font-heading text-lg leading-tight">{fmtPrice(item)}</p>
       <p className="text-xs text-muted mt-0.5">
         {item.duty_manager || item.uploaded_by
           ? `by ${item.duty_manager || item.uploaded_by} · `
