@@ -10,13 +10,13 @@ import {
   Star,
   Trash2,
   Undo2,
-  MousePointerClick,
   Sparkles,
   Loader2,
   Search,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
+import Image from 'next/image';
 import { ShopItem } from '@/lib/supabase';
 import type { BulkAction } from '@/lib/admin-api';
 import {
@@ -659,8 +659,102 @@ function ItemRow({
   const [showSoldSheet, setShowSoldSheet] = useState(false);
   const displayName =
     item.published_item_name ?? item.ai_item_name ?? item.item_name;
+  const thumbSrc = item.thumbnail_url || item.image_urls?.[0];
   return (
     <div>
+      {tab === 'published' ? (
+        // Compact vertical card — top row (64px photo + name/price/date),
+        // action row below. Built to fit 2-3 cards on a 390px screen.
+        <div
+          className={`bg-white border rounded-xl p-3 transition-colors ${
+            checked ? 'border-yellow ring-2 ring-yellow/30 bg-yellow/5' : 'border-gray-200'
+          }`}
+        >
+          <div className="flex gap-3">
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={() => onToggleSelect(item.id)}
+              aria-label={`Select ${displayName}`}
+              className="w-4 h-4 accent-yellow flex-shrink-0 mt-1"
+            />
+            <button
+              type="button"
+              onClick={() => photos.length > 0 && setLightboxIndex(0)}
+              disabled={photos.length === 0}
+              aria-label={`View photo of ${displayName}`}
+              className="relative w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 focus:outline-none focus:ring-2 focus:ring-yellow disabled:cursor-default"
+            >
+              {thumbSrc && (
+                <Image
+                  src={thumbSrc}
+                  alt={displayName || 'Item photo'}
+                  fill
+                  className="object-cover"
+                  sizes="64px"
+                />
+              )}
+            </button>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h3 className="font-semibold text-sm truncate">{displayName}</h3>
+                {item.is_featured && (
+                  <Star size={13} className="text-yellow fill-yellow flex-shrink-0" />
+                )}
+                <ConditionBadge condition={item.condition} />
+              </div>
+              <p className="font-heading text-lg leading-tight">
+                AED {item.sale_price}
+              </p>
+              <p className="text-xs text-muted mt-0.5">
+                Added {fmtCreated(item.created_at)}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 mt-2.5">
+            <button
+              onClick={() => onToggleFeatured(item.id, item.is_featured)}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                item.is_featured
+                  ? 'bg-yellow text-black'
+                  : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+              }`}
+              title={item.is_featured ? 'Unfeature' : 'Feature'}
+              aria-label={item.is_featured ? 'Unfeature' : 'Feature'}
+            >
+              <Star size={15} />
+            </button>
+            <button
+              onClick={() => setShowSoldSheet(true)}
+              className="px-3 py-1.5 bg-gray-900 text-white text-xs font-semibold rounded-lg hover:bg-black whitespace-nowrap"
+              title="Mark as Sold"
+            >
+              Mark Sold
+            </button>
+            <button
+              onClick={() => onHide(item.id)}
+              className="w-8 h-8 bg-gray-100 text-gray-500 rounded-lg flex items-center justify-center hover:bg-gray-200"
+              title="Hide"
+              aria-label="Hide"
+            >
+              <EyeOff size={15} />
+            </button>
+            <button
+              onClick={() => (editing ? onCancelEdit() : onStartEdit(item))}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                editing
+                  ? 'bg-yellow text-black'
+                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+              title="Edit"
+              aria-label="Edit"
+            >
+              <Pencil size={15} />
+            </button>
+          </div>
+        </div>
+      ) : (
       <div
         className={`flex items-center gap-3 bg-white border rounded-xl p-3 transition-colors ${
           checked ? 'border-yellow ring-2 ring-yellow/30 bg-yellow/5' : 'border-gray-200'
@@ -686,9 +780,9 @@ function ItemRow({
           <Thumb item={item} />
         )}
 
-        {/* Body — varies by tab */}
+        {/* Body — varies by tab. 'published' renders its own dedicated
+            vertical card above, never this horizontal layout. */}
         {tab === 'pending' && <PendingBody item={item} />}
-        {tab === 'published' && <PublishedBody item={item} />}
         {tab === 'sold' && <SoldBody item={item} />}
         {tab === 'hidden' && <HiddenBody item={item} />}
 
@@ -711,36 +805,6 @@ function ItemRow({
                 aria-label="Reject"
               >
                 <X size={18} />
-              </button>
-            </>
-          )}
-          {tab === 'published' && (
-            <>
-              <button
-                onClick={() => onToggleFeatured(item.id, item.is_featured)}
-                className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                  item.is_featured
-                    ? 'bg-yellow text-black'
-                    : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-                }`}
-                title={item.is_featured ? 'Unfeature' : 'Feature'}
-              >
-                <Star size={16} />
-              </button>
-              <button
-                onClick={() => setShowSoldSheet(true)}
-                className="px-2.5 py-1.5 bg-gray-900 text-white text-xs font-semibold rounded-lg hover:bg-black whitespace-nowrap"
-                title="Mark as Sold"
-              >
-                Mark Sold
-              </button>
-              <button
-                onClick={() => onHide(item.id)}
-                className="w-9 h-9 bg-gray-100 text-gray-500 rounded-lg flex items-center justify-center hover:bg-gray-200"
-                title="Hide"
-                aria-label="Hide"
-              >
-                <EyeOff size={16} />
               </button>
             </>
           )}
@@ -787,6 +851,7 @@ function ItemRow({
           )}
         </div>
       </div>
+      )}
 
       {editing && showEdit && (
         <EditPanel
@@ -907,46 +972,6 @@ function PendingBody({ item }: { item: ShopItem }) {
         {item.shop_source || item.shop_label || '—'} ·{' '}
         {item.duty_manager || item.uploaded_by || '—'} · {fmtDate(item.created_at)}
       </p>
-    </div>
-  );
-}
-
-function PublishedBody({ item }: { item: ShopItem }) {
-  // Full name with the canonical fallback: published_* (admin-approved
-  // snapshot) → ai_* (AI draft) → legacy item_name. No truncation — the
-  // name wraps so nothing is cut off on a narrow phone screen.
-  const displayName =
-    item.published_item_name ?? item.ai_item_name ?? item.item_name;
-  return (
-    <div className="flex-1 min-w-0">
-      <div className="flex items-start gap-2">
-        <h3 className="font-semibold text-sm break-words">{displayName}</h3>
-        {item.is_featured && (
-          <Star size={14} className="text-yellow fill-yellow flex-shrink-0 mt-0.5" />
-        )}
-      </div>
-      <p className="font-heading text-lg leading-tight">AED {item.sale_price}</p>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted mt-0.5">
-        <span>Added {fmtCreated(item.created_at)}</span>
-        {(item.duty_manager || item.uploaded_by) && (
-          <span>by {item.duty_manager || item.uploaded_by}</span>
-        )}
-        <span className="flex items-center gap-0.5">
-          <Eye size={12} /> {item.view_count}
-        </span>
-        <span className="flex items-center gap-0.5">
-          <MousePointerClick size={12} /> {item.whatsapp_clicks}
-        </span>
-        <ConditionBadge condition={item.condition} />
-        {item.negotiable === false && (
-          <span
-            title="Price is at the floor — customer sees a Starting Price pill, not Negotiable."
-            className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-200 text-gray-700"
-          >
-            Starting Price
-          </span>
-        )}
-      </div>
     </div>
   );
 }
