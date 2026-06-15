@@ -131,7 +131,7 @@ export default function ItemCard({ item, priority = false }: { item: ShopItem; p
           className="w-full flex items-center justify-center gap-2 bg-yellow hover:bg-yellow/90 text-black font-bold text-sm py-2.5 rounded-lg mt-2 active:scale-95 transition-all"
         >
           <MessageCircle size={16} />
-          WHATSAPP
+          NEGOTIATE
         </button>
       </div>
     </div>
