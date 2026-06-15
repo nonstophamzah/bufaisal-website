@@ -730,8 +730,8 @@ export default function TeamPage() {
             <div className="grid grid-cols-3 gap-3">
               <PhotoSlotCard
                 slot="brand"
-                label="Brand"
-                helper="Shoot the brand plate or logo. For furniture without a brand, take a clean angle of the item."
+                label="Full Item Photo"
+                helper="Show the complete item clearly"
                 url={photos.brand}
                 uploading={uploadingSlot === 'brand'}
                 inputRef={fileInputRefs.brand}
@@ -740,7 +740,8 @@ export default function TeamPage() {
               />
               <PhotoSlotCard
                 slot="photo_2"
-                label="Photo 2"
+                label="Brand / Label"
+                helper="Shoot the brand plate or logo"
                 url={photos.photo_2}
                 uploading={uploadingSlot === 'photo_2'}
                 inputRef={fileInputRefs.photo_2}
@@ -749,7 +750,8 @@ export default function TeamPage() {
               />
               <PhotoSlotCard
                 slot="photo_3"
-                label="Photo 3"
+                label="Detail or Condition"
+                helper="Close-up of wear, damage, or key feature"
                 url={photos.photo_3}
                 uploading={uploadingSlot === 'photo_3'}
                 inputRef={fileInputRefs.photo_3}
