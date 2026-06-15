@@ -656,6 +656,9 @@ function ItemRow({
   const showEdit = tab === 'pending' || tab === 'published';
   const photos = collectPhotos(item);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [showSoldSheet, setShowSoldSheet] = useState(false);
+  const displayName =
+    item.published_item_name ?? item.ai_item_name ?? item.item_name;
   return (
     <div>
       <div
@@ -725,18 +728,11 @@ function ItemRow({
                 <Star size={16} />
               </button>
               <button
-                onClick={() => onMarkSold(item.id, 'online')}
-                className="px-2.5 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700"
-                title="Mark Sold Online"
+                onClick={() => setShowSoldSheet(true)}
+                className="px-2.5 py-1.5 bg-gray-900 text-white text-xs font-semibold rounded-lg hover:bg-black whitespace-nowrap"
+                title="Mark as Sold"
               >
-                Sold Online
-              </button>
-              <button
-                onClick={() => onMarkSold(item.id, 'shop')}
-                className="px-2.5 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700"
-                title="Mark Sold in Shop"
-              >
-                Sold in Shop
+                Mark Sold
               </button>
               <button
                 onClick={() => onHide(item.id)}
@@ -812,6 +808,59 @@ function ItemRow({
           onIndexChange={setLightboxIndex}
         />
       )}
+
+      {/* Mark-as-Sold bottom sheet — replaces the two inline Sold
+          buttons. Tapping either option fires the existing onMarkSold
+          action with its channel and closes. Slides up from the bottom
+          on mobile, centered card on sm+. */}
+      {showSoldSheet && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Mark item as sold"
+          onClick={() => setShowSoldSheet(false)}
+        >
+          <div
+            className="bg-white w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-heading text-xl mb-1">
+              MARK AS <span className="text-yellow">SOLD</span>
+            </h3>
+            <p className="text-sm text-muted mb-4 truncate">{displayName}</p>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSoldSheet(false);
+                  onMarkSold(item.id, 'online');
+                }}
+                className="w-full py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700"
+              >
+                Sold Online
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSoldSheet(false);
+                  onMarkSold(item.id, 'shop');
+                }}
+                className="w-full py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700"
+              >
+                Sold in Shop
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowSoldSheet(false)}
+                className="w-full py-3 bg-gray-100 text-gray-600 font-semibold rounded-xl hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -863,16 +912,21 @@ function PendingBody({ item }: { item: ShopItem }) {
 }
 
 function PublishedBody({ item }: { item: ShopItem }) {
+  // Full name with the canonical fallback: published_* (admin-approved
+  // snapshot) → ai_* (AI draft) → legacy item_name. No truncation — the
+  // name wraps so nothing is cut off on a narrow phone screen.
+  const displayName =
+    item.published_item_name ?? item.ai_item_name ?? item.item_name;
   return (
     <div className="flex-1 min-w-0">
-      <div className="flex items-center gap-2">
-        <h3 className="font-semibold text-sm truncate">{item.item_name}</h3>
+      <div className="flex items-start gap-2">
+        <h3 className="font-semibold text-sm break-words">{displayName}</h3>
         {item.is_featured && (
-          <Star size={14} className="text-yellow fill-yellow flex-shrink-0" />
+          <Star size={14} className="text-yellow fill-yellow flex-shrink-0 mt-0.5" />
         )}
       </div>
       <p className="font-heading text-lg leading-tight">AED {item.sale_price}</p>
-      <div className="flex items-center gap-3 text-xs text-muted mt-0.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted mt-0.5">
         <span>Added {fmtCreated(item.created_at)}</span>
         {(item.duty_manager || item.uploaded_by) && (
           <span>by {item.duty_manager || item.uploaded_by}</span>
