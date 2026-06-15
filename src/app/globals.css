@@ -13,6 +13,13 @@ body {
   background: var(--white);
 }
 
+/* Disable pinch-zoom gestures (belt-and-braces with the viewport meta
+   maximumScale/userScalable settings in layout.tsx). */
+html, body {
+  touch-action: pan-x pan-y;
+  -ms-touch-action: pan-x pan-y;
+}
+
 /* WhatsApp floating button pulse */
 @keyframes whatsapp-pulse {
   0% {
