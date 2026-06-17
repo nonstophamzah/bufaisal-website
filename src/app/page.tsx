@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { Suspense } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { ShopItem } from '@/lib/supabase';
-import { CATEGORY_SLUG_MAP } from '@/lib/constants';
+import { CATEGORY_SLUG_MAP, SHOP_PAGE_SIZE } from '@/lib/constants';
 import ShopClient from './shop/shop-client';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -59,10 +59,13 @@ type Props = {
   searchParams: Promise<{ category?: string; q?: string }>;
 };
 
-async function getItems(category?: string, q?: string): Promise<ShopItem[]> {
+async function getItems(
+  category?: string,
+  q?: string
+): Promise<{ items: ShopItem[]; hasMore: boolean }> {
   let query = getSupabase()
     .from('shop_items')
-    .select('*')
+    .select('*', { count: 'exact' })
     .eq('is_published', true)
     .eq('is_sold', false)
     .eq('is_hidden', false);
@@ -79,15 +82,20 @@ async function getItems(category?: string, q?: string): Promise<ShopItem[]> {
 
   query = query
     .order('is_featured', { ascending: false })
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .range(0, SHOP_PAGE_SIZE - 1);
 
-  const { data } = await query.limit(50);
-  return (data || []) as ShopItem[];
+  const { data, count } = await query;
+  const items = (data || []) as ShopItem[];
+  const hasMore =
+    count != null ? items.length < count : items.length === SHOP_PAGE_SIZE;
+  return { items, hasMore };
 }
 
 export default async function HomePage({ searchParams }: Props) {
   const { category, q } = await searchParams;
-  const items = await getItems(category, q);
+  const { items, hasMore } = await getItems(category, q);
 
   const faqSchema = {
     '@context': 'https://schema.org',
@@ -134,6 +142,7 @@ export default async function HomePage({ searchParams }: Props) {
           <ShopClient
             initialItems={items}
             initialCategory={category || ''}
+            initialHasMore={hasMore}
             basePath="/"
           />
         </Suspense>

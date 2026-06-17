@@ -118,3 +118,9 @@ export function getWhatsAppGeneralUrl() {
 export const CATEGORY_SLUG_MAP = Object.fromEntries(
   CATEGORIES.map((c) => [c.slug, c.name])
 );
+
+// Public shop/home grid pagination size. Initial SSR load fetches this many,
+// each "Load More" tap fetches the next page of this size. Shared by the SSR
+// fetchers (page.tsx, shop/page.tsx) and the client refetch in shop-client.tsx
+// so offsets line up.
+export const SHOP_PAGE_SIZE = 50;

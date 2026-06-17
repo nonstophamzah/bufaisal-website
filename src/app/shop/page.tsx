@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { Suspense } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { ShopItem } from '@/lib/supabase';
-import { CATEGORY_SLUG_MAP } from '@/lib/constants';
+import { CATEGORY_SLUG_MAP, SHOP_PAGE_SIZE } from '@/lib/constants';
 import ShopClient from './shop-client';
 import { LOCAL_BUSINESS_SCHEMAS } from '@/lib/local-business-schema';
 import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
@@ -81,10 +81,13 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   };
 }
 
-async function getItems(category?: string, q?: string): Promise<ShopItem[]> {
+async function getItems(
+  category?: string,
+  q?: string
+): Promise<{ items: ShopItem[]; hasMore: boolean }> {
   let query = getSupabase()
     .from('shop_items')
-    .select('*')
+    .select('*', { count: 'exact' })
     .eq('is_published', true)
     .eq('is_sold', false)
     .eq('is_hidden', false);
@@ -101,15 +104,20 @@ async function getItems(category?: string, q?: string): Promise<ShopItem[]> {
 
   query = query
     .order('is_featured', { ascending: false })
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .range(0, SHOP_PAGE_SIZE - 1);
 
-  const { data } = await query.limit(50);
-  return (data || []) as ShopItem[];
+  const { data, count } = await query;
+  const items = (data || []) as ShopItem[];
+  const hasMore =
+    count != null ? items.length < count : items.length === SHOP_PAGE_SIZE;
+  return { items, hasMore };
 }
 
 export default async function ShopPage({ searchParams }: Props) {
   const { category, q } = await searchParams;
-  const items = await getItems(category, q);
+  const { items, hasMore } = await getItems(category, q);
 
   // Server-side JSON-LD schemas (rendered in initial HTML).
   // LocalBusiness comes from the shared 5-shop registry; FAQ stays inline.
@@ -210,7 +218,11 @@ export default async function ShopPage({ searchParams }: Props) {
           </div>
         }
       >
-        <ShopClient initialItems={items} initialCategory={category || ''} />
+        <ShopClient
+          initialItems={items}
+          initialCategory={category || ''}
+          initialHasMore={hasMore}
+        />
       </Suspense>
     </>
   );

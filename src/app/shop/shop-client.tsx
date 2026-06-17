@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Search, X, ChevronDown, ChevronRight } from 'lucide-react';
 import ItemCard from '@/components/ItemCard';
 import { supabase, ShopItem } from '@/lib/supabase';
-import { CATEGORIES, CATEGORY_SLUG_MAP } from '@/lib/constants';
+import { CATEGORIES, CATEGORY_SLUG_MAP, SHOP_PAGE_SIZE } from '@/lib/constants';
 
 const CATEGORY_INTROS: Record<string, string> = {
   'living-room-lounge':
@@ -78,10 +78,12 @@ const FAQS = [
 export default function ShopClient({
   initialItems,
   initialCategory,
+  initialHasMore,
   basePath = '/shop',
 }: {
   initialItems: ShopItem[];
   initialCategory: string;
+  initialHasMore?: boolean;
   basePath?: '/' | '/shop';
 }) {
   const searchParams = useSearchParams();
@@ -89,6 +91,10 @@ export default function ShopClient({
   const isHome = basePath === '/';
   const [items, setItems] = useState<ShopItem[]>(initialItems);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(
+    initialHasMore ?? initialItems.length >= SHOP_PAGE_SIZE
+  );
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [activeCategory, setActiveCategory] = useState(initialCategory);
   const [sortBy, setSortBy] = useState('newest');
@@ -96,12 +102,12 @@ export default function ShopClient({
 
   const catName = activeCategory ? CATEGORY_SLUG_MAP[activeCategory] : '';
 
-  // Re-fetch when filters change client-side
-  const fetchItems = useCallback(async () => {
-    setLoading(true);
+  // Shared filter/sort builder so the reset fetch and "Load More" page the
+  // same result set (same WHERE + ORDER) — only the .range() differs.
+  const buildQuery = useCallback(() => {
     let query = supabase
       .from('shop_items')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('is_published', true)
       .eq('is_sold', false)
       .eq('is_hidden', false);
@@ -116,15 +122,38 @@ export default function ShopClient({
       );
     }
 
-    query = query
+    return query
       .order('is_featured', { ascending: false })
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
+  }, [activeCategory, search]);
 
-    const { data } = await query.limit(50);
-    setItems(data || []);
+  // Re-fetch (page 0) when filters change client-side
+  const fetchItems = useCallback(async () => {
+    setLoading(true);
+    const { data, count } = await buildQuery().range(0, SHOP_PAGE_SIZE - 1);
+    const rows = (data || []) as ShopItem[];
+    setItems(rows);
+    setHasMore(count != null ? rows.length < count : rows.length === SHOP_PAGE_SIZE);
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCategory, search, sortBy]);
+  }, [buildQuery, sortBy]);
+
+  // Append the next page of results
+  const loadMore = useCallback(async () => {
+    setLoadingMore(true);
+    const offset = items.length;
+    const { data, count } = await buildQuery().range(
+      offset,
+      offset + SHOP_PAGE_SIZE - 1
+    );
+    const rows = (data || []) as ShopItem[];
+    setItems((prev) => [...prev, ...rows]);
+    setHasMore(
+      count != null ? offset + rows.length < count : rows.length === SHOP_PAGE_SIZE
+    );
+    setLoadingMore(false);
+  }, [buildQuery, items.length]);
 
   // Only re-fetch when user changes filters (not on initial mount)
   const [hasMounted, setHasMounted] = useState(false);
@@ -333,11 +362,26 @@ export default function ShopClient({
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {items.map((item) => (
-              <ItemCard key={item.id} item={item} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {items.map((item) => (
+                <ItemCard key={item.id} item={item} />
+              ))}
+            </div>
+
+            {hasMore && (
+              <div className="mt-8 flex justify-center">
+                <button
+                  type="button"
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="inline-flex items-center gap-2 bg-yellow text-black font-semibold px-8 py-3 rounded-xl hover:bg-yellow/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {loadingMore ? 'Loading…' : 'Load More'}
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         {/* FAQ Section */}
