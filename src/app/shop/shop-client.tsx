@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Search, X, ChevronDown, ChevronRight } from 'lucide-react';
@@ -99,6 +99,7 @@ export default function ShopClient({
   const [activeCategory, setActiveCategory] = useState(initialCategory);
   const [sortBy, setSortBy] = useState('newest');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const catName = activeCategory ? CATEGORY_SLUG_MAP[activeCategory] : '';
 
@@ -154,6 +155,25 @@ export default function ShopClient({
     );
     setLoadingMore(false);
   }, [buildQuery, items.length]);
+
+  // Infinite scroll: when the bottom sentinel scrolls into view (with a 400px
+  // pre-load margin), fetch the next page. The effect re-runs after each append
+  // (loadMore identity changes with items.length), re-attaching to the moved
+  // sentinel. Guards prevent overlapping or post-exhaustion fetches.
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loadingMore && !loading) {
+          loadMore();
+        }
+      },
+      { rootMargin: '400px' }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loading, loadMore]);
 
   // Only re-fetch when user changes filters (not on initial mount)
   const [hasMounted, setHasMounted] = useState(false);
@@ -370,15 +390,19 @@ export default function ShopClient({
             </div>
 
             {hasMore && (
-              <div className="mt-8 flex justify-center">
-                <button
-                  type="button"
-                  onClick={loadMore}
-                  disabled={loadingMore}
-                  className="inline-flex items-center gap-2 bg-yellow text-black font-semibold px-8 py-3 rounded-xl hover:bg-yellow/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {loadingMore ? 'Loading…' : 'Load More'}
-                </button>
+              <div
+                ref={sentinelRef}
+                aria-hidden="true"
+                className="mt-8 flex justify-center"
+                style={{ minHeight: 1 }}
+              >
+                {loadingMore && (
+                  <div
+                    role="status"
+                    aria-label="Loading more items"
+                    className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-gray-500"
+                  />
+                )}
               </div>
             )}
           </>
