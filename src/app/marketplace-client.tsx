@@ -16,6 +16,33 @@ import TrustStrip from '@/components/TrustStrip';
 const CAT_PILLS = ['All', ...CATEGORIES.map((c) => c.name)];
 const BATCH = 20;
 
+// Category-name detection for the search box. When a shopper types a term that
+// matches (or closely matches) one of the 8 category names, we redirect them to
+// that category's page (/shop?category=<slug>) instead of running a keyword
+// search. Targets are the canonical query-param category pages — note /appliances
+// is the internal staff tracker, so the appliances *category* is the slug below.
+const CATEGORY_SEARCH_TRIGGERS: { slug: string; terms: string[] }[] = [
+  { slug: 'appliances', terms: ['appliances', 'appliance'] },
+  { slug: 'bedroom-sleep', terms: ['beds', 'bedroom', 'sleep', 'bedroom & sleep'] },
+  { slug: 'living-room-lounge', terms: ['living room', 'sofa', 'lounge', 'living room & lounge'] },
+  { slug: 'kitchen-dining', terms: ['kitchen', 'dining', 'kitchen & dining'] },
+  { slug: 'outdoor-garden', terms: ['outdoor', 'garden', 'outdoor & garden'] },
+  { slug: 'kids-baby', terms: ['kids', 'baby', 'kids & baby'] },
+  { slug: 'office-study-fitness', terms: ['office', 'fitness', 'gym', 'office study fitness', 'office, study & fitness'] },
+  { slug: 'everyday-essentials', terms: ['everyday', 'essentials', 'everyday essentials'] },
+];
+
+// Whole-term (not substring) match so legitimate product searches like
+// "sofa bed" or "office chair" are not hijacked — only a bare category word redirects.
+function detectCategorySlug(raw: string): string | null {
+  const t = raw.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!t) return null;
+  for (const { slug, terms } of CATEGORY_SEARCH_TRIGGERS) {
+    if (terms.includes(t)) return slug;
+  }
+  return null;
+}
+
 function isNew(d: string) {
   return Date.now() - new Date(d).getTime() < 24 * 60 * 60 * 1000;
 }
@@ -30,6 +57,19 @@ export default function MarketplaceClient({ initialItems }: { initialItems: Shop
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [cat, setCat] = useState(searchParams.get('category') || 'All');
   const [visible, setVisible] = useState(BATCH);
+
+  // Category-name detection: if the search term matches a category name, redirect
+  // to that category page instead of running a keyword search. Debounced so a term
+  // is only acted on once the shopper stops typing (avoids "beds" firing while
+  // someone is on their way to typing "bedside").
+  useEffect(() => {
+    const slug = detectCategorySlug(search);
+    if (!slug) return;
+    const timeout = setTimeout(() => {
+      router.push(`/shop?category=${slug}`);
+    }, 450);
+    return () => clearTimeout(timeout);
+  }, [search, router]);
 
   // Track search events (debounced)
   useEffect(() => {
