@@ -89,7 +89,7 @@ const PRODUCT_TYPES: string[] = [
   'BBQ Grill',
   'Outdoor Chair',
   'Pool Equipment',
-  // Office / Study / Fitness
+  // Office, Study & Fitness
   'Desk',
   'Office Chair',
   'Filing Cabinet',

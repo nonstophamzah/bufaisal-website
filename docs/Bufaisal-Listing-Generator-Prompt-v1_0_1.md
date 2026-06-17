@@ -97,7 +97,7 @@ For Used Appliances (universally true for ALL appliances on the site):
 - "7-day warranty included"
 - "Anything wrong, we fix it"
 
-For Used Furniture and Bulky Items (Living Room, Bedroom, Kitchen & Dining furniture, Outdoor & Garden, Office/Study/Fitness, Kids & Baby furniture):
+For Used Furniture and Bulky Items (Living Room, Bedroom, Kitchen & Dining furniture, Outdoor & Garden, Office, Study & Fitness, Kids & Baby furniture):
 - "Trucks include carpenters for free assembly at your home"
 - (No warranty — used furniture is sold as-is, condition disclosed honestly.)
 
@@ -170,7 +170,7 @@ The 8 locked categories are:
 4. Appliances
 5. Outdoor & Garden
 6. Kids & Baby
-7. Office / Study / Fitness
+7. Office, Study & Fitness
 8. Everyday Essentials
 
 Apply this decision tree IN ORDER. Stop at the first match.
@@ -188,7 +188,7 @@ Step 3: Is the item designed for outdoor use (patio furniture, garden tools, BBQ
    NO → continue.
 
 Step 4: Is the item a desk, office chair, filing cabinet, treadmill, exercise bike, or other study/fitness equipment?
-   YES → Office / Study / Fitness. STOP.
+   YES → Office, Study & Fitness. STOP.
    NO → continue.
 
 Step 5: Is the item a bed, mattress, headboard, wardrobe, dresser, nightstand, or anything primarily used in a bedroom?
@@ -214,7 +214,7 @@ PRODUCT_TYPE_VOCABULARY (for the product_type field, used in filter URLs):
 - Kitchen & Dining: Dining Table, Dining Chair, Dining Set, Kitchen Cabinet, Cookware, Dishware
 - Kids & Baby: Crib, High Chair, Stroller, Kids Bed, Kids Toy, Kids Clothing
 - Outdoor & Garden: Patio Set, Garden Tool, BBQ Grill, Outdoor Chair, Pool Equipment
-- Office / Study / Fitness: Desk, Office Chair, Filing Cabinet, Treadmill, Exercise Bike, Study Set
+- Office, Study & Fitness: Desk, Office Chair, Filing Cabinet, Treadmill, Exercise Bike, Study Set
 - Everyday Essentials: Lamp, Mirror, Decor, Storage, Other
 
 Use a value from this list in the product_type field. If nothing fits exactly, use the closest match and add "product_type_uncertain" to flags.
@@ -466,7 +466,7 @@ APPLIANCES ONLY (used appliances):
 - "7-day warranty included"
 - "Anything wrong, we fix it"
 
-FURNITURE AND BULKY ASSEMBLY ITEMS (used or new — Living Room, Bedroom, Kitchen & Dining furniture, Outdoor & Garden, Office/Study/Fitness, Kids & Baby furniture):
+FURNITURE AND BULKY ASSEMBLY ITEMS (used or new — Living Room, Bedroom, Kitchen & Dining furniture, Outdoor & Garden, Office, Study & Fitness, Kids & Baby furniture):
 - "Trucks include carpenters for free assembly at your home"
 
 NOTE on carpenter assembly: apply this signal to any item that needs assembly at home (sofas, beds, dining sets, patio sets, BBQs, desks, treadmills, cribs, etc.). Do NOT apply to small/no-assembly items (lamps, mirrors, decor, cookware, dishware, toys, clothing).
