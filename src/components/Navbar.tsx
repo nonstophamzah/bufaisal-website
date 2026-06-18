@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Search, Menu, X, Phone } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useLang } from '@/lib/lang';
+import { detectCategorySlug } from '@/lib/category-search';
 import TrustStrip from './TrustStrip';
 
 export default function Navbar() {
@@ -16,11 +17,15 @@ export default function Navbar() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (query.trim()) {
-      router.push(`/shop?q=${encodeURIComponent(query.trim())}`);
-      setSearchOpen(false);
-      setQuery('');
-    }
+    const term = query.trim();
+    if (!term) return;
+    // Category-name terms (e.g. "fridge", "beds") redirect to the category page;
+    // everything else runs a keyword search. Same detection the in-page search
+    // uses, so both entry points behave identically.
+    const slug = detectCategorySlug(term);
+    router.push(slug ? `/shop?category=${slug}` : `/shop?q=${encodeURIComponent(term)}`);
+    setSearchOpen(false);
+    setQuery('');
   };
 
   const navLinks = [

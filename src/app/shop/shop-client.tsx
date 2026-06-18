@@ -7,6 +7,7 @@ import { Search, X, ChevronDown, ChevronRight } from 'lucide-react';
 import ItemCard from '@/components/ItemCard';
 import { supabase, ShopItem } from '@/lib/supabase';
 import { CATEGORIES, CATEGORY_SLUG_MAP, SHOP_PAGE_SIZE } from '@/lib/constants';
+import { detectCategorySlug } from '@/lib/category-search';
 
 const CATEGORY_INTROS: Record<string, string> = {
   'living-room-lounge':
@@ -74,33 +75,6 @@ const FAQS = [
     a: 'Tap the yellow PRICE button on any item. It opens WhatsApp with a pre-filled message. Our team will reply with the price, availability, and delivery options.',
   },
 ];
-
-// Category-name detection for the search box. When a shopper types a term that
-// matches (or closely matches) one of the 8 category names, redirect them to that
-// category's page (/shop?category=<slug>) instead of running a keyword search.
-// Targets are the canonical query-param category pages — note /appliances is the
-// internal staff tracker, so the appliances *category* is the slug below.
-const CATEGORY_SEARCH_TRIGGERS: { slug: string; terms: string[] }[] = [
-  { slug: 'appliances', terms: ['appliances', 'appliance', 'fridge', 'fridges', 'refrigerator', 'refrigerators', 'washing machine', 'washer', 'ac', 'air conditioner', 'tv', 'television'] },
-  { slug: 'bedroom-sleep', terms: ['beds', 'bed', 'bedroom', 'sleep', 'bedroom & sleep', 'wardrobe', 'wardrobes', 'closet', 'mattress', 'mattresses'] },
-  { slug: 'living-room-lounge', terms: ['living room', 'sofa', 'sofas', 'couch', 'lounge', 'living room & lounge'] },
-  { slug: 'kitchen-dining', terms: ['kitchen', 'dining', 'kitchen & dining', 'dining table', 'dining set'] },
-  { slug: 'outdoor-garden', terms: ['outdoor', 'garden', 'outdoor & garden'] },
-  { slug: 'kids-baby', terms: ['kids', 'baby', 'kids & baby'] },
-  { slug: 'office-study-fitness', terms: ['office', 'fitness', 'gym', 'treadmill', 'office study fitness', 'office, study & fitness'] },
-  { slug: 'everyday-essentials', terms: ['everyday', 'essentials', 'everyday essentials'] },
-];
-
-// Whole-term (not substring) match so legitimate product searches like
-// "sofa bed" or "office chair" are not hijacked — only a bare category word redirects.
-function detectCategorySlug(raw: string): string | null {
-  const t = raw.trim().toLowerCase().replace(/\s+/g, ' ');
-  if (!t) return null;
-  for (const { slug, terms } of CATEGORY_SEARCH_TRIGGERS) {
-    if (terms.includes(t)) return slug;
-  }
-  return null;
-}
 
 export default function ShopClient({
   initialItems,
