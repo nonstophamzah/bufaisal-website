@@ -100,6 +100,10 @@ export default function ShopClient({
   const [sortBy, setSortBy] = useState('newest');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  // Monotonic id for client-side fetches. A response is only applied if it's
+  // still the latest request — so a slow in-flight keyword fetch (or one
+  // superseded by an SSR navigation) can't clobber the displayed list.
+  const reqIdRef = useRef(0);
 
   // Category and page-depth are URL-driven so they survive back/forward nav and
   // reconstruct the feed height for scroll restoration. Search stays local state
@@ -162,8 +166,13 @@ export default function ShopClient({
 
   // Re-fetch (page 0) when filters change client-side
   const fetchItems = useCallback(async () => {
+    const reqId = ++reqIdRef.current;
     setLoading(true);
     const { data, count } = await buildQuery().range(0, SHOP_PAGE_SIZE - 1);
+    // Bail if a newer fetch or an SSR navigation has superseded this one — its
+    // stale rows must not overwrite the current list (e.g. a partial-term
+    // keyword fetch resolving after a category redirect).
+    if (reqId !== reqIdRef.current) return;
     const rows = (data || []) as ShopItem[];
     setItems(rows);
     setHasMore(count != null ? rows.length < count : rows.length === SHOP_PAGE_SIZE);
@@ -176,8 +185,12 @@ export default function ShopClient({
   // replace, or back/forward), so initialItems' identity is stable between
   // navigations — this never fights the client-side live-search fetch below.
   useEffect(() => {
+    // The SSR payload is authoritative: invalidate any in-flight client fetch,
+    // adopt the rows, and clear the redirect loading state once they arrive.
+    reqIdRef.current++;
     setItems(initialItems);
     setHasMore(initialHasMore ?? initialItems.length >= SHOP_PAGE_SIZE);
+    setLoading(false);
   }, [initialItems, initialHasMore]);
 
   // Load more = bump ?page in the URL (replace, so it doesn't pollute history)
@@ -257,6 +270,17 @@ export default function ShopClient({
     e.preventDefault();
     const slug = detectCategorySlug(search);
     if (slug) {
+      // Same-route redirect (already on /shop) doesn't remount, so clear the
+      // stale list and show the loading skeleton immediately — otherwise the
+      // feed flashes the leftover keyword result until the SSR category payload
+      // arrives (prop-sync clears `loading`). reqId bump cancels any in-flight
+      // keyword fetch so it can't repopulate after the clear. On the homepage
+      // (cross-route) the fresh mount handles this, so skip the flash-of-skeleton.
+      if (!isHome) {
+        reqIdRef.current++;
+        setItems([]);
+        setLoading(true);
+      }
       router.push(
         `/shop?category=${slug}&redirectedFrom=${encodeURIComponent(search.trim())}`
       );
