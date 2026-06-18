@@ -186,6 +186,10 @@ export default function ShopClient({
     const slug = detectCategorySlug(search);
     if (!slug) return;
     router.push(`/shop?category=${slug}`);
+    // Clear the term so it can't linger as a keyword filter on top of the
+    // category — covers the same-route case where the component does not remount
+    // and `search` would otherwise persist.
+    setSearch('');
   }, [search, router]);
 
   // Only re-fetch when user changes filters (not on initial mount). Skip the
