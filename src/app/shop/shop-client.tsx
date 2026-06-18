@@ -186,11 +186,19 @@ export default function ShopClient({
     const slug = detectCategorySlug(search);
     if (!slug) return;
     router.push(`/shop?category=${slug}`);
-    // Clear the term so it can't linger as a keyword filter on top of the
-    // category — covers the same-route case where the component does not remount
-    // and `search` would otherwise persist.
-    setSearch('');
   }, [search, router]);
+
+  // Keep the search box in sync with the URL's `q` param. When a redirect (or any
+  // navigation) lands on a URL without `q` — e.g. /shop?category=appliances — the
+  // input clears naturally once navigation completes, instead of being blanked
+  // mid-keystroke by the redirect effect. Depends on the full param string so it
+  // fires on any actual URL change (q present → absent) but NOT while the user is
+  // typing (that only mutates local state; the URL is unchanged).
+  const paramString = searchParams.toString();
+  useEffect(() => {
+    setSearch(searchParams.get('q') || '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramString]);
 
   // Only re-fetch when user changes filters (not on initial mount). Skip the
   // keyword fetch entirely when the term is a category trigger — the redirect
