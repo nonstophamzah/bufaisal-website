@@ -216,6 +216,9 @@ export default function ShopClient({
     router.push(
       `/shop?category=${slug}&redirectedFrom=${encodeURIComponent(search.trim())}`
     );
+    // Clear the box — the term now lives in the redirect label, and an empty
+    // `search` removes any residual keyword filter on top of the category.
+    setSearch('');
   }, [search, router]);
 
   // Only re-fetch when user changes filters (not on initial mount). Skip the
