@@ -81,13 +81,13 @@ const FAQS = [
 // Targets are the canonical query-param category pages — note /appliances is the
 // internal staff tracker, so the appliances *category* is the slug below.
 const CATEGORY_SEARCH_TRIGGERS: { slug: string; terms: string[] }[] = [
-  { slug: 'appliances', terms: ['appliances', 'appliance'] },
-  { slug: 'bedroom-sleep', terms: ['beds', 'bedroom', 'sleep', 'bedroom & sleep'] },
-  { slug: 'living-room-lounge', terms: ['living room', 'sofa', 'lounge', 'living room & lounge'] },
-  { slug: 'kitchen-dining', terms: ['kitchen', 'dining', 'kitchen & dining'] },
+  { slug: 'appliances', terms: ['appliances', 'appliance', 'fridge', 'fridges', 'refrigerator', 'refrigerators', 'washing machine', 'washer', 'ac', 'air conditioner', 'tv', 'television'] },
+  { slug: 'bedroom-sleep', terms: ['beds', 'bed', 'bedroom', 'sleep', 'bedroom & sleep', 'wardrobe', 'wardrobes', 'closet', 'mattress', 'mattresses'] },
+  { slug: 'living-room-lounge', terms: ['living room', 'sofa', 'sofas', 'couch', 'lounge', 'living room & lounge'] },
+  { slug: 'kitchen-dining', terms: ['kitchen', 'dining', 'kitchen & dining', 'dining table', 'dining set'] },
   { slug: 'outdoor-garden', terms: ['outdoor', 'garden', 'outdoor & garden'] },
   { slug: 'kids-baby', terms: ['kids', 'baby', 'kids & baby'] },
-  { slug: 'office-study-fitness', terms: ['office', 'fitness', 'gym', 'office study fitness', 'office, study & fitness'] },
+  { slug: 'office-study-fitness', terms: ['office', 'fitness', 'gym', 'treadmill', 'office study fitness', 'office, study & fitness'] },
   { slug: 'everyday-essentials', terms: ['everyday', 'essentials', 'everyday essentials'] },
 ];
 
