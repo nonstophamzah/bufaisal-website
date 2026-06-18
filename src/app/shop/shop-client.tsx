@@ -185,6 +185,8 @@ export default function ShopClient({
   // replace, or back/forward), so initialItems' identity is stable between
   // navigations — this never fights the client-side live-search fetch below.
   useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.log('PROP SYNC, initialItems count:', initialItems.length);
     // The SSR payload is authoritative: invalidate any in-flight client fetch,
     // adopt the rows, and clear the redirect loading state once they arrive.
     reqIdRef.current++;
@@ -276,6 +278,8 @@ export default function ShopClient({
       // arrives (prop-sync clears `loading`). reqId bump cancels any in-flight
       // keyword fetch so it can't repopulate after the clear. On the homepage
       // (cross-route) the fresh mount handles this, so skip the flash-of-skeleton.
+      // eslint-disable-next-line no-console
+      console.log('REDIRECT FIRING, clearing items', { isHome, slug, search });
       if (!isHome) {
         reqIdRef.current++;
         setItems([]);
