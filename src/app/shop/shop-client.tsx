@@ -215,30 +215,15 @@ export default function ShopClient({
     return () => observer.disconnect();
   }, [hasMore, isPending, loading, loadMore]);
 
-  // Category-name detection: if the search term matches a category name, redirect
-  // to that category page instead of running a keyword search. Fires immediately
-  // (no debounce) — the keyword fetch below is suppressed for the same term, so
-  // there is no race where the keyword search shows wrong results before the
-  // redirect lands. A whole-term match means "fridge" navigates but "fridge door
-  // seal" still runs a normal search, so we don't hijack legitimate queries.
-  // The matched term rides along as `redirectedFrom` so the landing page can show
-  // a "Showing X for 'term'" label explaining why the shopper arrived here. It is
-  // NOT passed as `q`, so it never becomes a keyword filter on top of the category.
-  useEffect(() => {
-    const slug = detectCategorySlug(search);
-    if (!slug) return;
-    router.push(
-      `/shop?category=${slug}&redirectedFrom=${encodeURIComponent(search.trim())}`
-    );
-    // Clear the box — the term now lives in the redirect label, and an empty
-    // `search` removes any residual keyword filter on top of the category.
-    setSearch('');
-  }, [search, router]);
+  // Category-name redirect is handled ONLY on submit (Enter / search button) in
+  // handleSearch below — never on keystroke. A live, per-keystroke redirect was
+  // removed because it cleared the box mid-typing the instant a whole-term match
+  // appeared (e.g. "fridge", or "bed" while typing "bedside").
 
   // Live as-you-type search runs client-side for instant feedback. Fires only for
   // a non-empty term: an empty box (cleared, or never typed) falls through to the
-  // URL/SSR-driven list via the sync effect above. Category-name terms navigate
-  // via the redirect effect, so we skip them here. Category + page changes are
+  // URL/SSR-driven list via the sync effect above. Category-name terms are left
+  // for submit-time redirect, so we skip them here. Category + page changes are
   // URL-driven and do NOT trigger this — they re-render from SSR props.
   const [hasMounted, setHasMounted] = useState(false);
   useEffect(() => {
@@ -275,6 +260,9 @@ export default function ShopClient({
       router.push(
         `/shop?category=${slug}&redirectedFrom=${encodeURIComponent(search.trim())}`
       );
+      // Clear on submit only — the term now lives in the redirect label, and an
+      // empty box avoids a residual keyword filter on top of the category.
+      setSearch('');
       return;
     }
     writeUrl(activeCategory, search);
