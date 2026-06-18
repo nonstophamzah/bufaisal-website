@@ -40,7 +40,7 @@ const FAQS = [
 ];
 
 type Props = {
-  searchParams: Promise<{ category?: string; q?: string }>;
+  searchParams: Promise<{ category?: string; q?: string; page?: string }>;
 };
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
@@ -83,7 +83,8 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
 
 async function getItems(
   category?: string,
-  q?: string
+  q?: string,
+  page = 1
 ): Promise<{ items: ShopItem[]; hasMore: boolean }> {
   let query = getSupabase()
     .from('shop_items')
@@ -102,22 +103,28 @@ async function getItems(
     );
   }
 
+  // ?page=N returns pages 1..N in one shot (range is inclusive on both ends), so
+  // the feed height is reconstructed on back-nav and scroll restoration can land.
+  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+  const limit = safePage * SHOP_PAGE_SIZE;
+
   query = query
     .order('is_featured', { ascending: false })
     .order('created_at', { ascending: false })
     .order('id', { ascending: false })
-    .range(0, SHOP_PAGE_SIZE - 1);
+    .range(0, limit - 1);
 
   const { data, count } = await query;
   const items = (data || []) as ShopItem[];
   const hasMore =
-    count != null ? items.length < count : items.length === SHOP_PAGE_SIZE;
+    count != null ? items.length < count : items.length === limit;
   return { items, hasMore };
 }
 
 export default async function ShopPage({ searchParams }: Props) {
-  const { category, q } = await searchParams;
-  const { items, hasMore } = await getItems(category, q);
+  const { category, q, page } = await searchParams;
+  const pageNum = Math.max(1, parseInt(page ?? '1', 10) || 1);
+  const { items, hasMore } = await getItems(category, q, pageNum);
 
   // Server-side JSON-LD schemas (rendered in initial HTML).
   // LocalBusiness comes from the shared 5-shop registry; FAQ stays inline.

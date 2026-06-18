@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useTransition } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Search, X, ChevronDown, ChevronRight } from 'lucide-react';
@@ -92,15 +92,20 @@ export default function ShopClient({
   const isHome = basePath === '/';
   const [items, setItems] = useState<ShopItem[]>(initialItems);
   const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [hasMore, setHasMore] = useState(
     initialHasMore ?? initialItems.length >= SHOP_PAGE_SIZE
   );
   const [search, setSearch] = useState(searchParams.get('q') || '');
-  const [activeCategory, setActiveCategory] = useState(initialCategory);
   const [sortBy, setSortBy] = useState('newest');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Category and page-depth are URL-driven so they survive back/forward nav and
+  // reconstruct the feed height for scroll restoration. Search stays local state
+  // for instant as-you-type filtering. activeCategory falls back to the SSR prop.
+  const activeCategory = searchParams.get('category') ?? initialCategory ?? '';
+  const pageNum = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
 
   const catName = activeCategory ? CATEGORY_SLUG_MAP[activeCategory] : '';
 
@@ -166,21 +171,30 @@ export default function ShopClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildQuery, sortBy]);
 
-  // Append the next page of results
-  const loadMore = useCallback(async () => {
-    setLoadingMore(true);
-    const offset = items.length;
-    const { data, count } = await buildQuery().range(
-      offset,
-      offset + SHOP_PAGE_SIZE - 1
-    );
-    const rows = (data || []) as ShopItem[];
-    setItems((prev) => [...prev, ...rows]);
-    setHasMore(
-      count != null ? offset + rows.length < count : rows.length === SHOP_PAGE_SIZE
-    );
-    setLoadingMore(false);
-  }, [buildQuery, items.length]);
+  // Sync the displayed list with whatever the server returned for the current
+  // URL. The server component only re-runs on navigation (filter push, page
+  // replace, or back/forward), so initialItems' identity is stable between
+  // navigations — this never fights the client-side live-search fetch below.
+  useEffect(() => {
+    setItems(initialItems);
+    setHasMore(initialHasMore ?? initialItems.length >= SHOP_PAGE_SIZE);
+  }, [initialItems, initialHasMore]);
+
+  // Load more = bump ?page in the URL (replace, so it doesn't pollute history)
+  // and let SSR return pages 1..N in one shot. scroll:false keeps the viewport
+  // put — the navigation must not jump to the top. Carries the current filters
+  // (and the redirect label) forward so depth is scoped to this exact view.
+  const loadMore = useCallback(() => {
+    const params = new URLSearchParams();
+    if (activeCategory) params.set('category', activeCategory);
+    if (search.trim()) params.set('q', search.trim());
+    const rf = searchParams.get('redirectedFrom');
+    if (rf) params.set('redirectedFrom', rf);
+    params.set('page', String(pageNum + 1));
+    startTransition(() => {
+      router.replace(`${basePath}?${params.toString()}`, { scroll: false });
+    });
+  }, [activeCategory, search, pageNum, searchParams, basePath, router]);
 
   // Infinite scroll: when the bottom sentinel scrolls into view (with a 400px
   // pre-load margin), fetch the next page. The effect re-runs after each append
@@ -191,7 +205,7 @@ export default function ShopClient({
     if (!node || !hasMore) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && !loadingMore && !loading) {
+        if (entries[0].isIntersecting && !isPending && !loading) {
           loadMore();
         }
       },
@@ -199,7 +213,7 @@ export default function ShopClient({
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [hasMore, loadingMore, loading, loadMore]);
+  }, [hasMore, isPending, loading, loadMore]);
 
   // Category-name detection: if the search term matches a category name, redirect
   // to that category page instead of running a keyword search. Fires immediately
@@ -221,32 +235,36 @@ export default function ShopClient({
     setSearch('');
   }, [search, router]);
 
-  // Only re-fetch when user changes filters (not on initial mount). Skip the
-  // keyword fetch entirely when the term is a category trigger — the redirect
-  // effect above handles navigation, and running the search would briefly flash
-  // wrong results before the route changes.
+  // Live as-you-type search runs client-side for instant feedback. Fires only for
+  // a non-empty term: an empty box (cleared, or never typed) falls through to the
+  // URL/SSR-driven list via the sync effect above. Category-name terms navigate
+  // via the redirect effect, so we skip them here. Category + page changes are
+  // URL-driven and do NOT trigger this — they re-render from SSR props.
   const [hasMounted, setHasMounted] = useState(false);
   useEffect(() => {
     if (!hasMounted) {
       setHasMounted(true);
       return;
     }
-    if (detectCategorySlug(search)) return;
+    const term = search.trim();
+    if (!term || detectCategorySlug(term)) return;
     fetchItems();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchItems]);
+  }, [search]);
 
+  // Filter changes use push so each creates a history entry — back steps through
+  // the filter states. Omitting `page` resets depth to 1; omitting `redirectedFrom`
+  // clears the redirect label.
   const writeUrl = (cat: string, q: string) => {
     const params = new URLSearchParams();
     if (cat) params.set('category', cat);
     if (q.trim()) params.set('q', q.trim());
     const qs = params.toString();
-    router.replace(qs ? `${basePath}?${qs}` : basePath);
+    router.push(qs ? `${basePath}?${qs}` : basePath);
   };
 
   const handleCategoryClick = (slug: string) => {
     const newCat = activeCategory === slug ? '' : slug;
-    setActiveCategory(newCat);
     writeUrl(newCat, search);
   };
 
@@ -370,7 +388,12 @@ export default function ShopClient({
             {search && (
               <button
                 type="button"
-                onClick={() => setSearch('')}
+                onClick={() => {
+                  setSearch('');
+                  // Drop ?q and restore the URL/SSR-driven list (the live-search
+                  // effect intentionally no-ops on an empty term).
+                  writeUrl(activeCategory, '');
+                }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-black"
                 aria-label="Clear search"
               >
@@ -395,10 +418,7 @@ export default function ShopClient({
               label="All"
               selected={!activeCategory}
               onClick={() => {
-                if (activeCategory) {
-                  setActiveCategory('');
-                  writeUrl('', search);
-                }
+                if (activeCategory) writeUrl('', search);
               }}
             />
             {CATEGORIES.map((cat) => (
@@ -444,10 +464,7 @@ export default function ShopClient({
                 </p>
                 <button
                   type="button"
-                  onClick={() => {
-                    setActiveCategory('');
-                    writeUrl('', search);
-                  }}
+                  onClick={() => writeUrl('', search)}
                   className="inline-flex items-center gap-2 bg-yellow text-black font-semibold px-5 py-2.5 rounded-xl hover:bg-yellow/90 transition-colors"
                 >
                   Show all items
@@ -475,7 +492,7 @@ export default function ShopClient({
                 className="mt-8 flex justify-center"
                 style={{ minHeight: 1 }}
               >
-                {loadingMore && (
+                {isPending && (
                   <div
                     role="status"
                     aria-label="Loading more items"
