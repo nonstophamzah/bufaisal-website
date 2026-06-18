@@ -104,6 +104,31 @@ export default function ShopClient({
 
   const catName = activeCategory ? CATEGORY_SLUG_MAP[activeCategory] : '';
 
+  // "Showing X for 'term'" label after a keyword→category redirect. Driven by the
+  // `redirectedFrom` URL param (set by the redirect) so it survives both a fresh
+  // mount and a same-route navigation, and a local dismiss flag for the in-place
+  // clears. Category name comes from the URL too, so it's correct even when
+  // activeCategory state hasn't re-synced on a same-route push. Display only —
+  // `redirectedFrom` never feeds buildQuery, so it has no effect on results.
+  const redirectedFrom = searchParams.get('redirectedFrom') || '';
+  const redirectedCatName =
+    CATEGORY_SLUG_MAP[searchParams.get('category') || ''] || '';
+  const [labelDismissed, setLabelDismissed] = useState(false);
+  // A fresh redirect (new term) revives the label even if a prior one was dismissed.
+  useEffect(() => {
+    setLabelDismissed(false);
+  }, [redirectedFrom]);
+  const showRedirectLabel = !!redirectedFrom && !!redirectedCatName && !labelDismissed;
+
+  // Strip `redirectedFrom` from the URL (the label's X). Drops only that param;
+  // keeps the category filter intact.
+  const dismissRedirectLabel = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('redirectedFrom');
+    const qs = params.toString();
+    router.replace(qs ? `${basePath}?${qs}` : basePath);
+  };
+
   // Shared filter/sort builder so the reset fetch and "Load More" page the
   // same result set (same WHERE + ORDER) — only the .range() differs.
   const buildQuery = useCallback(() => {
@@ -182,14 +207,15 @@ export default function ShopClient({
   // there is no race where the keyword search shows wrong results before the
   // redirect lands. A whole-term match means "fridge" navigates but "fridge door
   // seal" still runs a normal search, so we don't hijack legitimate queries.
-  // Redirect only — the search term is intentionally left in place so the box
-  // keeps showing e.g. "fridge" after landing on /shop?category=appliances,
-  // making it clear why the shopper arrived on that category. The term is only
-  // cleared when the user clears it or types something new.
+  // The matched term rides along as `redirectedFrom` so the landing page can show
+  // a "Showing X for 'term'" label explaining why the shopper arrived here. It is
+  // NOT passed as `q`, so it never becomes a keyword filter on top of the category.
   useEffect(() => {
     const slug = detectCategorySlug(search);
     if (!slug) return;
-    router.push(`/shop?category=${slug}`);
+    router.push(
+      `/shop?category=${slug}&redirectedFrom=${encodeURIComponent(search.trim())}`
+    );
   }, [search, router]);
 
   // Only re-fetch when user changes filters (not on initial mount). Skip the
@@ -225,7 +251,9 @@ export default function ShopClient({
     e.preventDefault();
     const slug = detectCategorySlug(search);
     if (slug) {
-      router.push(`/shop?category=${slug}`);
+      router.push(
+        `/shop?category=${slug}&redirectedFrom=${encodeURIComponent(search.trim())}`
+      );
       return;
     }
     writeUrl(activeCategory, search);
@@ -300,13 +328,35 @@ export default function ShopClient({
           )}
         </div>
 
+        {/* Keyword→category redirect notice. Display only — does not filter. */}
+        {showRedirectLabel && (
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1.5 text-sm text-gray-700">
+            <span>
+              Showing <span className="font-medium">{redirectedCatName}</span> for{' '}
+              <span className="font-medium">&ldquo;{redirectedFrom}&rdquo;</span>
+            </span>
+            <button
+              type="button"
+              onClick={dismissRedirectLabel}
+              className="text-muted hover:text-black"
+              aria-label="Clear redirect notice"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         {/* Search bar */}
         <form onSubmit={handleSearch} className="mb-6">
           <div className="relative max-w-xl">
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                // Using the search box again dismisses the redirect notice.
+                if (redirectedFrom) setLabelDismissed(true);
+              }}
               placeholder="Search items by name, brand..."
               className="w-full px-4 py-3 pl-11 border border-gray-200 rounded-xl focus:outline-none focus:border-yellow text-base"
             />

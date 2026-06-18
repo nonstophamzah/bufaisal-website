@@ -23,7 +23,11 @@ export default function Navbar() {
     // everything else runs a keyword search. Same detection the in-page search
     // uses, so both entry points behave identically.
     const slug = detectCategorySlug(term);
-    router.push(slug ? `/shop?category=${slug}` : `/shop?q=${encodeURIComponent(term)}`);
+    router.push(
+      slug
+        ? `/shop?category=${slug}&redirectedFrom=${encodeURIComponent(term)}`
+        : `/shop?q=${encodeURIComponent(term)}`
+    );
     setSearchOpen(false);
     setQuery('');
   };
