@@ -203,26 +203,29 @@ export default function ShopClient({
   }, [hasMore, loadingMore, loading, loadMore]);
 
   // Category-name detection: if the search term matches a category name, redirect
-  // to that category page instead of running a keyword search. Debounced so a term
-  // is only acted on once the shopper stops typing (avoids "beds" firing while
-  // someone is on their way to typing "bedside").
+  // to that category page instead of running a keyword search. Fires immediately
+  // (no debounce) — the keyword fetch below is suppressed for the same term, so
+  // there is no race where the keyword search shows wrong results before the
+  // redirect lands. A whole-term match means "fridge" navigates but "fridge door
+  // seal" still runs a normal search, so we don't hijack legitimate queries.
   useEffect(() => {
     const slug = detectCategorySlug(search);
     if (!slug) return;
-    const timeout = setTimeout(() => {
-      router.push(`/shop?category=${slug}`);
-    }, 450);
-    return () => clearTimeout(timeout);
+    router.push(`/shop?category=${slug}`);
   }, [search, router]);
 
-  // Only re-fetch when user changes filters (not on initial mount)
+  // Only re-fetch when user changes filters (not on initial mount). Skip the
+  // keyword fetch entirely when the term is a category trigger — the redirect
+  // effect above handles navigation, and running the search would briefly flash
+  // wrong results before the route changes.
   const [hasMounted, setHasMounted] = useState(false);
   useEffect(() => {
-    if (hasMounted) {
-      fetchItems();
-    } else {
+    if (!hasMounted) {
       setHasMounted(true);
+      return;
     }
+    if (detectCategorySlug(search)) return;
+    fetchItems();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchItems]);
 
