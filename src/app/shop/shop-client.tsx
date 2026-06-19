@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef, useTransition } from 'react';
+import { flushSync } from 'react-dom';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Search, X, ChevronDown, ChevronRight } from 'lucide-react';
@@ -172,7 +173,11 @@ export default function ShopClient({
     // Bail if a newer fetch or an SSR navigation has superseded this one — its
     // stale rows must not overwrite the current list (e.g. a partial-term
     // keyword fetch resolving after a category redirect).
-    if (reqId !== reqIdRef.current) return;
+    if (reqId !== reqIdRef.current) {
+      // eslint-disable-next-line no-console
+      console.log('FETCH CANCELLED (stale reqId)', { reqId, current: reqIdRef.current, rows: (data || []).length });
+      return;
+    }
     const rows = (data || []) as ShopItem[];
     setItems(rows);
     setHasMore(count != null ? rows.length < count : rows.length === SHOP_PAGE_SIZE);
@@ -281,9 +286,16 @@ export default function ShopClient({
       // eslint-disable-next-line no-console
       console.log('REDIRECT FIRING, clearing items', { isHome, slug, search });
       if (!isHome) {
+        // flushSync forces the clear + loading state to COMMIT (and paint)
+        // before router.push starts the navigation. Without it, these are
+        // batched as non-urgent updates and can land AFTER the SSR prop-sync,
+        // wiping the correct 22-row payload instead of the stale 1-row result.
+        // The reqId bump cancels any in-flight keyword fetch (see fetchItems).
         reqIdRef.current++;
-        setItems([]);
-        setLoading(true);
+        flushSync(() => {
+          setItems([]);
+          setLoading(true);
+        });
       }
       router.push(
         `/shop?category=${slug}&redirectedFrom=${encodeURIComponent(search.trim())}`
