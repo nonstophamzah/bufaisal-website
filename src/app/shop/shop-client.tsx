@@ -192,12 +192,13 @@ export default function ShopClient({
   useEffect(() => {
     // eslint-disable-next-line no-console
     console.log('PROP SYNC, initialItems count:', initialItems.length);
-    // The SSR payload is authoritative: invalidate any in-flight client fetch,
-    // adopt the rows, and clear the redirect loading state once they arrive.
-    reqIdRef.current++;
+    // The SSR payload is authoritative — adopt it UNCONDITIONALLY (no reqId
+    // guard; it must always win). THEN bump reqIdRef so any client fetch that is
+    // still in flight is treated as stale and can't overwrite these rows.
     setItems(initialItems);
     setHasMore(initialHasMore ?? initialItems.length >= SHOP_PAGE_SIZE);
     setLoading(false);
+    reqIdRef.current++;
   }, [initialItems, initialHasMore]);
 
   // Load more = bump ?page in the URL (replace, so it doesn't pollute history)
