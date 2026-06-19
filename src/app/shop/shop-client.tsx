@@ -93,12 +93,6 @@ export default function ShopClient({
   const [items, setItems] = useState<ShopItem[]>(initialItems);
   const [loading, setLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
-  // Separate transition for the search→category redirect. Wrapping its
-  // router.push keeps `isRedirecting` true for the whole SSR round-trip, so the
-  // skeleton actually paints (flushSync committed loading=true but the fast SSR
-  // response replaced it before the browser drew a frame). Kept distinct from
-  // `isPending` so a load-more (which uses isPending) never blanks the grid.
-  const [isRedirecting, startRedirectTransition] = useTransition();
   const [hasMore, setHasMore] = useState(
     initialHasMore ?? initialItems.length >= SHOP_PAGE_SIZE
   );
@@ -178,11 +172,7 @@ export default function ShopClient({
     // Bail if a newer fetch or an SSR navigation has superseded this one — its
     // stale rows must not overwrite the current list (e.g. a partial-term
     // keyword fetch resolving after a category redirect).
-    if (reqId !== reqIdRef.current) {
-      // eslint-disable-next-line no-console
-      console.log('FETCH CANCELLED (stale reqId)', { reqId, current: reqIdRef.current, rows: (data || []).length });
-      return;
-    }
+    if (reqId !== reqIdRef.current) return;
     const rows = (data || []) as ShopItem[];
     setItems(rows);
     setHasMore(count != null ? rows.length < count : rows.length === SHOP_PAGE_SIZE);
@@ -195,8 +185,6 @@ export default function ShopClient({
   // replace, or back/forward), so initialItems' identity is stable between
   // navigations — this never fights the client-side live-search fetch below.
   useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.log('PROP SYNC, initialItems count:', initialItems.length);
     // The SSR payload is authoritative — adopt it UNCONDITIONALLY (no reqId
     // guard; it must always win). THEN bump reqIdRef so any client fetch that is
     // still in flight is treated as stale and can't overwrite these rows.
@@ -289,25 +277,14 @@ export default function ShopClient({
       // arrives (prop-sync clears `loading`). reqId bump cancels any in-flight
       // keyword fetch so it can't repopulate after the clear. On the homepage
       // (cross-route) the fresh mount handles this, so skip the flash-of-skeleton.
-      // eslint-disable-next-line no-console
-      console.log('REDIRECT FIRING', { isHome, slug, search });
-      const url = `/shop?category=${slug}&redirectedFrom=${encodeURIComponent(search.trim())}`;
-      if (!isHome) {
-        // Same-route redirect (already on /shop) doesn't remount. Bump reqId to
-        // cancel any in-flight keyword fetch, set loading=true to bridge the
-        // final commit→prop-sync window, and run the navigation INSIDE a
-        // transition so `isRedirecting` stays true (and the skeleton paints) for
-        // the whole SSR round-trip — covering the gap flushSync could not.
-        reqIdRef.current++;
-        setLoading(true);
-        startRedirectTransition(() => router.push(url));
-      } else {
-        // Homepage: cross-route nav remounts /shop fresh from SSR — no skeleton needed.
-        router.push(url);
-      }
-      // Clear on submit only — the term now lives in the redirect label, and an
-      // empty box avoids a residual keyword filter on top of the category.
-      setSearch('');
+      // Category keyword → full-page navigation (NOT client-side router.push) so
+      // /shop remounts fresh from SSR. This deliberately bypasses all same-route
+      // client-state timing (the stale-keyword-result flash); a full reload on a
+      // search submit is an acceptable tradeoff. The term rides along as
+      // `redirectedFrom` for the "Showing X for 'term'" label.
+      window.location.href = `/shop?category=${slug}&redirectedFrom=${encodeURIComponent(
+        search.trim()
+      )}`;
       return;
     }
     writeUrl(activeCategory, search);
@@ -478,7 +455,7 @@ export default function ShopClient({
         </div>
 
         {/* Items grid */}
-        {loading || isRedirecting ? (
+        {loading ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {Array.from({ length: 8 }).map((_, i) => (
               <div
