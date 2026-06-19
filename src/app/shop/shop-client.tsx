@@ -8,6 +8,7 @@ import ItemCard from '@/components/ItemCard';
 import { supabase, ShopItem } from '@/lib/supabase';
 import { CATEGORIES, CATEGORY_SLUG_MAP, SHOP_PAGE_SIZE } from '@/lib/constants';
 import { detectCategorySlug } from '@/lib/category-search';
+import { canonicalizeSearchTerm } from '@/lib/search-synonyms';
 
 const CATEGORY_INTROS: Record<string, string> = {
   'living-room-lounge':
@@ -153,8 +154,11 @@ export default function ShopClient({
     }
 
     if (search.trim()) {
+      // Rewrite synonyms (e.g. "couch" → "sofa") to the canonical catalog word
+      // for the query only — the box keeps the user's original text.
+      const term = canonicalizeSearchTerm(search);
       query = query.or(
-        `published_item_name.ilike.%${search.trim()}%,published_brand.ilike.%${search.trim()}%,published_description.ilike.%${search.trim()}%`
+        `published_item_name.ilike.%${term}%,published_brand.ilike.%${term}%,published_description.ilike.%${term}%`
       );
     }
 

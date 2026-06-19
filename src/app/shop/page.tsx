@@ -8,6 +8,7 @@ import { LOCAL_BUSINESS_SCHEMAS } from '@/lib/local-business-schema';
 import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
 import { resolveItemImageUrl } from '@/lib/item-image';
 import { getEffectivePrice } from '@/lib/effective-fields';
+import { canonicalizeSearchTerm } from '@/lib/search-synonyms';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -98,8 +99,11 @@ async function getItems(
   }
 
   if (q?.trim()) {
+    // Rewrite synonyms (e.g. "couch" → "sofa") to the canonical catalog word for
+    // the query only — the URL's ?q and the search box keep the original text.
+    const term = canonicalizeSearchTerm(q);
     query = query.or(
-      `published_item_name.ilike.%${q.trim()}%,published_brand.ilike.%${q.trim()}%,published_description.ilike.%${q.trim()}%`
+      `published_item_name.ilike.%${term}%,published_brand.ilike.%${term}%,published_description.ilike.%${term}%`
     );
   }
 
