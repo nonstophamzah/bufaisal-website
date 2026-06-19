@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef, useTransition } from 'react';
-import { flushSync } from 'react-dom';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Search, X, ChevronDown, ChevronRight } from 'lucide-react';
@@ -94,6 +93,12 @@ export default function ShopClient({
   const [items, setItems] = useState<ShopItem[]>(initialItems);
   const [loading, setLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
+  // Separate transition for the search→category redirect. Wrapping its
+  // router.push keeps `isRedirecting` true for the whole SSR round-trip, so the
+  // skeleton actually paints (flushSync committed loading=true but the fast SSR
+  // response replaced it before the browser drew a frame). Kept distinct from
+  // `isPending` so a load-more (which uses isPending) never blanks the grid.
+  const [isRedirecting, startRedirectTransition] = useTransition();
   const [hasMore, setHasMore] = useState(
     initialHasMore ?? initialItems.length >= SHOP_PAGE_SIZE
   );
@@ -285,22 +290,21 @@ export default function ShopClient({
       // keyword fetch so it can't repopulate after the clear. On the homepage
       // (cross-route) the fresh mount handles this, so skip the flash-of-skeleton.
       // eslint-disable-next-line no-console
-      console.log('REDIRECT FIRING, clearing items', { isHome, slug, search });
+      console.log('REDIRECT FIRING', { isHome, slug, search });
+      const url = `/shop?category=${slug}&redirectedFrom=${encodeURIComponent(search.trim())}`;
       if (!isHome) {
-        // flushSync forces the clear + loading state to COMMIT (and paint)
-        // before router.push starts the navigation. Without it, these are
-        // batched as non-urgent updates and can land AFTER the SSR prop-sync,
-        // wiping the correct 22-row payload instead of the stale 1-row result.
-        // The reqId bump cancels any in-flight keyword fetch (see fetchItems).
+        // Same-route redirect (already on /shop) doesn't remount. Bump reqId to
+        // cancel any in-flight keyword fetch, set loading=true to bridge the
+        // final commit→prop-sync window, and run the navigation INSIDE a
+        // transition so `isRedirecting` stays true (and the skeleton paints) for
+        // the whole SSR round-trip — covering the gap flushSync could not.
         reqIdRef.current++;
-        flushSync(() => {
-          setItems([]);
-          setLoading(true);
-        });
+        setLoading(true);
+        startRedirectTransition(() => router.push(url));
+      } else {
+        // Homepage: cross-route nav remounts /shop fresh from SSR — no skeleton needed.
+        router.push(url);
       }
-      router.push(
-        `/shop?category=${slug}&redirectedFrom=${encodeURIComponent(search.trim())}`
-      );
       // Clear on submit only — the term now lives in the redirect label, and an
       // empty box avoids a residual keyword filter on top of the category.
       setSearch('');
@@ -474,7 +478,7 @@ export default function ShopClient({
         </div>
 
         {/* Items grid */}
-        {loading ? (
+        {loading || isRedirecting ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {Array.from({ length: 8 }).map((_, i) => (
               <div
