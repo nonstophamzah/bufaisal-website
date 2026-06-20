@@ -13,6 +13,7 @@
 const SEARCH_SYNONYMS: Record<string, string> = {
   fridge: 'refrigerator',
   fridges: 'refrigerator',
+  refrigerators: 'refrigerator', // plural — catalog titles are singular (0 matches for "refrigerators")
   washer: 'washing machine',
   washers: 'washing machine',
   couch: 'sofa',
@@ -21,6 +22,7 @@ const SEARCH_SYNONYMS: Record<string, string> = {
   tele: 'tv',
   television: 'tv',
   'a/c': 'ac',
+  'air conditioner': 'ac', // catalog uses "AC" — "air conditioner" matches 0 rows
 };
 
 // Returns the canonical query term for a raw search string. ONLY the query term

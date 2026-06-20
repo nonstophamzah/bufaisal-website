@@ -10,11 +10,12 @@
 // identically. No 'use client' here — this is a pure module importable from both
 // client components and server code.
 export const CATEGORY_SEARCH_TRIGGERS: { slug: string; terms: string[] }[] = [
-  // Note: specific-product terms "fridge"/"fridges"/"washer" are intentionally
-  // NOT here — they fall through to the keyword search, where the synonym map
-  // canonicalizes them ("fridge"→"refrigerator", "washer"→"washing machine") so
-  // a shopper sees only those products, not the whole appliances category.
-  { slug: 'appliances', terms: ['appliances', 'appliance', 'refrigerator', 'refrigerators', 'washing machine', 'ac', 'air conditioner', 'tv', 'television'] },
+  // Only the category-level words redirect here. Every specific-product term
+  // (fridge, refrigerator, washing machine, tv, ac, air conditioner, …) is
+  // intentionally NOT a trigger — those fall through to the keyword search (with
+  // synonym canonicalization in search-synonyms.ts) so a shopper sees just those
+  // products, not the whole 22-item appliances category.
+  { slug: 'appliances', terms: ['appliances', 'appliance'] },
   { slug: 'bedroom-sleep', terms: ['beds', 'bed', 'bedroom', 'sleep', 'bedroom & sleep', 'wardrobe', 'wardrobes', 'closet', 'mattress', 'mattresses'] },
   { slug: 'living-room-lounge', terms: ['living room', 'sofa', 'sofas', 'couch', 'lounge', 'living room & lounge'] },
   { slug: 'kitchen-dining', terms: ['kitchen', 'dining', 'kitchen & dining', 'dining table', 'dining set'] },
