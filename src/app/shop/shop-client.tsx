@@ -275,19 +275,16 @@ export default function ShopClient({
     e.preventDefault();
     const slug = detectCategorySlug(search);
     if (slug) {
-      // Same-route redirect (already on /shop) doesn't remount, so clear the
-      // stale list and show the loading skeleton immediately — otherwise the
-      // feed flashes the leftover keyword result until the SSR category payload
-      // arrives (prop-sync clears `loading`). reqId bump cancels any in-flight
-      // keyword fetch so it can't repopulate after the clear. On the homepage
-      // (cross-route) the fresh mount handles this, so skip the flash-of-skeleton.
-      // Category keyword → full-page navigation (NOT client-side router.push) so
-      // /shop remounts fresh from SSR. This deliberately bypasses all same-route
-      // client-state timing (the stale-keyword-result flash); a full reload on a
-      // search submit is an acceptable tradeoff. The term rides along as
-      // `redirectedFrom` for the "Showing X for 'term'" label.
+      // Category term → full-page navigation to the category view. The URL carries
+      // ONLY category + redirectedFrom — never ?q — so the term can't be applied
+      // as a keyword filter against item names (which is why "appliances" must
+      // show the category, not 0 results). Clearing the box guards the edge case
+      // where the browser treats the navigation as a same-URL no-op. The full
+      // reload remounts /shop fresh from SSR, sidestepping client-state timing.
+      const term = search.trim();
+      setSearch('');
       window.location.href = `/shop?category=${slug}&redirectedFrom=${encodeURIComponent(
-        search.trim()
+        term
       )}`;
       return;
     }
