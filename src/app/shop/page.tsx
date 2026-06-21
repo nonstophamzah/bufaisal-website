@@ -9,6 +9,7 @@ import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
 import { resolveItemImageUrl } from '@/lib/item-image';
 import { getEffectivePrice } from '@/lib/effective-fields';
 import { canonicalizeSearchTerm } from '@/lib/search-synonyms';
+import { sortByCategoryPriority, hasCategoryPriority } from '@/lib/category-sort';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -112,14 +113,35 @@ async function getItems(
   const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   const limit = safePage * SHOP_PAGE_SIZE;
 
+  const catName =
+    category && CATEGORY_SLUG_MAP[category] ? CATEGORY_SLUG_MAP[category] : undefined;
+  const prioritized = !!catName && hasCategoryPriority(catName);
+
   query = query
     .order('is_featured', { ascending: false })
     .order('created_at', { ascending: false })
-    .order('id', { ascending: false })
-    .range(0, limit - 1);
+    .order('id', { ascending: false });
+
+  // Prioritized category pages need the priority tier computed across the WHOLE
+  // category, not just the first page window — otherwise high-intent items that
+  // are also old (beyond page 1 in recency order) stay buried. Categories are
+  // far smaller than any realistic page depth (≤ a few hundred rows), so we
+  // fetch the whole category, re-sort by priority, then slice to the page
+  // window below. Non-prioritized feeds keep the lighter DB-range pagination.
+  if (!prioritized) {
+    query = query.range(0, limit - 1);
+  }
 
   const { data, count } = await query;
   const items = (data || []) as ShopItem[];
+
+  if (prioritized && catName) {
+    // Stable priority re-sort across the full category; within a tier the
+    // is_featured → created_at DESC → id DESC order above is preserved.
+    const ordered = sortByCategoryPriority(items, catName);
+    return { items: ordered.slice(0, limit), hasMore: ordered.length > limit };
+  }
+
   const hasMore =
     count != null ? items.length < count : items.length === limit;
   return { items, hasMore };
