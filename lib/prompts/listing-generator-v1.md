@@ -38,7 +38,7 @@ For Used Appliances (universally true for ALL appliances on the site):
 - "7-day warranty included"
 - "Anything wrong, we fix it"
 
-For Used Furniture and Bulky Items (Living Room, Bedroom, Kitchen & Dining furniture, Outdoor & Garden, Office, Study & Fitness, Kids & Baby furniture):
+For Used Furniture and Bulky Items (Living Room, Bedroom, Dining & Kitchen furniture, Outdoor & Garden, Office & Fitness, Kids & Baby furniture):
 - "Trucks include carpenters for free assembly at your home"
 - (No warranty — used furniture is sold as-is, condition disclosed honestly.)
 
@@ -105,19 +105,19 @@ BRAND HANDLING RULE (locked decision #1):
 JOB 3 — CHOOSE THE CATEGORY (STRICT DECISION TREE)
 
 The 8 locked categories are:
-1. Living Room & Lounge
-2. Bedroom & Sleep
-3. Kitchen & Dining
+1. Living Room
+2. Bedroom
+3. Dining & Kitchen
 4. Appliances
 5. Outdoor & Garden
 6. Kids & Baby
-7. Office, Study & Fitness
-8. Everyday Essentials
+7. Office & Fitness
+8. Shoe Racks & Shelves
 
 Apply this decision tree IN ORDER. Stop at the first match.
 
 Step 1: Does the item plug into electricity, run on gas, or contain a motor/compressor/heating element?
-   YES → Appliances. STOP. (This includes refrigerators, freezers, washing machines, dryers, dishwashers, microwaves, ovens, stoves, AC units, water heaters, vacuum cleaners, fans, mixers, blenders, kettles, irons. NO EXCEPTIONS — a fridge is NEVER Kitchen & Dining.)
+   YES → Appliances. STOP. (This includes refrigerators, freezers, washing machines, dryers, dishwashers, microwaves, ovens, stoves, AC units, water heaters, vacuum cleaners, fans, mixers, blenders, kettles, irons. NO EXCEPTIONS — a fridge is NEVER Dining & Kitchen.)
    NO → continue.
 
 Step 2: Is the item primarily for children under 12 (cribs, high chairs, kids' beds, kids' toys, strollers, kids' clothing/shoes)?
@@ -129,34 +129,34 @@ Step 3: Is the item designed for outdoor use (patio furniture, garden tools, BBQ
    NO → continue.
 
 Step 4: Is the item a desk, office chair, filing cabinet, treadmill, exercise bike, or other study/fitness equipment?
-   YES → Office, Study & Fitness. STOP.
+   YES → Office & Fitness. STOP.
    NO → continue.
 
 Step 5: Is the item a bed, mattress, headboard, wardrobe, dresser, nightstand, or anything primarily used in a bedroom?
-   YES → Bedroom & Sleep. STOP.
+   YES → Bedroom. STOP.
    NO → continue.
 
 Step 6: Is the item a sofa, armchair, coffee table, TV stand, lounge accent piece, or anything primarily used in a living room?
-   YES → Living Room & Lounge. STOP.
+   YES → Living Room. STOP.
    NO → continue.
 
 Step 7: Is the item a dining table, dining chair, dining set, kitchen cabinet, cookware, dishware, or anything primarily used for eating/cooking that is NOT an appliance?
-   YES → Kitchen & Dining. STOP.
+   YES → Dining & Kitchen. STOP.
    NO → continue.
 
-Step 8: Default → Everyday Essentials. (Use this only when nothing else clearly fits — e.g., small home goods, lamps without clear room association, generic decor.)
+Step 8: Default → Shoe Racks & Shelves. (Use this only when nothing else clearly fits — e.g., shoe racks, shelving units, small home goods, lamps without clear room association, generic decor.)
 
-If you find yourself uncertain between two categories, choose the more specific one (Bedroom & Sleep over Everyday Essentials), but ONLY if the item clearly fits. Do not stretch.
+If you find yourself uncertain between two categories, choose the more specific one (Bedroom over Shoe Racks & Shelves), but ONLY if the item clearly fits. Do not stretch.
 
 PRODUCT_TYPE_VOCABULARY (for the product_type field, used in filter URLs):
 - Appliances: Refrigerator, Freezer, Washing Machine, Dryer, Dishwasher, Microwave, Oven, Stove, AC Unit, Water Heater, Vacuum Cleaner, Fan, Small Appliance
-- Bedroom & Sleep: Bed Frame, Mattress, Wardrobe, Dresser, Nightstand, Bedroom Set
-- Living Room & Lounge: Sofa, Sectional Sofa, Armchair, Coffee Table, TV Stand, Living Room Set
-- Kitchen & Dining: Dining Table, Dining Chair, Dining Set, Kitchen Cabinet, Cookware, Dishware
+- Bedroom: Bed Frame, Mattress, Wardrobe, Dresser, Nightstand, Bedroom Set
+- Living Room: Sofa, Sectional Sofa, Armchair, Coffee Table, TV Stand, Living Room Set
+- Dining & Kitchen: Dining Table, Dining Chair, Dining Set, Kitchen Cabinet, Cookware, Dishware
 - Kids & Baby: Crib, High Chair, Stroller, Kids Bed, Kids Toy, Kids Clothing
 - Outdoor & Garden: Patio Set, Garden Tool, BBQ Grill, Outdoor Chair, Pool Equipment
-- Office, Study & Fitness: Desk, Office Chair, Filing Cabinet, Treadmill, Exercise Bike, Study Set
-- Everyday Essentials: Lamp, Mirror, Decor, Storage, Other
+- Office & Fitness: Desk, Office Chair, Filing Cabinet, Treadmill, Exercise Bike, Study Set
+- Shoe Racks & Shelves: Shoe Rack, Shelving Unit, Lamp, Mirror, Decor, Storage, Other
 
 Use a value from this list in the product_type field. If nothing fits exactly, use the closest match and add "product_type_uncertain" to flags.
 
@@ -321,7 +321,7 @@ For Used Appliances:
   "answer": "Yes. All Bufaisal appliances are tested by our team before listing and come with a 7-day warranty. The current condition is described above and shown in the photos. For specific concerns, message on WhatsApp."
 }
 
-For Used Furniture (Living Room, Bedroom, Kitchen & Dining, Office, Outdoor):
+For Used Furniture (Living Room, Bedroom, Dining & Kitchen, Office, Outdoor):
 {
   "question": "What condition is this [item] in?",
   "answer": "This [item] is listed in [Excellent/Good/Fair] condition. All Bufaisal items are inspected before listing. Visible wear or imperfections are shown in the photos. For specific concerns, message on WhatsApp."
@@ -407,7 +407,7 @@ APPLIANCES ONLY (used appliances):
 - "7-day warranty included"
 - "Anything wrong, we fix it"
 
-FURNITURE AND BULKY ASSEMBLY ITEMS (used or new — Living Room, Bedroom, Kitchen & Dining furniture, Outdoor & Garden, Office, Study & Fitness, Kids & Baby furniture):
+FURNITURE AND BULKY ASSEMBLY ITEMS (used or new — Living Room, Bedroom, Dining & Kitchen furniture, Outdoor & Garden, Office & Fitness, Kids & Baby furniture):
 - "Trucks include carpenters for free assembly at your home"
 
 NOTE on carpenter assembly: apply this signal to any item that needs assembly at home (sofas, beds, dining sets, patio sets, BBQs, desks, treadmills, cribs, etc.). Do NOT apply to small/no-assembly items (lamps, mirrors, decor, cookware, dishware, toys, clothing).

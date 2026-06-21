@@ -15,14 +15,16 @@ export const CATEGORY_SEARCH_TRIGGERS: { slug: string; terms: string[] }[] = [
   // intentionally NOT a trigger — those fall through to the keyword search (with
   // synonym canonicalization in search-synonyms.ts) so a shopper sees just those
   // products, not the whole 22-item appliances category.
+  // Slugs are canonical (post-2026-06-21 rename). Terms keep both old and new
+  // category-name phrasings so either redirects correctly.
   { slug: 'appliances', terms: ['appliances', 'appliance'] },
-  { slug: 'bedroom-sleep', terms: ['beds', 'bed', 'bedroom', 'sleep', 'bedroom & sleep', 'wardrobe', 'wardrobes', 'closet', 'mattress', 'mattresses'] },
-  { slug: 'living-room-lounge', terms: ['living room', 'sofa', 'sofas', 'couch', 'lounge', 'living room & lounge'] },
-  { slug: 'kitchen-dining', terms: ['kitchen', 'dining', 'kitchen & dining', 'dining table', 'dining set'] },
+  { slug: 'bedroom', terms: ['beds', 'bed', 'bedroom', 'sleep', 'bedroom & sleep', 'wardrobe', 'wardrobes', 'closet', 'mattress', 'mattresses'] },
+  { slug: 'living-room', terms: ['living room', 'sofa', 'sofas', 'couch', 'lounge', 'living room & lounge'] },
+  { slug: 'dining-kitchen', terms: ['kitchen', 'dining', 'dining & kitchen', 'kitchen & dining', 'dining table', 'dining set'] },
   { slug: 'outdoor-garden', terms: ['outdoor', 'garden', 'outdoor & garden'] },
   { slug: 'kids-baby', terms: ['kids', 'baby', 'kids & baby'] },
-  { slug: 'office-study-fitness', terms: ['office', 'fitness', 'gym', 'treadmill', 'office study fitness', 'office, study & fitness'] },
-  { slug: 'everyday-essentials', terms: ['everyday', 'essentials', 'everyday essentials'] },
+  { slug: 'office-fitness', terms: ['office', 'fitness', 'gym', 'treadmill', 'office & fitness', 'office study fitness', 'office, study & fitness'] },
+  { slug: 'shoe-racks-shelves', terms: ['shoe rack', 'shoe racks', 'shoe racks & shelves', 'shelves', 'shelf', 'everyday', 'essentials', 'everyday essentials'] },
 ];
 
 // Whole-term (not substring) match so legitimate product searches like

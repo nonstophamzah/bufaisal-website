@@ -30,10 +30,10 @@ import { resolvePublicItemFields } from './resolve-public-item-fields';
 // value (see CATEGORIES in constants.ts). Array order IS the tier order:
 // index 0 = tier 1 (highest). A name that matches no rule is "everything else"
 // and sorts below all matched tiers. Categories absent from this map
-// (Appliances, Kids & Baby, Outdoor & Garden, Everyday Essentials) are left in
+// (Appliances, Kids & Baby, Outdoor & Garden, Shoe Racks & Shelves) are left in
 // their incoming order.
 const PRIORITY_RULES: Record<string, RegExp[]> = {
-  'Bedroom & Sleep': [
+  'Bedroom': [
     // king/queen/double/single/bunk/canopy/upholstered beds all literally
     // contain the word "bed". \b boundaries keep "bedside"/"bedroom" out.
     /\bbeds?\b/,
@@ -41,19 +41,19 @@ const PRIORITY_RULES: Record<string, RegExp[]> = {
     /\bmattress/,
     /\bnightstand\b|\bbedside\b/,
   ],
-  'Living Room & Lounge': [
+  'Living Room': [
     /\bsofa|\bsectional|\bcouch|\barmchair/,
     /\bcoffee table/,
     /\btv stand|\btv unit/,
   ],
-  'Kitchen & Dining': [
+  'Dining & Kitchen': [
     // "dining chair" must NOT match the table/set tier, so these phrases are
     // checked before the dining-chair tier below.
     /\bdining table|\bdining set/,
     /\bdining chair/,
     /\bkitchen cabinet/,
   ],
-  'Office, Study & Fitness': [
+  'Office & Fitness': [
     /\bdesk/,
     /\boffice chair/,
     /\btreadmill|\bexercise bike/,

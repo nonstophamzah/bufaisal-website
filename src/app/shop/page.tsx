@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { Suspense } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { ShopItem } from '@/lib/supabase';
-import { CATEGORY_SLUG_MAP, SHOP_PAGE_SIZE } from '@/lib/constants';
+import { CATEGORY_SLUG_MAP, SHOP_PAGE_SIZE, resolveCategorySlug } from '@/lib/constants';
 import ShopClient from './shop-client';
 import { LOCAL_BUSINESS_SCHEMAS } from '@/lib/local-business-schema';
 import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
@@ -47,7 +47,10 @@ type Props = {
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   const { category } = await searchParams;
-  const catName = category ? CATEGORY_SLUG_MAP[category] : '';
+  // Canonical slug so legacy ?category= links produce the right title + a
+  // canonical OG URL on the new slug.
+  const slug = resolveCategorySlug(category);
+  const catName = slug ? CATEGORY_SLUG_MAP[slug] : '';
 
   if (catName) {
     return {
@@ -58,7 +61,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
         description: `Buy quality second-hand ${catName.toLowerCase()} at affordable prices. Visit our 5 shops in Ajman or WhatsApp us.`,
         siteName: 'Bu Faisal',
         type: 'website',
-        url: `https://bufaisal.ae/shop?category=${category}`,
+        url: `https://bufaisal.ae/shop?category=${slug}`,
       },
       alternates: {
         canonical: '/shop',
@@ -95,8 +98,11 @@ async function getItems(
     .eq('is_sold', false)
     .eq('is_hidden', false);
 
-  if (category && CATEGORY_SLUG_MAP[category]) {
-    query = query.eq('published_category', CATEGORY_SLUG_MAP[category]);
+  // Normalize legacy slugs (e.g. bedroom-sleep → bedroom) so old indexed links
+  // still filter correctly after the 2026-06-21 category rename.
+  const slug = resolveCategorySlug(category);
+  if (slug && CATEGORY_SLUG_MAP[slug]) {
+    query = query.eq('published_category', CATEGORY_SLUG_MAP[slug]);
   }
 
   if (q?.trim()) {
@@ -114,7 +120,7 @@ async function getItems(
   const limit = safePage * SHOP_PAGE_SIZE;
 
   const catName =
-    category && CATEGORY_SLUG_MAP[category] ? CATEGORY_SLUG_MAP[category] : undefined;
+    slug && CATEGORY_SLUG_MAP[slug] ? CATEGORY_SLUG_MAP[slug] : undefined;
   const prioritized = !!catName && hasCategoryPriority(catName);
 
   query = query
@@ -158,7 +164,7 @@ export default async function ShopPage({ searchParams }: Props) {
   // version in shop-client.tsx, but emitted in the SSR HTML so Googlebot
   // doesn't have to render JS to see it. Gated on `catName && items.length`
   // (no schema on the unfiltered /shop view, matching prior behavior).
-  const catName = category ? CATEGORY_SLUG_MAP[category] : '';
+  const catName = category ? CATEGORY_SLUG_MAP[resolveCategorySlug(category)] : '';
   const itemListSchema =
     catName && items.length > 0
       ? {

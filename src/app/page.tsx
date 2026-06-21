@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { Suspense } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { ShopItem } from '@/lib/supabase';
-import { CATEGORY_SLUG_MAP, SHOP_PAGE_SIZE } from '@/lib/constants';
+import { CATEGORY_SLUG_MAP, SHOP_PAGE_SIZE, resolveCategorySlug } from '@/lib/constants';
 import ShopClient from './shop/shop-client';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -73,8 +73,11 @@ async function getItems(
     .eq('is_sold', false)
     .eq('is_hidden', false);
 
-  if (category && CATEGORY_SLUG_MAP[category]) {
-    query = query.eq('published_category', CATEGORY_SLUG_MAP[category]);
+  // Normalize legacy slugs (e.g. bedroom-sleep → bedroom) so old indexed links
+  // still filter correctly after the 2026-06-21 category rename.
+  const slug = resolveCategorySlug(category);
+  if (slug && CATEGORY_SLUG_MAP[slug]) {
+    query = query.eq('published_category', CATEGORY_SLUG_MAP[slug]);
   }
 
   if (q?.trim()) {
@@ -92,7 +95,7 @@ async function getItems(
   const limit = safePage * SHOP_PAGE_SIZE;
 
   const catName =
-    category && CATEGORY_SLUG_MAP[category] ? CATEGORY_SLUG_MAP[category] : undefined;
+    slug && CATEGORY_SLUG_MAP[slug] ? CATEGORY_SLUG_MAP[slug] : undefined;
   const prioritized = !!catName && hasCategoryPriority(catName);
 
   query = query

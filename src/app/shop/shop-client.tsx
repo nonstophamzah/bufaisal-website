@@ -6,16 +6,18 @@ import Link from 'next/link';
 import { Search, X, ChevronDown, ChevronRight } from 'lucide-react';
 import ItemCard from '@/components/ItemCard';
 import { supabase, ShopItem } from '@/lib/supabase';
-import { CATEGORIES, CATEGORY_SLUG_MAP, SHOP_PAGE_SIZE } from '@/lib/constants';
+import { CATEGORIES, CATEGORY_SLUG_MAP, SHOP_PAGE_SIZE, resolveCategorySlug } from '@/lib/constants';
 import { detectCategorySlug } from '@/lib/category-search';
 import { canonicalizeSearchTerm } from '@/lib/search-synonyms';
 
+// Keyed by canonical category slug (post-2026-06-21 rename). Lookups use the
+// canonical activeCategory, so legacy slugs resolve via resolveCategorySlug.
 const CATEGORY_INTROS: Record<string, string> = {
-  'living-room-lounge':
+  'living-room':
     'Transform your home with quality pre-owned sofas, coffee tables, TV stands, and lounge furniture. Every piece is inspected for quality at our Ajman showrooms. Save up to 70% compared to buying new.',
-  'bedroom-sleep':
+  'bedroom':
     'Sleep better for less. Browse beds, mattresses, wardrobes, and bedroom furniture — all checked for quality and comfort. Delivery available across all UAE emirates.',
-  'kitchen-dining':
+  'dining-kitchen':
     'Equip your kitchen and dining area with affordable second-hand dining sets, tables, chairs, and cookware. Quality items from top brands at a fraction of the retail price.',
   'appliances':
     'Reliable used appliances — fridges, washing machines, ACs, microwaves, TVs, and more. All tested and working. Visit our 5 shops in Ajman or WhatsApp us for availability.',
@@ -23,9 +25,9 @@ const CATEGORY_INTROS: Record<string, string> = {
     'Create your perfect outdoor space with pre-owned garden furniture, BBQ sets, patio chairs, and camping gear. Built to last, priced to save.',
   'kids-baby':
     'Safe, affordable kids and baby essentials — cribs, strollers, toys, bikes, car seats, and study tables. Every item inspected for safety. Perfect for growing families on a budget.',
-  'office-study-fitness':
+  'office-fitness':
     'Work from home or build your gym with used office desks, chairs, laptops, treadmills, and dumbbells. Professional quality at second-hand prices.',
-  'everyday-essentials':
+  'shoe-racks-shelves':
     'Bags, shoes, clothes, books, and everyday accessories at unbeatable prices. New items added daily across all 5 Bu Faisal shops in Ajman.',
 };
 
@@ -109,7 +111,11 @@ export default function ShopClient({
   // Category and page-depth are URL-driven so they survive back/forward nav and
   // reconstruct the feed height for scroll restoration. Search stays local state
   // for instant as-you-type filtering. activeCategory falls back to the SSR prop.
-  const activeCategory = searchParams.get('category') ?? initialCategory ?? '';
+  // Canonicalize so a legacy slug (e.g. bedroom-sleep) highlights the right pill,
+  // shows the right intro, and self-heals the URL on the next navigation.
+  const activeCategory = resolveCategorySlug(
+    searchParams.get('category') ?? initialCategory ?? ''
+  );
   const pageNum = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
 
   const catName = activeCategory ? CATEGORY_SLUG_MAP[activeCategory] : '';
@@ -122,7 +128,7 @@ export default function ShopClient({
   // `redirectedFrom` never feeds buildQuery, so it has no effect on results.
   const redirectedFrom = searchParams.get('redirectedFrom') || '';
   const redirectedCatName =
-    CATEGORY_SLUG_MAP[searchParams.get('category') || ''] || '';
+    CATEGORY_SLUG_MAP[resolveCategorySlug(searchParams.get('category'))] || '';
   const [labelDismissed, setLabelDismissed] = useState(false);
   // A fresh redirect (new term) revives the label even if a prior one was dismissed.
   useEffect(() => {

@@ -55,21 +55,21 @@ const PRODUCT_TYPES: string[] = [
   'Vacuum Cleaner',
   'Fan',
   'Small Appliance',
-  // Bedroom & Sleep
+  // Bedroom
   'Bed Frame',
   'Mattress',
   'Wardrobe',
   'Dresser',
   'Nightstand',
   'Bedroom Set',
-  // Living Room & Lounge
+  // Living Room
   'Sofa',
   'Sectional Sofa',
   'Armchair',
   'Coffee Table',
   'TV Stand',
   'Living Room Set',
-  // Kitchen & Dining
+  // Dining & Kitchen
   'Dining Table',
   'Dining Chair',
   'Dining Set',
@@ -89,14 +89,14 @@ const PRODUCT_TYPES: string[] = [
   'BBQ Grill',
   'Outdoor Chair',
   'Pool Equipment',
-  // Office, Study & Fitness
+  // Office & Fitness
   'Desk',
   'Office Chair',
   'Filing Cabinet',
   'Treadmill',
   'Exercise Bike',
   'Study Set',
-  // Everyday Essentials
+  // Shoe Racks & Shelves
   'Lamp',
   'Mirror',
   'Decor',

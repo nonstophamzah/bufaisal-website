@@ -6,22 +6,22 @@ import { getEffectivePrice } from './effective-fields';
 
 export const CATEGORIES = [
   {
-    name: 'Living Room & Lounge',
-    slug: 'living-room-lounge',
+    name: 'Living Room',
+    slug: 'living-room',
     description: 'Sofas, coffee tables, TV stands, shelves, mirrors, carpets, curtains, decor',
     icon: Sofa,
     image: 'https://images.unsplash.com/photo-1618220179428-22790b461013?w=600&h=400&fit=crop&q=80',
   },
   {
-    name: 'Bedroom & Sleep',
-    slug: 'bedroom-sleep',
+    name: 'Bedroom',
+    slug: 'bedroom',
     description: 'Beds, mattresses, wardrobes, drawers, pillows, blankets',
     icon: Bed,
     image: 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600&h=400&fit=crop&q=80',
   },
   {
-    name: 'Kitchen & Dining',
-    slug: 'kitchen-dining',
+    name: 'Dining & Kitchen',
+    slug: 'dining-kitchen',
     description: 'Dining sets, dining tables, chairs, pots, pans, kitchen items',
     icon: UtensilsCrossed,
     image: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600&h=400&fit=crop&q=80',
@@ -48,15 +48,15 @@ export const CATEGORIES = [
     image: 'https://images.unsplash.com/photo-1540479859555-17af45c78602?w=600&h=400&fit=crop&q=80',
   },
   {
-    name: 'Office, Study & Fitness',
-    slug: 'office-study-fitness',
+    name: 'Office & Fitness',
+    slug: 'office-fitness',
     description: 'Office chairs & tables, laptops, exercise machines, treadmills, dumbbells',
     icon: Briefcase,
     image: 'https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?w=600&h=400&fit=crop&q=80',
   },
   {
-    name: 'Everyday Essentials',
-    slug: 'everyday-essentials',
+    name: 'Shoe Racks & Shelves',
+    slug: 'shoe-racks-shelves',
     description: 'Bags, clothes, shoes, books, baskets, small accessories, misc',
     icon: ShoppingBag,
     image: 'https://images.unsplash.com/photo-1558997519-83ea9252edf8?w=600&h=400&fit=crop&q=80',
@@ -118,6 +118,28 @@ export function getWhatsAppGeneralUrl() {
 export const CATEGORY_SLUG_MAP = Object.fromEntries(
   CATEGORIES.map((c) => [c.slug, c.name])
 );
+
+// Backward-compat slug aliases (2026-06-21 category rename). Old slugs were
+// indexed by Google and live in existing links/bookmarks; map each to its new
+// canonical slug so `?category=<old>` still resolves to the right category.
+// The new slug is canonical everywhere (navbar links, metadata canonical URLs).
+// Only the 5 renamed categories appear here — Appliances, Kids & Baby, and
+// Outdoor & Garden kept their slugs.
+export const CATEGORY_SLUG_ALIASES: Record<string, string> = {
+  'living-room-lounge': 'living-room',
+  'bedroom-sleep': 'bedroom',
+  'kitchen-dining': 'dining-kitchen',
+  'office-study-fitness': 'office-fitness',
+  'everyday-essentials': 'shoe-racks-shelves',
+};
+
+// Normalize an incoming URL category slug to its canonical form. Returns the
+// alias target for a legacy slug, otherwise the slug unchanged. Use this before
+// any CATEGORY_SLUG_MAP lookup so old indexed links keep working.
+export function resolveCategorySlug(slug: string | undefined | null): string {
+  if (!slug) return '';
+  return CATEGORY_SLUG_ALIASES[slug] ?? slug;
+}
 
 // Public shop/home grid pagination size. Initial SSR load fetches this many,
 // each "Load More" tap fetches the next page of this size. Shared by the SSR
