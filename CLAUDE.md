@@ -461,6 +461,41 @@ All four shipped direct to `main`, clean tree, HEAD `6150386`.
 
 ## Last session handoff
 
+---
+SESSION: June 22, 2026
+
+SHIPPED:
+- feat: category-balanced homepage feed via demand-weighted interleave (commit 17d8fb7)
+- Homepage no longer sorts by created_at DESC only
+- New interleaveByCategory() helper in page.tsx — pure, deterministic, no DB changes
+- Demand priority order: Appliances → Sofas & Seating → Beds & Mattresses → 
+  Bedroom Furniture → Dining & Kitchen → Office & Fitness → Wardrobes & Storage → 
+  Shoe Racks & Shelves → Kids & Baby → Outdoor & Garden → Everyday Essentials
+- Featured items still pin to top before interleave
+- Search (/?q=...) keeps recency sort — interleave not applied to search results
+- Category pages untouched — existing sort logic unchanged
+
+KNOWN LIMITATION (future flag):
+- Bare homepage fetches full visible catalog on every page request
+- PostgREST caps at 1000 rows — feed tail silently truncates above that
+- Not actionable today at ~501 items; flag when approaching 800+
+
+NEXT PRIORITIES:
+1. Card component audit — grep src/ for old category names (Living Room, Bedroom, 
+   living-room, bedroom) in .ts and .tsx files. Fix any hardcoded references.
+2. Related categories strip — horizontal "You might also like" on category pages. 
+   Static config, no DB changes.
+3. Click-behavior feed reshuffling — session-level only, no user accounts needed. 
+   Build after card audit and related categories strip.
+
+DO NOT TOUCH:
+- Sacred routes: /team, /admin, /appliances, /api/appliances
+- The 11-category structure
+- Migration 024
+- The slug alias chain
+- interleaveByCategory() — working, do not refactor
+---
+
 - **2026-06-22 (category split, 8 → 11)** — Split `Living Room` → Sofas & Seating and `Bedroom` → Beds & Mattresses / Wardrobes & Storage / Bedroom Furniture; added Everyday Essentials as a real catch-all category. Full brief: [`.claude/handoffs/2026-06-22-category-split-restructure-start.md`](.claude/handoffs/2026-06-22-category-split-restructure-start.md). Six commits direct-to-`main` (`fe318e3`..`d5a3614`) + handoff, HEAD `29c7ad4`, clean. **Migration `024_split-categories.sql` already run in prod** (do not re-run). 11 locked categories now: Sofas & Seating, Beds & Mattresses, Wardrobes & Storage, Bedroom Furniture, Dining & Kitchen, Appliances, Office & Fitness, Kids & Baby, Outdoor & Garden, Shoe Racks & Shelves, Everyday Essentials. `resolveCategorySlug` is now 2-hop transitive (`bedroom-sleep → bedroom → bedroom-furniture`); don't revert or modify existing aliases. Next priorities: card-component old-slug cleanup, homepage feed rebalancing, related-categories strip.
 
 - **2026-06-20** — Search UX hardening + synonyms + cover-photo data audit. Full brief: [`.claude/handoffs/2026-06-20-search-flash-synonyms-cover-audit-start.md`](.claude/handoffs/2026-06-20-search-flash-synonyms-cover-audit-start.md). All direct-to-`main`, HEAD `385eca4`, clean.
