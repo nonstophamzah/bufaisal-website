@@ -21,6 +21,66 @@ function getSupabase() {
   );
 }
 
+// Bare-homepage demand-priority order, by canonical `published_category` value.
+// The interleave below round-robins one item per category per round in this
+// order, so a batch upload of a single category can't flood the feed. A
+// category not present here (or a null/unknown category) still appears — it's
+// appended after the known ones — so no inventory is silently dropped.
+const FEED_PRIORITY = [
+  'Appliances',
+  'Sofas & Seating',
+  'Beds & Mattresses',
+  'Bedroom Furniture',
+  'Dining & Kitchen',
+  'Office & Fitness',
+  'Wardrobes & Storage',
+  'Shoe Racks & Shelves',
+  'Kids & Baby',
+  'Outdoor & Garden',
+  'Everyday Essentials',
+];
+
+// Category-balanced interleave for the bare homepage. Featured items pin to the
+// very top (in incoming order); the rest are grouped by published_category and
+// emitted round-robin in FEED_PRIORITY order — newest-first within each category
+// (the input is expected pre-sorted created_at DESC, which grouping preserves).
+// Empty categories are skipped silently. Pure: does not mutate the input.
+function interleaveByCategory(items: ShopItem[]): ShopItem[] {
+  const featured = items.filter((it) => it.is_featured);
+  const rest = items.filter((it) => !it.is_featured);
+
+  // Group the non-featured rows, preserving the incoming created_at DESC order
+  // within each bucket. A null/unknown category falls into its own bucket.
+  const buckets = new Map<string, ShopItem[]>();
+  for (const it of rest) {
+    const cat = it.published_category ?? '__uncategorized__';
+    const bucket = buckets.get(cat);
+    if (bucket) bucket.push(it);
+    else buckets.set(cat, [it]);
+  }
+
+  // Known categories first in demand order, then any leftover buckets (unknown
+  // or null category) in first-seen order so nothing is dropped.
+  const order = [
+    ...FEED_PRIORITY.filter((c) => buckets.has(c)),
+    ...Array.from(buckets.keys()).filter((c) => !FEED_PRIORITY.includes(c)),
+  ];
+
+  const interleaved: ShopItem[] = [];
+  for (let round = 0, added = true; added; round++) {
+    added = false;
+    for (const cat of order) {
+      const bucket = buckets.get(cat)!;
+      if (round < bucket.length) {
+        interleaved.push(bucket[round]);
+        added = true;
+      }
+    }
+  }
+
+  return [...featured, ...interleaved];
+}
+
 const FAQS = [
   {
     q: 'Do you deliver to Dubai?',
@@ -96,6 +156,21 @@ async function getItems(
 
   const catName =
     slug && CATEGORY_SLUG_MAP[slug] ? CATEGORY_SLUG_MAP[slug] : undefined;
+
+  // Bare homepage (no category, no search): demand-balanced interleave instead
+  // of pure recency, so a batch upload of one category can't flood the feed.
+  // Fetch the whole visible catalog newest-first, round-robin across categories
+  // in FEED_PRIORITY order, then slice to the page window (pages 1..N in one
+  // shot, same contract as below). Category pages and search are left to the
+  // untouched recency/priority path that follows.
+  if (!catName && !q?.trim()) {
+    const { data } = await query
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
+    const ordered = interleaveByCategory((data || []) as ShopItem[]);
+    return { items: ordered.slice(0, limit), hasMore: ordered.length > limit };
+  }
+
   const prioritized = !!catName && hasCategoryPriority(catName);
 
   query = query
