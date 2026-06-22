@@ -529,20 +529,22 @@ export default function ShopClient({
 
         {/* Subcategory quick-filter tabs (only for categories in SUBCATEGORY_FILTERS) */}
         {subcategoryFilters && (
-          <div className="flex gap-2 overflow-x-auto pb-2 mt-3">
-            {subcategoryFilters.map((filter) => (
-              <button
-                key={filter.label}
-                onClick={() => setActiveSubcategory(filter.label)}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-colors ${
-                  activeSubcategory === filter.label
-                    ? 'bg-[#F9D923] text-black border-[#F9D923]'
-                    : 'bg-white text-black border-gray-300'
-                }`}
-              >
-                {filter.label}
-              </button>
-            ))}
+          <div className="relative">
+            <div className="flex gap-2 overflow-x-auto pb-2 mt-3 hide-scrollbar [mask-image:linear-gradient(to_right,black_85%,transparent_100%)]">
+              {subcategoryFilters.map((filter) => (
+                <button
+                  key={filter.label}
+                  onClick={() => setActiveSubcategory(filter.label)}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-colors ${
+                    activeSubcategory === filter.label
+                      ? 'bg-[#F9D923] text-black border-[#F9D923]'
+                      : 'bg-white text-black border-gray-300'
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
