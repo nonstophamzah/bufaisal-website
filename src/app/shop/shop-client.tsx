@@ -10,6 +10,26 @@ import { CATEGORIES, CATEGORY_SLUG_MAP, SHOP_PAGE_SIZE, resolveCategorySlug } fr
 import { detectCategorySlug } from '@/lib/category-search';
 import { canonicalizeSearchTerm } from '@/lib/search-synonyms';
 
+// Subcategory quick-filter tabs, keyed by canonical category name (catName, i.e.
+// the published_category value). Only categories listed here render a tab bar.
+// `match` is tested against published_item_name; `null` = the "All" pass-through.
+const SUBCATEGORY_FILTERS: Record<string, { label: string; match: RegExp | null }[]> = {
+  'Bedroom': [
+    { label: 'All', match: null },
+    { label: 'Beds', match: /\b(bed|bunk|mattress|headboard)\b/i },
+    { label: 'Wardrobes', match: /\b(wardrobe|cupboard|armoire)\b/i },
+    { label: 'Nightstands', match: /\b(nightstand|bedside|night stand)\b/i },
+    { label: 'Dressers', match: /\b(dresser|chest of drawers|dressing table)\b/i },
+  ],
+  'Living Room': [
+    { label: 'All', match: null },
+    { label: 'Sofas', match: /\b(sofa|sectional|couch)\b/i },
+    { label: 'Armchairs', match: /\b(armchair|accent chair|recliner)\b/i },
+    { label: 'TV Stands', match: /\b(tv stand|tv unit|media unit|television stand)\b/i },
+    { label: 'Coffee Tables', match: /\b(coffee table)\b/i },
+  ],
+};
+
 // Keyed by canonical category slug (post-2026-06-21 rename). Lookups use the
 // canonical activeCategory, so legacy slugs resolve via resolveCategorySlug.
 const CATEGORY_INTROS: Record<string, string> = {
@@ -101,6 +121,13 @@ export default function ShopClient({
   );
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [sortBy, setSortBy] = useState('newest');
+  const [activeSubcategory, setActiveSubcategory] = useState<string>('All');
+  // Full-category pool for subcategory filtering. The paginated feed (`items`)
+  // only holds the current page window, but a sub-tab must filter the WHOLE
+  // category — so categories with sub-tabs load every row here once (additive,
+  // parallel to the feed; does not touch the feed query or pagination).
+  const [subcatPool, setSubcatPool] = useState<ShopItem[]>([]);
+  const [subcatLoading, setSubcatLoading] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   // Monotonic id for client-side fetches. A response is only applied if it's
@@ -119,6 +146,57 @@ export default function ShopClient({
   const pageNum = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
 
   const catName = activeCategory ? CATEGORY_SLUG_MAP[activeCategory] : '';
+
+  // Subcategory quick-filter tabs for this category (null when none defined).
+  const subcategoryFilters = SUBCATEGORY_FILTERS[catName] ?? null;
+  // Reset the active subcategory whenever the category changes.
+  useEffect(() => {
+    setActiveSubcategory('All');
+  }, [activeCategory]);
+
+  // Load the WHOLE category once (canonical order, no range) for categories that
+  // have sub-tabs, so a sub-tab can filter the full set rather than just the
+  // loaded page window. Same WHERE as the feed; RLS limits anon to published
+  // rows. Refetched only when the category changes; reused across sub-tab clicks.
+  useEffect(() => {
+    if (!subcategoryFilters || !catName) {
+      setSubcatPool([]);
+      return;
+    }
+    let cancelled = false;
+    setSubcatLoading(true);
+    (async () => {
+      const { data } = await supabase
+        .from('shop_items')
+        .select('*')
+        .eq('is_published', true)
+        .eq('is_sold', false)
+        .eq('is_hidden', false)
+        .eq('published_category', catName)
+        .order('is_featured', { ascending: false })
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false });
+      if (cancelled) return;
+      setSubcatPool((data || []) as ShopItem[]);
+      setSubcatLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catName]);
+
+  // A non-'All' sub-tab is active and filtering the full category pool.
+  const subcategoryActive = !!subcategoryFilters && activeSubcategory !== 'All';
+
+  // When a sub-tab is active, filter the full-category pool by its regex;
+  // otherwise show the normal paginated feed unchanged.
+  const displayItems = subcategoryActive
+    ? subcatPool.filter((item) => {
+        const filter = subcategoryFilters!.find((f) => f.label === activeSubcategory);
+        return filter?.match ? filter.match.test(item.published_item_name ?? '') : true;
+      })
+    : items;
 
   // "Showing X for 'term'" label after a keyword→category redirect. Driven by the
   // `redirectedFrom` URL param (set by the redirect) so it survives both a fresh
@@ -449,6 +527,25 @@ export default function ShopClient({
           </div>
         </div>
 
+        {/* Subcategory quick-filter tabs (only for categories in SUBCATEGORY_FILTERS) */}
+        {subcategoryFilters && (
+          <div className="flex gap-2 overflow-x-auto pb-2 mt-3">
+            {subcategoryFilters.map((filter) => (
+              <button
+                key={filter.label}
+                onClick={() => setActiveSubcategory(filter.label)}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-colors ${
+                  activeSubcategory === filter.label
+                    ? 'bg-[#F9D923] text-black border-[#F9D923]'
+                    : 'bg-white text-black border-gray-300'
+                }`}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Sort + future filters row */}
         <div className="flex items-center mb-4">
           <select
@@ -462,7 +559,7 @@ export default function ShopClient({
         </div>
 
         {/* Items grid */}
-        {loading ? (
+        {loading || (subcategoryActive && subcatLoading) ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {Array.from({ length: 8 }).map((_, i) => (
               <div
@@ -471,9 +568,23 @@ export default function ShopClient({
               />
             ))}
           </div>
-        ) : items.length === 0 ? (
+        ) : displayItems.length === 0 ? (
           <div className="text-center py-20">
-            {activeCategory ? (
+            {subcategoryActive ? (
+              <>
+                <p className="font-heading text-2xl mb-2">NOTHING IN THIS FILTER</p>
+                <p className="text-muted mb-5">
+                  No {activeSubcategory.toLowerCase()} in {catName} right now.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveSubcategory('All')}
+                  className="inline-flex items-center gap-2 bg-yellow text-black font-semibold px-5 py-2.5 rounded-xl hover:bg-yellow/90 transition-colors"
+                >
+                  Show all {catName}
+                </button>
+              </>
+            ) : activeCategory ? (
               <>
                 <p className="font-heading text-2xl mb-2">NOTHING IN THIS CATEGORY YET</p>
                 <p className="text-muted mb-5">
@@ -497,12 +608,15 @@ export default function ShopClient({
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {items.map((item) => (
+              {displayItems.map((item) => (
                 <ItemCard key={item.id} item={item} />
               ))}
             </div>
 
-            {hasMore && (
+            {/* Infinite-scroll sentinel — only for the paginated feed. A sub-tab
+                shows the complete matched set from the full-category pool, so
+                there's nothing to page. */}
+            {hasMore && !subcategoryActive && (
               <div
                 ref={sentinelRef}
                 aria-hidden="true"
