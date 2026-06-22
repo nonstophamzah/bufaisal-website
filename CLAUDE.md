@@ -474,6 +474,10 @@ SHIPPED:
 - Featured items still pin to top before interleave
 - Search (/?q=...) keeps recency sort — interleave not applied to search results
 - Category pages untouched — existing sort logic unchanged
+- fix: update stale Bedroom category string in test fixture (commit 333389a)
+- feat: related categories strip on category pages (commit 1b4618a) — 
+  static config in constants.ts, new RelatedCategories.tsx component, 
+  wired into shop-client.tsx below product grid above FAQ section
 
 KNOWN LIMITATION (future flag):
 - Bare homepage fetches full visible catalog on every page request
