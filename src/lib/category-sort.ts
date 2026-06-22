@@ -29,22 +29,29 @@ import { resolvePublicItemFields } from './resolve-public-item-fields';
 // Per-category priority rules, keyed by the canonical `published_category`
 // value (see CATEGORIES in constants.ts). Array order IS the tier order:
 // index 0 = tier 1 (highest). A name that matches no rule is "everything else"
-// and sorts below all matched tiers. Categories absent from this map
-// (Appliances, Kids & Baby, Outdoor & Garden, Shoe Racks & Shelves) are left in
-// their incoming order.
+// and sorts below all matched tiers. Categories absent from this map (Appliances,
+// Kids & Baby, Outdoor & Garden, Shoe Racks & Shelves, Everyday Essentials) are
+// left in their incoming order.
 const PRIORITY_RULES: Record<string, RegExp[]> = {
-  'Bedroom': [
-    // king/queen/double/single/bunk/canopy/upholstered beds all literally
-    // contain the word "bed". \b boundaries keep "bedside"/"bedroom" out.
-    /\bbeds?\b/,
-    /\bwardrobe/,
-    /\bmattress/,
-    /\bnightstand\b|\bbedside\b/,
+  'Sofas & Seating': [
+    /\b(sofa|sectional|couch)\b/i,
+    /\b(armchair|accent chair|recliner)\b/i,
+    /\b(coffee table|tv stand|tv unit)\b/i,
   ],
-  'Living Room': [
-    /\bsofa|\bsectional|\bcouch|\barmchair/,
-    /\bcoffee table/,
-    /\btv stand|\btv unit/,
+  'Beds & Mattresses': [
+    /\b(bed frame|bunk bed|platform bed|canopy bed)\b/i,
+    /\bmattress\b/i,
+    /\bheadboard\b/i,
+  ],
+  'Wardrobes & Storage': [
+    /\bwardrobe\b/i,
+    /\bcupboard\b/i,
+    /\bstorage cabinet\b/i,
+  ],
+  'Bedroom Furniture': [
+    /\b(nightstand|bedside)\b/i,
+    /\b(dresser|dressing table)\b/i,
+    /\bchest of drawers\b/i,
   ],
   'Dining & Kitchen': [
     // "dining chair" must NOT match the table/set tier, so these phrases are

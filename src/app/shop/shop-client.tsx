@@ -14,29 +14,44 @@ import { canonicalizeSearchTerm } from '@/lib/search-synonyms';
 // the published_category value). Only categories listed here render a tab bar.
 // `match` is tested against published_item_name; `null` = the "All" pass-through.
 const SUBCATEGORY_FILTERS: Record<string, { label: string; match: RegExp | null }[]> = {
-  'Bedroom': [
+  'Sofas & Seating': [
     { label: 'All', match: null },
-    { label: 'Beds', match: /\b(bed|bunk|mattress|headboard)\b/i },
-    { label: 'Wardrobes', match: /\b(wardrobe|cupboard|armoire)\b/i },
-    { label: 'Nightstands', match: /\b(nightstand|bedside|night stand)\b/i },
-    { label: 'Dressers', match: /\b(dresser|chest of drawers|dressing table)\b/i },
-  ],
-  'Living Room': [
-    { label: 'All', match: null },
-    { label: 'Sofas', match: /\b(sofa|sectional|couch)\b/i },
+    { label: 'Sofas', match: /\b(sofa|sectional|couch|sofa bed)\b/i },
     { label: 'Armchairs', match: /\b(armchair|accent chair|recliner)\b/i },
     { label: 'TV Stands', match: /\b(tv stand|tv unit|media unit|television stand)\b/i },
-    { label: 'Coffee Tables', match: /\b(coffee table)\b/i },
+    { label: 'Coffee Tables', match: /\b(coffee table|side table|console)\b/i },
+  ],
+  'Beds & Mattresses': [
+    { label: 'All', match: null },
+    { label: 'Beds', match: /\b(bed frame|bunk bed|day bed|canopy bed|platform bed)\b/i },
+    { label: 'Mattresses', match: /\b(mattress)\b/i },
+    { label: 'Headboards', match: /\b(headboard)\b/i },
+  ],
+  'Wardrobes & Storage': [
+    { label: 'All', match: null },
+    { label: 'Wardrobes', match: /\b(wardrobe|armoire)\b/i },
+    { label: 'Cupboards', match: /\b(cupboard)\b/i },
+    { label: 'Storage Cabinets', match: /\b(storage cabinet)\b/i },
+  ],
+  'Bedroom Furniture': [
+    { label: 'All', match: null },
+    { label: 'Nightstands', match: /\b(nightstand|bedside|night stand)\b/i },
+    { label: 'Dressers', match: /\b(dresser|dressing table)\b/i },
+    { label: 'Chest of Drawers', match: /\b(chest of drawers)\b/i },
   ],
 };
 
 // Keyed by canonical category slug (post-2026-06-21 rename). Lookups use the
 // canonical activeCategory, so legacy slugs resolve via resolveCategorySlug.
 const CATEGORY_INTROS: Record<string, string> = {
-  'living-room':
-    'Transform your home with quality pre-owned sofas, coffee tables, TV stands, and lounge furniture. Every piece is inspected for quality at our Ajman showrooms. Save up to 70% compared to buying new.',
-  'bedroom':
-    'Sleep better for less. Browse beds, mattresses, wardrobes, and bedroom furniture — all checked for quality and comfort. Delivery available across all UAE emirates.',
+  'sofas-seating':
+    'Browse used sofas, sectionals, armchairs, and lounge seating. All items inspected. Delivery across UAE.',
+  'beds-mattresses':
+    'Browse used bed frames, mattresses, and headboards. All sizes available. Delivery with free carpenter assembly.',
+  'wardrobes-storage':
+    'Browse used wardrobes, cupboards, and storage cabinets. All items inspected. Delivery across UAE.',
+  'bedroom-furniture':
+    'Browse used nightstands, dressers, dressing tables, and chest of drawers. All items inspected. Delivery across UAE.',
   'dining-kitchen':
     'Equip your kitchen and dining area with affordable second-hand dining sets, tables, chairs, and cookware. Quality items from top brands at a fraction of the retail price.',
   'appliances':
