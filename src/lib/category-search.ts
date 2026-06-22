@@ -1,5 +1,5 @@
 // Category-name detection for the site's search boxes. When a shopper types a
-// term that matches (or closely matches) one of the 8 category names, we redirect
+// term that matches (or closely matches) one of the 11 category names, we redirect
 // them to that category's page (/shop?category=<slug>) instead of running a
 // keyword search. Targets are the canonical query-param category pages — note
 // /appliances is the internal staff tracker, so the appliances *category* is the
@@ -15,16 +15,20 @@ export const CATEGORY_SEARCH_TRIGGERS: { slug: string; terms: string[] }[] = [
   // intentionally NOT a trigger — those fall through to the keyword search (with
   // synonym canonicalization in search-synonyms.ts) so a shopper sees just those
   // products, not the whole 22-item appliances category.
-  // Slugs are canonical (post-2026-06-21 rename). Terms keep both old and new
-  // category-name phrasings so either redirects correctly.
+  // Slugs are canonical (post-2026-06-22 category split). Terms keep both old
+  // and new category-name phrasings so either redirects correctly — e.g. the
+  // old room words "living room" / "bedroom" redirect into the split taxonomy.
   { slug: 'appliances', terms: ['appliances', 'appliance'] },
-  { slug: 'bedroom', terms: ['beds', 'bed', 'bedroom', 'sleep', 'bedroom & sleep', 'wardrobe', 'wardrobes', 'closet', 'mattress', 'mattresses'] },
-  { slug: 'living-room', terms: ['living room', 'sofa', 'sofas', 'couch', 'lounge', 'living room & lounge'] },
+  { slug: 'sofas-seating', terms: ['sofa', 'sofas', 'couch', 'sectional', 'sectionals', 'armchair', 'armchairs', 'recliner', 'recliners', 'accent chair', 'sofa bed', 'lounge', 'seating', 'living room', 'sofas & seating'] },
+  { slug: 'beds-mattresses', terms: ['bed', 'beds', 'bed frame', 'mattress', 'mattresses', 'headboard', 'headboards', 'bunk bed', 'beds & mattresses'] },
+  { slug: 'wardrobes-storage', terms: ['wardrobe', 'wardrobes', 'cupboard', 'cupboards', 'closet', 'closets', 'wardrobes & storage'] },
+  { slug: 'bedroom-furniture', terms: ['nightstand', 'nightstands', 'bedside', 'bedside table', 'dresser', 'dressers', 'dressing table', 'chest of drawers', 'bedroom', 'bedroom furniture'] },
   { slug: 'dining-kitchen', terms: ['kitchen', 'dining', 'dining & kitchen', 'kitchen & dining', 'dining table', 'dining set'] },
   { slug: 'outdoor-garden', terms: ['outdoor', 'garden', 'outdoor & garden'] },
   { slug: 'kids-baby', terms: ['kids', 'baby', 'kids & baby'] },
   { slug: 'office-fitness', terms: ['office', 'fitness', 'gym', 'treadmill', 'office & fitness', 'office study fitness', 'office, study & fitness'] },
-  { slug: 'shoe-racks-shelves', terms: ['shoe rack', 'shoe racks', 'shoe racks & shelves', 'shelves', 'shelf', 'everyday', 'essentials', 'everyday essentials'] },
+  { slug: 'shoe-racks-shelves', terms: ['shoe rack', 'shoe racks', 'shoe racks & shelves', 'shelves', 'shelf'] },
+  { slug: 'everyday-essentials', terms: ['everyday', 'essentials', 'everyday essentials'] },
 ];
 
 // Whole-term (not substring) match so legitimate product searches like

@@ -104,59 +104,70 @@ BRAND HANDLING RULE (locked decision #1):
 
 JOB 3 — CHOOSE THE CATEGORY (STRICT DECISION TREE)
 
-The 8 locked categories are:
-1. Living Room
-2. Bedroom
-3. Dining & Kitchen
-4. Appliances
-5. Outdoor & Garden
-6. Kids & Baby
+The 11 locked categories are:
+1. Sofas & Seating
+2. Beds & Mattresses
+3. Wardrobes & Storage
+4. Bedroom Furniture
+5. Dining & Kitchen
+6. Appliances
 7. Office & Fitness
-8. Shoe Racks & Shelves
+8. Kids & Baby
+9. Outdoor & Garden
+10. Shoe Racks & Shelves
+11. Everyday Essentials
 
 Apply this decision tree IN ORDER. Stop at the first match.
 
 Step 1: Does the item plug into electricity, run on gas, or contain a motor/compressor/heating element?
-   YES → Appliances. STOP. (This includes refrigerators, freezers, washing machines, dryers, dishwashers, microwaves, ovens, stoves, AC units, water heaters, vacuum cleaners, fans, mixers, blenders, kettles, irons. NO EXCEPTIONS — a fridge is NEVER Dining & Kitchen.)
-   NO → continue.
+   YES → Appliances. STOP. NO EXCEPTIONS — a fridge is NEVER Dining & Kitchen.
 
-Step 2: Is the item primarily for children under 12 (cribs, high chairs, kids' beds, kids' toys, strollers, kids' clothing/shoes)?
+Step 2: Is the item primarily for children under 12 (cribs, kids beds, strollers, kids toys, kids clothing)?
    YES → Kids & Baby. STOP.
-   NO → continue.
 
-Step 3: Is the item designed for outdoor use (patio furniture, garden tools, BBQ grills, pool/garden equipment)?
+Step 3: Is the item designed for outdoor use (patio furniture, garden tools, BBQ grills, pool equipment)?
    YES → Outdoor & Garden. STOP.
-   NO → continue.
 
-Step 4: Is the item a desk, office chair, filing cabinet, treadmill, exercise bike, or other study/fitness equipment?
+Step 4: Is the item a desk, office chair, filing cabinet, treadmill, exercise bike, or study/fitness equipment?
    YES → Office & Fitness. STOP.
-   NO → continue.
 
-Step 5: Is the item a bed, mattress, headboard, wardrobe, dresser, nightstand, or anything primarily used in a bedroom?
-   YES → Bedroom. STOP.
-   NO → continue.
+Step 5: Is the item a shoe rack, shoe cabinet, or dedicated shoe storage unit?
+   YES → Shoe Racks & Shelves. STOP.
 
-Step 6: Is the item a sofa, armchair, coffee table, TV stand, lounge accent piece, or anything primarily used in a living room?
-   YES → Living Room. STOP.
-   NO → continue.
+Step 6: Is the item a sofa, sectional, armchair, recliner, accent chair, sofa bed, or any lounge seating?
+   YES → Sofas & Seating. STOP.
 
-Step 7: Is the item a dining table, dining chair, dining set, kitchen cabinet, cookware, dishware, or anything primarily used for eating/cooking that is NOT an appliance?
+Step 7: Is the item a bed frame, mattress, or headboard?
+   YES → Beds & Mattresses. STOP.
+
+Step 8: Is the item a wardrobe, cupboard, or large storage cabinet designed primarily for clothes or linen storage?
+   YES → Wardrobes & Storage. STOP.
+
+Step 9: Is the item a nightstand, dresser, dressing table, chest of drawers, or bedside table?
+   YES → Bedroom Furniture. STOP.
+
+Step 10: Is the item a dining table, dining chair, dining set, kitchen cabinet, bar stool, or kitchen/dining storage?
    YES → Dining & Kitchen. STOP.
-   NO → continue.
 
-Step 8: Default → Shoe Racks & Shelves. (Use this only when nothing else clearly fits — e.g., shoe racks, shelving units, small home goods, lamps without clear room association, generic decor.)
+Step 11: Is the item a shelf unit, bookshelf, display shelf, or general shelving not dedicated to shoes?
+   YES → Shoe Racks & Shelves. STOP.
 
-If you find yourself uncertain between two categories, choose the more specific one (Bedroom over Shoe Racks & Shelves), but ONLY if the item clearly fits. Do not stretch.
+Step 12: Default → Everyday Essentials.
+
+If you find yourself uncertain between two categories, choose the more specific one (Bedroom Furniture over Everyday Essentials), but ONLY if the item clearly fits. Do not stretch.
 
 PRODUCT_TYPE_VOCABULARY (for the product_type field, used in filter URLs):
 - Appliances: Refrigerator, Freezer, Washing Machine, Dryer, Dishwasher, Microwave, Oven, Stove, AC Unit, Water Heater, Vacuum Cleaner, Fan, Small Appliance
-- Bedroom: Bed Frame, Mattress, Wardrobe, Dresser, Nightstand, Bedroom Set
-- Living Room: Sofa, Sectional Sofa, Armchair, Coffee Table, TV Stand, Living Room Set
+- Sofas & Seating: Sofa, Sectional Sofa, Armchair, Recliner, Sofa Bed, Accent Chair, TV Stand, Coffee Table
+- Beds & Mattresses: Bed Frame, Mattress, Headboard, Bunk Bed, Day Bed
+- Wardrobes & Storage: Wardrobe, Cupboard, Storage Cabinet, Armoire
+- Bedroom Furniture: Nightstand, Dresser, Dressing Table, Chest of Drawers, Bedside Table
 - Dining & Kitchen: Dining Table, Dining Chair, Dining Set, Kitchen Cabinet, Cookware, Dishware
 - Kids & Baby: Crib, High Chair, Stroller, Kids Bed, Kids Toy, Kids Clothing
 - Outdoor & Garden: Patio Set, Garden Tool, BBQ Grill, Outdoor Chair, Pool Equipment
 - Office & Fitness: Desk, Office Chair, Filing Cabinet, Treadmill, Exercise Bike, Study Set
-- Shoe Racks & Shelves: Shoe Rack, Shelving Unit, Lamp, Mirror, Decor, Storage, Other
+- Shoe Racks & Shelves: Shoe Rack, Shelving Unit, Storage, Other
+- Everyday Essentials: Lamp, Mirror, Rug, Decor, Storage, Other
 
 Use a value from this list in the product_type field. If nothing fits exactly, use the closest match and add "product_type_uncertain" to flags.
 
