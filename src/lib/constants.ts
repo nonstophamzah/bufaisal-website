@@ -1,4 +1,4 @@
-import { Sofa, Bed, UtensilsCrossed, Zap, TreePine, Baby, Briefcase, ShoppingBag } from 'lucide-react';
+import { Sofa, Bed, UtensilsCrossed, Zap, TreePine, Baby, Briefcase, ShoppingBag, Shirt, Lamp, Home } from 'lucide-react';
 import type { ShopItem } from './supabase';
 import { resolvePublicItemFields } from './resolve-public-item-fields';
 import { getShop } from './shops';
@@ -6,17 +6,33 @@ import { getEffectivePrice } from './effective-fields';
 
 export const CATEGORIES = [
   {
-    name: 'Living Room',
-    slug: 'living-room',
+    name: 'Sofas & Seating',
+    slug: 'sofas-seating',
     description: 'Sofas, coffee tables, TV stands, shelves, mirrors, carpets, curtains, decor',
     icon: Sofa,
     image: 'https://images.unsplash.com/photo-1618220179428-22790b461013?w=600&h=400&fit=crop&q=80',
   },
   {
-    name: 'Bedroom',
-    slug: 'bedroom',
+    name: 'Beds & Mattresses',
+    slug: 'beds-mattresses',
     description: 'Beds, mattresses, wardrobes, drawers, pillows, blankets',
     icon: Bed,
+    image: 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600&h=400&fit=crop&q=80',
+  },
+  {
+    name: 'Wardrobes & Storage',
+    slug: 'wardrobes-storage',
+    description: 'Wardrobes, cupboards, and clothes storage cabinets for every bedroom',
+    icon: Shirt,
+    // PLACEHOLDER image — reuses the Bedroom Unsplash photo until a dedicated one is supplied.
+    image: 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600&h=400&fit=crop&q=80',
+  },
+  {
+    name: 'Bedroom Furniture',
+    slug: 'bedroom-furniture',
+    description: 'Nightstands, bedside tables, dressers, chests of drawers, and dressing tables',
+    icon: Lamp,
+    // PLACEHOLDER image — reuses the Bedroom Unsplash photo until a dedicated one is supplied.
     image: 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600&h=400&fit=crop&q=80',
   },
   {
@@ -34,11 +50,11 @@ export const CATEGORIES = [
     image: 'https://images.unsplash.com/photo-1584568694244-14fbdf83bd30?w=600&h=400&fit=crop&q=80',
   },
   {
-    name: 'Outdoor & Garden',
-    slug: 'outdoor-garden',
-    description: 'Garden sets, chairs, tables, BBQs, camping, pet houses, storage sheds',
-    icon: TreePine,
-    image: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&h=400&fit=crop&q=80',
+    name: 'Office & Fitness',
+    slug: 'office-fitness',
+    description: 'Office chairs & tables, laptops, exercise machines, treadmills, dumbbells',
+    icon: Briefcase,
+    image: 'https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?w=600&h=400&fit=crop&q=80',
   },
   {
     name: 'Kids & Baby',
@@ -48,17 +64,24 @@ export const CATEGORIES = [
     image: 'https://images.unsplash.com/photo-1540479859555-17af45c78602?w=600&h=400&fit=crop&q=80',
   },
   {
-    name: 'Office & Fitness',
-    slug: 'office-fitness',
-    description: 'Office chairs & tables, laptops, exercise machines, treadmills, dumbbells',
-    icon: Briefcase,
-    image: 'https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?w=600&h=400&fit=crop&q=80',
+    name: 'Outdoor & Garden',
+    slug: 'outdoor-garden',
+    description: 'Garden sets, chairs, tables, BBQs, camping, pet houses, storage sheds',
+    icon: TreePine,
+    image: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&h=400&fit=crop&q=80',
   },
   {
     name: 'Shoe Racks & Shelves',
     slug: 'shoe-racks-shelves',
     description: 'Bags, clothes, shoes, books, baskets, small accessories, misc',
     icon: ShoppingBag,
+    image: 'https://images.unsplash.com/photo-1558997519-83ea9252edf8?w=600&h=400&fit=crop&q=80',
+  },
+  {
+    name: 'Everyday Essentials',
+    slug: 'everyday-essentials',
+    description: 'Lamps, mirrors, rugs, decor, and everyday home items',
+    icon: Home,
     image: 'https://images.unsplash.com/photo-1558997519-83ea9252edf8?w=600&h=400&fit=crop&q=80',
   },
 ];
@@ -130,15 +153,33 @@ export const CATEGORY_SLUG_ALIASES: Record<string, string> = {
   'bedroom-sleep': 'bedroom',
   'kitchen-dining': 'dining-kitchen',
   'office-study-fitness': 'office-fitness',
-  'everyday-essentials': 'shoe-racks-shelves',
+  // 2026-06-22 category split. The 2026-06-21 slugs `living-room` and `bedroom`
+  // are no longer real categories — they now alias into the split taxonomy.
+  // Chains form (e.g. `bedroom-sleep` → `bedroom` → `bedroom-furniture`), so
+  // resolveCategorySlug below follows up to 2 hops.
+  // ('everyday-essentials' is intentionally absent now — it became a real
+  //  category in the same split, so its slug must resolve to itself.)
+  'bedroom': 'bedroom-furniture',
+  'living-room': 'sofas-seating',
 };
 
-// Normalize an incoming URL category slug to its canonical form. Returns the
-// alias target for a legacy slug, otherwise the slug unchanged. Use this before
-// any CATEGORY_SLUG_MAP lookup so old indexed links keep working.
+// Normalize an incoming URL category slug to its canonical form. Follows the
+// alias chain up to 2 hops so pre-2026-06-21 slugs still resolve through the
+// intermediate 2026-06-21 slug into the 2026-06-22 split taxonomy (e.g.
+// `bedroom-sleep` → `bedroom` → `bedroom-furniture`). The `seen` set guards
+// against a cyclic alias definition. Use this before any CATEGORY_SLUG_MAP
+// lookup so old indexed links keep working.
 export function resolveCategorySlug(slug: string | undefined | null): string {
   if (!slug) return '';
-  return CATEGORY_SLUG_ALIASES[slug] ?? slug;
+  let current = slug;
+  const seen = new Set<string>([current]);
+  for (let hops = 0; hops < 2; hops++) {
+    const next = CATEGORY_SLUG_ALIASES[current];
+    if (!next || seen.has(next)) break;
+    current = next;
+    seen.add(current);
+  }
+  return current;
 }
 
 // Public shop/home grid pagination size. Initial SSR load fetches this many,
