@@ -101,10 +101,10 @@ describe('augmentProductSchema — Merchant Listings fields', () => {
     }
   });
 
-  it('2. Non-appliance product (Bedroom) emits shippingDetails array only — no return policy', () => {
+  it('2. Non-appliance product (Bedroom Furniture) emits shippingDetails array only — no return policy', () => {
     const result = augmentProductSchema(baseSchema(), {
       ...baseContext,
-      category: 'Bedroom',
+      category: 'Bedroom Furniture',
     });
     const offers = result?.offers as Record<string, unknown>;
     expect(Array.isArray(offers.shippingDetails)).toBe(true);
