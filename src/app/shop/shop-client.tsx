@@ -52,6 +52,8 @@ const CATEGORY_INTROS: Record<string, string> = {
     'Browse used wardrobes, cupboards, and storage cabinets. All items inspected. Delivery across UAE.',
   'bedroom-furniture':
     'Browse used nightstands, dressers, dressing tables, and chest of drawers. All items inspected. Delivery across UAE.',
+  'everyday-essentials':
+    'Browse lamps, mirrors, rugs, decor, and everyday home items. All items inspected. Delivery across UAE.',
   'dining-kitchen':
     'Equip your kitchen and dining area with affordable second-hand dining sets, tables, chairs, and cookware. Quality items from top brands at a fraction of the retail price.',
   'appliances':

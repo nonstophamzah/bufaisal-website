@@ -290,7 +290,7 @@ Example (Used Furniture, 32 words):
 Example (New Custom Furniture, 30 words):
 "New L-shape sectional sofa in beige fabric. Three-seater configuration, made-to-order from our factory. Trucks include carpenters for free home assembly. Any issue, our call center resolves it. Click Negotiate on WhatsApp."
 
-Example (Used Bedroom, 33 words):
+Example (Used Bedroom Furniture, 33 words):
 "Used IKEA MALM queen bed frame in white. Good condition with all original parts included. Available at Shop C, Ajman. Carpenters included for free home assembly. Click Negotiate on WhatsApp."
 
 ----------------------------------------------------------------
