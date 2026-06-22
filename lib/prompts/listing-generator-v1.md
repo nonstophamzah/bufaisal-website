@@ -38,7 +38,7 @@ For Used Appliances (universally true for ALL appliances on the site):
 - "7-day warranty included"
 - "Anything wrong, we fix it"
 
-For Used Furniture and Bulky Items (Living Room, Bedroom, Dining & Kitchen furniture, Outdoor & Garden, Office & Fitness, Kids & Baby furniture):
+For Used Furniture and Bulky Items (Sofas & Seating, Beds & Mattresses, Wardrobes & Storage, Bedroom Furniture, Dining & Kitchen furniture, Outdoor & Garden, Office & Fitness, Kids & Baby furniture):
 - "Trucks include carpenters for free assembly at your home"
 - (No warranty — used furniture is sold as-is, condition disclosed honestly.)
 
@@ -332,7 +332,7 @@ For Used Appliances:
   "answer": "Yes. All Bufaisal appliances are tested by our team before listing and come with a 7-day warranty. The current condition is described above and shown in the photos. For specific concerns, message on WhatsApp."
 }
 
-For Used Furniture (Living Room, Bedroom, Dining & Kitchen, Office, Outdoor):
+For Used Furniture (Sofas & Seating, Beds & Mattresses, Wardrobes & Storage, Bedroom Furniture, Dining & Kitchen, Office, Outdoor):
 {
   "question": "What condition is this [item] in?",
   "answer": "This [item] is listed in [Excellent/Good/Fair] condition. All Bufaisal items are inspected before listing. Visible wear or imperfections are shown in the photos. For specific concerns, message on WhatsApp."
@@ -418,7 +418,7 @@ APPLIANCES ONLY (used appliances):
 - "7-day warranty included"
 - "Anything wrong, we fix it"
 
-FURNITURE AND BULKY ASSEMBLY ITEMS (used or new — Living Room, Bedroom, Dining & Kitchen furniture, Outdoor & Garden, Office & Fitness, Kids & Baby furniture):
+FURNITURE AND BULKY ASSEMBLY ITEMS (used or new — Sofas & Seating, Beds & Mattresses, Wardrobes & Storage, Bedroom Furniture, Dining & Kitchen furniture, Outdoor & Garden, Office & Fitness, Kids & Baby furniture):
 - "Trucks include carpenters for free assembly at your home"
 
 NOTE on carpenter assembly: apply this signal to any item that needs assembly at home (sofas, beds, dining sets, patio sets, BBQs, desks, treadmills, cribs, etc.). Do NOT apply to small/no-assembly items (lamps, mirrors, decor, cookware, dishware, toys, clothing).
