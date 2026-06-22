@@ -422,6 +422,43 @@ When a PR triggers an external doc update, add a section to the PR description t
 
 Tiny PRs (typo fixes, dependency bumps, formatting) skip doc updates. Use judgment: if the next Claude Code session would be confused by code that contradicts the docs, the docs need updating.
 
+## Session Log — 2026-06-22
+
+All four shipped direct to `main`, clean tree, HEAD `6150386`.
+
+**Shipped today:**
+
+- **`57b012f` — Category sort priority.** New [`src/lib/category-sort.ts`](src/lib/category-sort.ts). Beds pin to positions 1–19 on Bedroom page 1; sofas/armchairs pin to positions 1–20 on Living Room page 1. Whole-category fetch for prioritized categories, window-slice for others. (See the "Category sort-priority (locked 2026-06-21)" convention above for full invariants.)
+- **`bc9215e` — Full category rename + DB migration.** 5 renames: `Bedroom & Sleep → Bedroom`, `Living Room & Lounge → Living Room`, `Kitchen & Dining → Dining & Kitchen`, `Office, Study & Fitness → Office & Fitness`, `Everyday Essentials → Shoe Racks & Shelves`. Old slugs aliased via `CATEGORY_SLUG_ALIASES` + `resolveCategorySlug()` in `constants.ts`. DB migration [`023_rename-categories.sql`](supabase/migrations/023_rename-categories.sql) ran against both `published_category` and legacy `category` columns. 11 files updated, including the locked SEO Agent v1.0 prompt and the sacred `/admin/pending` route.
+- **`5d969a1` — Subcategory filter tabs.** Bedroom tabs: All / Beds / Wardrobes / Nightstands / Dressers. Living Room tabs: All / Sofas / Armchairs / TV Stands / Coffee Tables. Filters a full-category pool (not the page-1 window), so low-priority types (e.g. Dressers — 0 of 29 in the page-1 window) show their complete set on click. Infinite-scroll sentinel suppressed during a sub-tab view; empty sub-tab shows a "Show all `<category>`" reset CTA instead of a blank grid. All inside [`shop-client.tsx`](src/app/shop/shop-client.tsx).
+- **`6150386` — Mobile scroll fade on subcategory tab bar.** `mask-image` linear-gradient right-edge fade signals more tabs to scroll. Uses the project's existing `hide-scrollbar` utility (the spec's `scrollbar-hide` isn't defined in this project — `tailwind-scrollbar-hide` plugin not installed — so it would've been a no-op).
+
+**Current live category structure** (total rows / visible):
+
+| Category | Total | Visible |
+|---|--:|--:|
+| Bedroom | 212 | 128 |
+| Living Room | 128 | 60 |
+| Appliances | 66 | 14 |
+| Shoe Racks & Shelves | 54 | 23 |
+| Office & Fitness | 40 | 17 |
+| Dining & Kitchen | 37 | 19 |
+| Kids & Baby | 17 | 6 |
+| Outdoor & Garden | 2 | 2 |
+
+**Open items:**
+
+- **Category structure refinement** — Yousuf proposes 10 categories (his 11 minus a split Office/Fitness). Needs cross-referencing against live inventory and competition research before any code.
+- **Homepage feed** — currently newest-first. Problem: batch uploads flood the homepage with one item type. Yousuf wants a category-balanced mix. Research Noon, Amazon, Home Centre, Home Box, Danube homepage structure before building.
+- **SEO Agent .docx** — external doc still carries the old taxonomy (`Bedroom & Sleep`, etc.). Needs a manual update by Hamzah.
+- **Hermes SSL error on DigitalOcean** — unresolved, separate project.
+- **Phase 9 cleanup** — not started.
+- **Coffee Tables tab in Living Room** — 0 items currently (tab renders an empty state). Will auto-populate when inventory arrives.
+
+**Known pre-existing test failures (not regressions):**
+
+- 3 failures in `gemini.test.ts` — Anthropic mock returning 502. Confirmed identical on clean HEAD. Unrelated to any work done today.
+
 ## Last session handoff
 
 - **2026-06-20** — Search UX hardening + synonyms + cover-photo data audit. Full brief: [`.claude/handoffs/2026-06-20-search-flash-synonyms-cover-audit-start.md`](.claude/handoffs/2026-06-20-search-flash-synonyms-cover-audit-start.md). All direct-to-`main`, HEAD `385eca4`, clean.
