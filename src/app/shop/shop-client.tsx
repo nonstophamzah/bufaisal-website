@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Search, X, ChevronDown, ChevronRight } from 'lucide-react';
 import ItemCard from '@/components/ItemCard';
+import RelatedCategories from '@/components/RelatedCategories';
 import { supabase, ShopItem } from '@/lib/supabase';
 import { CATEGORIES, CATEGORY_SLUG_MAP, SHOP_PAGE_SIZE, resolveCategorySlug } from '@/lib/constants';
 import { detectCategorySlug } from '@/lib/category-search';
@@ -653,6 +654,10 @@ export default function ShopClient({
             )}
           </>
         )}
+
+        {/* Related categories strip — below the grid, above FAQ/footer. Renders
+            nothing unless the current category has a RELATED_CATEGORIES entry. */}
+        <RelatedCategories currentCategory={catName} />
 
         {/* FAQ Section */}
         <section className="mt-16 max-w-3xl">

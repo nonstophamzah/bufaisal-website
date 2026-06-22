@@ -86,6 +86,25 @@ export const CATEGORIES = [
   },
 ];
 
+// Related-categories strip (static config — no DB). Keyed by canonical category
+// name (the published_category value / CATEGORIES[].name). Each value is an
+// ordered list of sibling category names to surface as a "You might also like"
+// strip on that category's page. Names must match CATEGORIES[].name exactly so
+// the component can resolve each to its slug.
+export const RELATED_CATEGORIES: Record<string, string[]> = {
+  'Sofas & Seating':     ['Bedroom Furniture', 'Dining & Kitchen', 'Office & Fitness'],
+  'Beds & Mattresses':   ['Bedroom Furniture', 'Wardrobes & Storage', 'Kids & Baby'],
+  'Bedroom Furniture':   ['Beds & Mattresses', 'Wardrobes & Storage', 'Sofas & Seating'],
+  'Wardrobes & Storage': ['Bedroom Furniture', 'Shoe Racks & Shelves', 'Dining & Kitchen'],
+  'Dining & Kitchen':    ['Sofas & Seating', 'Appliances', 'Bedroom Furniture'],
+  'Appliances':          ['Dining & Kitchen', 'Office & Fitness', 'Bedroom Furniture'],
+  'Office & Fitness':    ['Sofas & Seating', 'Appliances', 'Bedroom Furniture'],
+  'Kids & Baby':         ['Beds & Mattresses', 'Bedroom Furniture', 'Sofas & Seating'],
+  'Outdoor & Garden':    ['Sofas & Seating', 'Dining & Kitchen', 'Office & Fitness'],
+  'Shoe Racks & Shelves':['Wardrobes & Storage', 'Bedroom Furniture', 'Everyday Essentials'],
+  'Everyday Essentials': ['Shoe Racks & Shelves', 'Dining & Kitchen', 'Sofas & Seating'],
+};
+
 export const SHOPS = [
   { id: 'A', name: 'Shop A' },
   { id: 'B', name: 'Shop B' },
