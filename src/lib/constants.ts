@@ -150,11 +150,11 @@ export function buildWhatsAppUrl(item: ShopItem) {
   lines.push('', `https://bufaisal.ae/item/${item.id}`);
 
   const message = lines.join('\n');
-  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+  return `https://wa.me/971558812411?text=${encodeURIComponent(message)}`;
 }
 
 export function getWhatsAppGeneralUrl() {
-  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Hi! I have a question about Bu Faisal.')}`;
+  return `https://wa.me/971558812411?text=Hey%2C%20I%27m%20interested%20in%20this.%20Is%20it%20available%3F`;
 }
 
 export const CATEGORY_SLUG_MAP = Object.fromEntries(
