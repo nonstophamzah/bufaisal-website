@@ -113,8 +113,6 @@ export const SHOPS = [
   { id: 'E', name: 'Shop E' },
 ];
 
-const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '971585932499';
-
 // PR #12: prefill format depends on the negotiable flag.
 // - true (default): "and want to negotiate" — keeps the existing tone
 // - false: neutral "saw this on bufaisal.ae" opener
