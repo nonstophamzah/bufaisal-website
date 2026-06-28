@@ -517,7 +517,7 @@ export default function TeamPage() {
         <h1 className="font-heading text-4xl text-white text-center mt-4 mb-8">
           SELECT <span className="text-yellow">SHOP</span>
         </h1>
-        <div className="flex flex-col gap-4 max-w-lg mx-auto w-full flex-1 justify-center">
+        <div className="flex flex-col gap-3 max-w-lg mx-auto w-full flex-1 justify-center">
           {SHOP_LABELS.map((label) => (
             <button
               key={label}
@@ -525,9 +525,9 @@ export default function TeamPage() {
                 setShopLabel(label);
                 setStep('password');
               }}
-              className="w-full bg-yellow text-black rounded-2xl py-8 text-center active:scale-95 transition-transform"
+              className="w-full bg-yellow text-black rounded-2xl py-4 text-center active:scale-95 transition-transform"
             >
-              <span className="font-heading text-5xl">SHOP {label}</span>
+              <span className="font-heading text-xl">SHOP {label}</span>
             </button>
           ))}
         </div>
