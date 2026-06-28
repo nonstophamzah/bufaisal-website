@@ -63,18 +63,18 @@ function WorkerHistory({
 }) {
   const pct = todayCount === null ? 0 : Math.min(100, Math.round((todayCount / goal) * 100));
   return (
-    <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 mb-5">
+    <div className="bg-yellow/10 border border-yellow/40 rounded-xl px-4 py-3 mb-5">
       <div className="flex items-baseline justify-between gap-3">
         <p className="text-sm">
-          <span className="font-bold text-white">Today: </span>
+          <span className="font-bold">Today: </span>
           {todayCount === null ? (
-            <span className="text-gray-400">…</span>
+            <span className="text-gray-500">…</span>
           ) : (
-            <span className="font-heading text-lg text-white">{todayCount}</span>
+            <span className="font-heading text-lg">{todayCount}</span>
           )}
-          <span className="text-gray-300"> items uploaded</span>
+          <span className="text-gray-600"> items uploaded</span>
         </p>
-        <p className="text-xs text-gray-400">Goal: {goal}/day</p>
+        <p className="text-xs text-gray-500">Goal: {goal}/day</p>
       </div>
       <div className="mt-2 h-1.5 w-full bg-yellow/20 rounded-full overflow-hidden">
         <div
@@ -82,7 +82,7 @@ function WorkerHistory({
           style={{ width: `${pct}%` }}
         />
       </div>
-      <p className="text-[11px] text-gray-400 mt-1.5">
+      <p className="text-[11px] text-gray-500 mt-1.5">
         {workerName} @ Shop {shopLabel}
       </p>
     </div>
@@ -665,17 +665,17 @@ export default function TeamPage() {
   // STEP 4 — UPLOAD FORM (Phase 3 pill design)
   // =========================================================
   return (
-    <div className="pt-6 pb-16 bg-[#1a1a1a] min-h-screen">
+    <div className="pt-6 pb-16 bg-[#f5f5f5] min-h-screen">
       <div className="max-w-2xl mx-auto px-4">
         {/* Header */}
         <div className="flex items-center justify-between mb-6 mt-2">
-          <h1 className="font-heading text-3xl text-white">
+          <h1 className="font-heading text-3xl">
             SHOP {shopLabel} <span className="text-yellow">&bull;</span>{' '}
             <span className="text-yellow">{managerName.toUpperCase()}</span>
           </h1>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-1.5 bg-white/10 text-white px-4 py-2 rounded-xl text-base font-medium"
+            className="flex items-center gap-1.5 bg-gray-100 text-gray-700 px-4 py-2 rounded-xl text-base font-medium"
           >
             <LogOut size={18} />
             Exit
@@ -718,7 +718,7 @@ export default function TeamPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* ITEM PHOTOS — 3 slots, slot 1 = Brand */}
           <div>
-            <p className="font-heading text-xl mb-3 text-white">ITEM PHOTOS (3 required)</p>
+            <p className="font-heading text-xl mb-3">ITEM PHOTOS (3 required)</p>
             <div className="grid grid-cols-2 gap-3">
               <PhotoSlotCard
                 slot="brand"
@@ -776,7 +776,7 @@ export default function TeamPage() {
 
           {/* USED OR NEW pills (reused from PR #18 picker) */}
           <div>
-            <p className="font-heading text-xl mb-3 text-white">USED OR NEW?</p>
+            <p className="font-heading text-xl mb-3">USED OR NEW?</p>
             <div className="grid grid-cols-2 gap-3">
               <PillButton
                 active={conditionType === 'Used'}
@@ -801,7 +801,7 @@ export default function TeamPage() {
           {/* CONDITION pills — only when Used */}
           {conditionType === 'Used' && (
             <div>
-              <p className="font-heading text-xl mb-3 text-white">CONDITION</p>
+              <p className="font-heading text-xl mb-3">CONDITION</p>
               <div className="grid grid-cols-3 gap-3">
                 <PillButton
                   active={conditionGrade === 'Excellent'}
@@ -827,7 +827,7 @@ export default function TeamPage() {
 
           {/* NEGOTIABLE pills */}
           <div>
-            <p className="font-heading text-xl mb-3 text-white">NEGOTIABLE?</p>
+            <p className="font-heading text-xl mb-3">NEGOTIABLE?</p>
             <div className="grid grid-cols-2 gap-3">
               <PillButton
                 active={negotiable === 'Yes'}
@@ -846,7 +846,7 @@ export default function TeamPage() {
 
           {/* PRICE */}
           <div>
-            <label className="block font-heading text-xl mb-2 text-white">PRICE (AED)</label>
+            <label className="block font-heading text-xl mb-2">PRICE (AED)</label>
             <input
               type="number"
               inputMode="numeric"
@@ -861,7 +861,7 @@ export default function TeamPage() {
 
           {/* NOTE */}
           <div>
-            <label className="block font-heading text-xl mb-2 text-white">NOTE (optional)</label>
+            <label className="block font-heading text-xl mb-2">NOTE (optional)</label>
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -894,7 +894,7 @@ export default function TeamPage() {
             className={`w-full flex items-center justify-center gap-2 font-heading text-3xl py-5 rounded-2xl active:scale-95 transition-transform ${
               submitEnabled
                 ? 'bg-[#F9D923] text-black'
-                : 'bg-white/10 text-gray-500 cursor-not-allowed'
+                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
           >
             {submitting ? (
@@ -969,7 +969,7 @@ function PhotoSlotCard({
   const tapColor = accent === 'blue' ? 'active:border-blue-600 active:text-blue-600' : 'active:border-yellow active:text-yellow';
   return (
     <div>
-      <p className="text-sm font-semibold text-center mb-1.5 text-white">{label}</p>
+      <p className="text-sm font-semibold text-center mb-1.5">{label}</p>
       {url ? (
         <div className={`relative ${aspectClass} rounded-xl overflow-hidden border-2 ${filledBorder}`}>
           <Image
@@ -1012,7 +1012,7 @@ function PhotoSlotCard({
         className="hidden"
       />
       {helper && (
-        <p className="text-[11px] text-gray-400 mt-1.5 leading-tight">{helper}</p>
+        <p className="text-[11px] text-gray-500 mt-1.5 leading-tight">{helper}</p>
       )}
     </div>
   );
