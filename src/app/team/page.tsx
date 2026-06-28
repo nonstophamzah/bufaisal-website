@@ -517,7 +517,7 @@ export default function TeamPage() {
         <h1 className="font-heading text-4xl text-white text-center mt-4 mb-8">
           SELECT <span className="text-yellow">SHOP</span>
         </h1>
-        <div className="flex flex-col gap-3 max-w-lg mx-auto w-full flex-1 justify-center">
+        <div className="flex flex-col gap-3 max-w-lg mx-auto w-full">
           {SHOP_LABELS.map((label) => (
             <button
               key={label}
@@ -591,7 +591,7 @@ export default function TeamPage() {
           <button
             onClick={handlePasswordSubmit}
             disabled={passwordLoading || !password}
-            className="w-full bg-yellow text-black font-heading text-3xl py-5 rounded-2xl mt-6 active:scale-95 transition-transform disabled:opacity-50"
+            className="w-full bg-[#F9D923] text-black font-heading text-3xl py-5 rounded-2xl mt-6 active:scale-95 transition-transform disabled:opacity-50"
           >
             {passwordLoading ? (
               <Loader2 size={28} className="animate-spin mx-auto" />
