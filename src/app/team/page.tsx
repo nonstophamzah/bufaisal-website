@@ -719,7 +719,7 @@ export default function TeamPage() {
           {/* ITEM PHOTOS — 3 slots, slot 1 = Brand */}
           <div>
             <p className="font-heading text-xl mb-3">ITEM PHOTOS (3 required)</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <PhotoSlotCard
                 slot="brand"
                 label="Full Item Photo"
