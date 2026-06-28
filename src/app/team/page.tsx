@@ -933,8 +933,8 @@ function PillButton({
       aria-pressed={active}
       className={`${sizeClass} rounded-2xl font-heading border-2 active:scale-95 transition-transform ${
         active
-          ? 'bg-yellow text-black border-yellow'
-          : 'bg-white text-gray-700 border-gray-300'
+          ? 'bg-[#F9D923] text-black border-[#F9D923]'
+          : 'bg-gray-100 text-gray-500 border-gray-200'
       }`}
     >
       {children}
