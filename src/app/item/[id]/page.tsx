@@ -9,6 +9,8 @@ import { augmentProductSchema } from '@/lib/augment-product-schema';
 import { fetchSimilarItems } from '@/lib/similar-items';
 import ItemDetailClient from './item-detail-client';
 
+export const dynamic = 'force-dynamic';
+
 function getSupabase() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
