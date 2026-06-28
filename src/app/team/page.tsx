@@ -542,6 +542,16 @@ export default function TeamPage() {
     return (
       <div className="relative min-h-screen bg-black flex flex-col pt-8 px-4 pb-8">
         <button
+          onClick={() => {
+            setStep('shop');
+            setPassword('');
+            setPasswordError(false);
+          }}
+          className="absolute top-4 left-4 flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/5 border border-white/10 text-gray-300 text-xs font-bold active:scale-95 min-h-[40px]"
+        >
+          ← BACK
+        </button>
+        <button
           onClick={() => router.push('/')}
           className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/5 border border-white/10 text-gray-300 text-xs font-bold active:scale-95 min-h-[40px]"
         >
