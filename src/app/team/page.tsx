@@ -770,6 +770,7 @@ export default function TeamPage() {
               onUpload={handleImageUpload}
               onClear={clearPhoto}
               accent="blue"
+              aspectClass="h-36 w-full"
             />
           </div>
 
@@ -950,6 +951,7 @@ function PhotoSlotCard({
   onUpload,
   onClear,
   accent,
+  aspectClass = 'aspect-square w-full',
 }: {
   slot: PhotoSlot;
   label: string;
@@ -960,6 +962,7 @@ function PhotoSlotCard({
   onUpload: (e: React.ChangeEvent<HTMLInputElement>, slot: PhotoSlot) => void;
   onClear: (slot: PhotoSlot) => void;
   accent?: 'blue';
+  aspectClass?: string;
 }) {
   const filledBorder = accent === 'blue' ? 'border-blue-500' : 'border-yellow';
   const emptyBorder = accent === 'blue' ? 'border-blue-300' : 'border-gray-300';
@@ -968,7 +971,7 @@ function PhotoSlotCard({
     <div>
       <p className="text-sm font-semibold text-center mb-1.5">{label}</p>
       {url ? (
-        <div className={`relative aspect-square rounded-xl overflow-hidden border-2 ${filledBorder}`}>
+        <div className={`relative ${aspectClass} rounded-xl overflow-hidden border-2 ${filledBorder}`}>
           <Image
             src={url}
             alt={label}
@@ -989,7 +992,7 @@ function PhotoSlotCard({
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className={`w-full aspect-square border-2 border-dashed ${emptyBorder} rounded-xl flex flex-col items-center justify-center text-gray-400 ${tapColor} transition-colors`}
+          className={`${aspectClass} border-2 border-dashed ${emptyBorder} rounded-xl flex flex-col items-center justify-center text-gray-400 ${tapColor} transition-colors`}
         >
           {uploading ? (
             <Loader2 size={28} className="animate-spin" />
