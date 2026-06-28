@@ -525,7 +525,7 @@ export default function TeamPage() {
                 setShopLabel(label);
                 setStep('password');
               }}
-              className="w-full bg-yellow text-black rounded-2xl py-4 text-center active:scale-95 transition-transform"
+              className="w-full bg-[#F9D923] text-black rounded-2xl py-4 text-center active:scale-95 transition-transform"
             >
               <span className="font-heading text-xl">SHOP {label}</span>
             </button>
