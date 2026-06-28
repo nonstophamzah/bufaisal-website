@@ -691,9 +691,9 @@ export default function TeamPage() {
 
         {/* Resume-draft prompt */}
         {showResume && pendingDraft && (
-          <div className="bg-[#F9D923]/10 border-2 border-[#F9D923] rounded-xl p-4 mb-5">
-            <p className="font-bold text-base mb-3">Resume previous upload?</p>
-            <p className="text-sm text-gray-300 mb-3">
+          <div className="bg-[#F9D923] border-2 border-[#F9D923] rounded-xl p-4 mb-5">
+            <p className="font-bold text-base mb-3 text-black">Resume previous upload?</p>
+            <p className="text-sm text-black mb-3">
               You have an unfinished upload from earlier. Resume it or start fresh?
             </p>
             <div className="grid grid-cols-2 gap-3">
@@ -707,7 +707,7 @@ export default function TeamPage() {
               <button
                 type="button"
                 onClick={handleDiscardDraft}
-                className="py-3 rounded-xl bg-white/10 border-2 border-white/20 text-white font-heading text-lg active:scale-95"
+                className="py-3 rounded-xl bg-white border-2 border-black text-black font-heading text-lg active:scale-95"
               >
                 DISCARD
               </button>
