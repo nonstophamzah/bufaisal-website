@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Image from 'next/image';
-import { Loader2, LogOut, Camera, ArrowLeft, Check, Home } from 'lucide-react';
+import { Loader2, LogOut, Camera, Check, Home } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import imageCompression from 'browser-image-compression';
 
@@ -547,17 +547,6 @@ export default function TeamPage() {
         >
           <Home size={14} /> HOME
         </button>
-        <button
-          onClick={() => {
-            setStep('shop');
-            setPassword('');
-            setPasswordError(false);
-          }}
-          className="text-white flex items-center gap-2 mt-4 mb-6 text-lg"
-        >
-          <ArrowLeft size={24} />
-          <span className="font-heading text-2xl">BACK</span>
-        </button>
 
         <div className="flex flex-col items-center justify-center max-w-lg mx-auto w-full">
           <span className="font-heading text-yellow text-lg tracking-widest mb-4">BU FAISAL</span>
@@ -615,13 +604,6 @@ export default function TeamPage() {
           className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/5 border border-white/10 text-gray-300 text-xs font-bold active:scale-95 min-h-[40px]"
         >
           <Home size={14} /> HOME
-        </button>
-        <button
-          onClick={() => setStep('password')}
-          className="text-white flex items-center gap-2 mt-4 mb-6 text-lg"
-        >
-          <ArrowLeft size={24} />
-          <span className="font-heading text-2xl">BACK</span>
         </button>
 
         <div className="flex flex-col items-center justify-center max-w-lg mx-auto w-full">
