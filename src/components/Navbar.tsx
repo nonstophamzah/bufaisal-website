@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Search, Menu, X, Phone } from 'lucide-react';
+import { Search, Menu, X, Phone, Lock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useLang } from '@/lib/lang';
 import { detectCategorySlug } from '@/lib/category-search';
@@ -163,6 +163,17 @@ export default function Navbar() {
             >
               {t('Call: +971 58 593 2499', 'اتصل: 2499 593 58 971+')}
             </a>
+            {/* Staff Login — separated from nav links by a divider */}
+            <div className="pt-3 mt-1 border-t border-gray-800">
+              <Link
+                href="/login"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center justify-center gap-2 w-full bg-[#F9D923] text-black text-sm font-bold rounded-lg py-2.5"
+              >
+                <Lock size={16} />
+                {t('Staff Login', 'دخول الموظفين')}
+              </Link>
+            </div>
           </div>
         </div>
       )}
