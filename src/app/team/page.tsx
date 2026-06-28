@@ -540,7 +540,7 @@ export default function TeamPage() {
   // =========================================================
   if (step === 'password') {
     return (
-      <div className="relative min-h-screen bg-black flex flex-col pt-20 px-4 pb-8">
+      <div className="relative min-h-screen bg-black flex flex-col pt-8 px-4 pb-8">
         <button
           onClick={() => router.push('/')}
           className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/5 border border-white/10 text-gray-300 text-xs font-bold active:scale-95 min-h-[40px]"
@@ -559,7 +559,7 @@ export default function TeamPage() {
           <span className="font-heading text-2xl">BACK</span>
         </button>
 
-        <div className="flex-1 flex flex-col items-center justify-center max-w-lg mx-auto w-full">
+        <div className="flex flex-col items-center justify-center max-w-lg mx-auto w-full">
           <span className="font-heading text-yellow text-lg tracking-widest mb-4">BU FAISAL</span>
           <h1 className="font-heading text-5xl text-yellow mb-10 text-center">
             SHOP {shopLabel}
@@ -609,7 +609,7 @@ export default function TeamPage() {
   // =========================================================
   if (step === 'name') {
     return (
-      <div className="relative min-h-screen bg-black flex flex-col pt-20 px-4 pb-8">
+      <div className="relative min-h-screen bg-black flex flex-col pt-8 px-4 pb-8">
         <button
           onClick={() => router.push('/')}
           className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/5 border border-white/10 text-gray-300 text-xs font-bold active:scale-95 min-h-[40px]"
@@ -624,7 +624,7 @@ export default function TeamPage() {
           <span className="font-heading text-2xl">BACK</span>
         </button>
 
-        <div className="flex-1 flex flex-col items-center justify-center max-w-lg mx-auto w-full">
+        <div className="flex flex-col items-center justify-center max-w-lg mx-auto w-full">
           <h1 className="font-heading text-5xl text-yellow mb-4 text-center">
             SHOP {shopLabel}
           </h1>
