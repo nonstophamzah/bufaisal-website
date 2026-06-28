@@ -63,18 +63,18 @@ function WorkerHistory({
 }) {
   const pct = todayCount === null ? 0 : Math.min(100, Math.round((todayCount / goal) * 100));
   return (
-    <div className="bg-yellow/10 border border-yellow/40 rounded-xl px-4 py-3 mb-5">
+    <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 mb-5">
       <div className="flex items-baseline justify-between gap-3">
         <p className="text-sm">
-          <span className="font-bold">Today: </span>
+          <span className="font-bold text-white">Today: </span>
           {todayCount === null ? (
-            <span className="text-gray-500">…</span>
+            <span className="text-gray-400">…</span>
           ) : (
-            <span className="font-heading text-lg">{todayCount}</span>
+            <span className="font-heading text-lg text-white">{todayCount}</span>
           )}
-          <span className="text-gray-600"> items uploaded</span>
+          <span className="text-gray-300"> items uploaded</span>
         </p>
-        <p className="text-xs text-gray-500">Goal: {goal}/day</p>
+        <p className="text-xs text-gray-400">Goal: {goal}/day</p>
       </div>
       <div className="mt-2 h-1.5 w-full bg-yellow/20 rounded-full overflow-hidden">
         <div
@@ -82,7 +82,7 @@ function WorkerHistory({
           style={{ width: `${pct}%` }}
         />
       </div>
-      <p className="text-[11px] text-gray-500 mt-1.5">
+      <p className="text-[11px] text-gray-400 mt-1.5">
         {workerName} @ Shop {shopLabel}
       </p>
     </div>
@@ -893,8 +893,8 @@ export default function TeamPage() {
             disabled={!submitEnabled}
             className={`w-full flex items-center justify-center gap-2 font-heading text-3xl py-5 rounded-2xl active:scale-95 transition-transform ${
               submitEnabled
-                ? 'bg-yellow text-black'
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                ? 'bg-[#F9D923] text-black'
+                : 'bg-white/10 text-gray-500 cursor-not-allowed'
             }`}
           >
             {submitting ? (
@@ -969,7 +969,7 @@ function PhotoSlotCard({
   const tapColor = accent === 'blue' ? 'active:border-blue-600 active:text-blue-600' : 'active:border-yellow active:text-yellow';
   return (
     <div>
-      <p className="text-sm font-semibold text-center mb-1.5">{label}</p>
+      <p className="text-sm font-semibold text-center mb-1.5 text-white">{label}</p>
       {url ? (
         <div className={`relative ${aspectClass} rounded-xl overflow-hidden border-2 ${filledBorder}`}>
           <Image
@@ -1012,7 +1012,7 @@ function PhotoSlotCard({
         className="hidden"
       />
       {helper && (
-        <p className="text-[11px] text-gray-500 mt-1.5 leading-tight">{helper}</p>
+        <p className="text-[11px] text-gray-400 mt-1.5 leading-tight">{helper}</p>
       )}
     </div>
   );
