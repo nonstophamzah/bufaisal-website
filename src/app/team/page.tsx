@@ -761,18 +761,16 @@ export default function TeamPage() {
             <p className="text-xs text-blue-700 mb-3">
               The Bufaisal sticker (e.g. BFW26031208).
             </p>
-            <div className="grid grid-cols-3 gap-3">
-              <PhotoSlotCard
-                slot="barcode"
-                label="Barcode"
-                url={photos.barcode}
-                uploading={uploadingSlot === 'barcode'}
-                inputRef={fileInputRefs.barcode}
-                onUpload={handleImageUpload}
-                onClear={clearPhoto}
-                accent="blue"
-              />
-            </div>
+            <PhotoSlotCard
+              slot="barcode"
+              label="Barcode"
+              url={photos.barcode}
+              uploading={uploadingSlot === 'barcode'}
+              inputRef={fileInputRefs.barcode}
+              onUpload={handleImageUpload}
+              onClear={clearPhoto}
+              accent="blue"
+            />
           </div>
 
           {/* USED OR NEW pills (reused from PR #18 picker) */}
