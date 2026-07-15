@@ -5,7 +5,7 @@ import ContactWhatsApp from './contact-wa';
 export const metadata: Metadata = {
   title: 'Contact Us — Bu Faisal',
   description:
-    'Get in touch with Bu Faisal. Visit our 5 showrooms in Ajman or message us on WhatsApp. Open daily 9AM–9PM.',
+    'Get in touch with Bu Faisal. Visit our 5 showrooms in Ajman or message us on WhatsApp. Open daily 9AM–11PM.',
   alternates: { canonical: '/contact' },
 };
 
@@ -31,28 +31,29 @@ export default function ContactPage() {
           <div className="bg-gray-50 rounded-xl p-5 text-center">
             <MapPin size={24} className="mx-auto mb-2 text-yellow" />
             <p className="font-heading text-sm mb-1">VISIT US</p>
-            <p className="text-sm text-muted">5 Showrooms, Ajman, UAE</p>
+            <p className="text-sm text-muted">
+              Bu Faisal General Trading
+              <br />
+              Ajman, UAE
+              <br />
+              5 Showrooms
+            </p>
+            <a
+              href="https://maps.google.com/?q=Bu+Faisal+General+Trading+Ajman+UAE"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block mt-3 text-sm font-bold text-black bg-yellow px-4 py-2 rounded-lg hover:bg-yellow/90 transition-colors"
+            >
+              Get Directions
+            </a>
           </div>
           <div className="bg-gray-50 rounded-xl p-5 text-center">
             <Clock size={24} className="mx-auto mb-2 text-yellow" />
             <p className="font-heading text-sm mb-1">HOURS</p>
-            <p className="text-sm text-muted">Open Daily 9AM – 9PM</p>
+            <p className="text-sm text-muted">Open Daily 9AM – 11PM</p>
           </div>
         </div>
 
-        {/* Google Maps */}
-        <div className="rounded-xl overflow-hidden border border-gray-200">
-          <iframe
-            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d28854.27590605638!2d55.43!3d25.41!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3e5f5f1c7b3b8b8b%3A0x1!2sAjman%20-%20United%20Arab%20Emirates!5e0!3m2!1sen!2s!4v1700000000000"
-            width="100%"
-            height="350"
-            style={{ border: 0 }}
-            allowFullScreen
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-            title="Bu Faisal location in Ajman, UAE"
-          />
-        </div>
       </div>
     </div>
   );

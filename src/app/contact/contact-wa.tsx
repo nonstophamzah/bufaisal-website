@@ -6,7 +6,7 @@ import { trackContactClick } from '@/lib/fbpixel';
 export default function ContactWhatsApp() {
   return (
     <a
-      href="https://wa.me/971558812411?text=Hey%2C%20I%27m%20interested%20in%20this.%20Is%20it%20available%3F"
+      href="https://wa.me/971585932499?text=Hey%2C%20I%27m%20interested%20in%20this.%20Is%20it%20available%3F"
       target="_blank"
       rel="noopener noreferrer"
       onClick={() => trackContactClick()}
