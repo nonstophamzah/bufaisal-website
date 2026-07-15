@@ -37,6 +37,7 @@ export default function Navbar() {
     { href: '/shop', label: t('Shop', 'تسوّق') },
     { href: '/categories', label: t('Categories', 'الأقسام') },
     { href: '/about', label: t('About', 'من نحن') },
+    { href: '/contact', label: t('Contact', 'اتصل بنا') },
   ];
 
   return (
