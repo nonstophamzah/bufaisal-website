@@ -47,9 +47,19 @@ export interface PublicItemFields {
 // `??` (not `||`) on every line: an empty string on a `published_*`
 // column is treated as an intentional admin-set blank, not as "missing".
 export function resolvePublicItemFields(item: ShopItem): PublicItemFields {
+  // Brand is resolved published_* ?? legacy, then "Unknown" (case-
+  // insensitive, trimmed) is treated as absent. The locked SEO Agent
+  // prompt writes literal "Unknown" as an internal placeholder for
+  // undeterminable brands; it must never render to customers. Nulling
+  // it here ripples to ItemCard, item detail, buildWhatsAppUrl, and the
+  // Product JSON-LD — all correctly omit brand when Unknown.
+  const rawBrand = item.published_brand ?? item.brand;
   return {
     itemName: item.published_item_name ?? item.item_name,
-    brand: item.published_brand ?? item.brand,
+    brand:
+      rawBrand && rawBrand.trim().toLowerCase() !== 'unknown'
+        ? rawBrand
+        : null,
     category: item.published_category ?? item.category,
     productType: item.published_product_type ?? item.product_type,
     description: item.published_description ?? item.description,
