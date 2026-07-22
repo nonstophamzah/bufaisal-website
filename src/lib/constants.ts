@@ -133,8 +133,8 @@ export function buildWhatsAppUrl(item: ShopItem) {
   const negotiable = item.admin_negotiable ?? item.worker_negotiable;
   const isNegotiable = negotiable !== false;
   const opener = isNegotiable
-    ? 'Hi! I saw this on bufaisal.ae and want to negotiate. Is it still available?'
-    : 'Hi! I saw this on bufaisal.ae. Is it still available?';
+    ? 'Hi! I saw this on your website and want to negotiate. Is it still available?'
+    : 'Hi! I saw this on your website. Is it still available?';
 
   const lines: string[] = [opener, ''];
   if (f.itemName) {
