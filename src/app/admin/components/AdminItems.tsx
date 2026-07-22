@@ -31,6 +31,13 @@ import {
 
 type ItemsTab = 'pending' | 'published' | 'sold' | 'hidden';
 
+// Barcodes are stored with human separators (e.g. "BFW/JF/26032407") but
+// admins type them freely with or without slashes/spaces/hyphens. Strip all
+// three and lowercase so matching is format-agnostic on both sides.
+function stripBarcodeSeparators(value: string | null | undefined): string {
+  return (value ?? '').toLowerCase().replace(/[\s/-]/g, '');
+}
+
 // PR #15: per-tab definition of which bulk actions are offered.
 // Order matters — the primary (yellow) action goes first so it gets
 // rendered as the leftmost button in the toolbar.
@@ -114,25 +121,35 @@ export function AdminItems({
   const [pendingAction, setPendingAction] = useState<BulkActionSpec | null>(null);
   const [query, setQuery] = useState('');
   const q = query.trim().toLowerCase();
+  // Separator-insensitive form of the query for barcode matching:
+  // "BFW/JF/26032407", "bfwjf26032407", and "26032407" all normalize
+  // so any of them finds the same row.
+  const qBarcode = stripBarcodeSeparators(query);
 
-  // Client-side filter: partial, case-insensitive match on any name
-  // source (published → ai → admin → legacy item_name) or barcode. Most
-  // rows have an empty legacy item_name, so the published_*/ai_*/admin_*
-  // sources are what actually surface a match. No query → full list.
+  // Client-side filter: partial, case-insensitive match. Name sources
+  // (published → ai → admin → legacy item_name) match on the raw query;
+  // barcode sources match on the separator-stripped query. Barcodes live
+  // in `ai_barcode_extracted` for Phase-3+ rows (the legacy `barcode`
+  // column is NULL — the worker submit never writes it), so both are
+  // searched. No query → full list.
   const filteredItems = useMemo(
     () =>
       q
-        ? items.filter((i) =>
-            [
+        ? items.filter((i) => {
+            const nameMatch = [
               i.published_item_name,
               i.ai_item_name,
               i.admin_item_name,
               i.item_name,
-              i.barcode,
-            ].some((f) => (f ?? '').toLowerCase().includes(q))
-          )
+            ].some((f) => (f ?? '').toLowerCase().includes(q));
+            if (nameMatch) return true;
+            if (!qBarcode) return false;
+            return [i.ai_barcode_extracted, i.barcode].some((f) =>
+              stripBarcodeSeparators(f).includes(qBarcode)
+            );
+          })
         : items,
-    [items, q]
+    [items, q, qBarcode]
   );
 
   // Reset the search when switching tabs.
