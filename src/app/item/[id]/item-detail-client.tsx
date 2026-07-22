@@ -10,6 +10,8 @@ import {
   ChevronRight,
   ChevronDown,
   ExternalLink,
+  Truck,
+  Check,
 } from 'lucide-react';
 import Lightbox from 'yet-another-react-lightbox';
 import 'yet-another-react-lightbox/styles.css';
@@ -47,6 +49,36 @@ function orderSpecRows(table: Record<string, string>): Array<[string, string]> {
     if (!seen.has(k)) ordered.push([k, String(v)]);
   }
   return ordered;
+}
+
+// Dedupe + cap trust signals for display. The admin whitelist stores
+// "…UAE's largest used goods market" with a curly apostrophe (U+2019)
+// while the AI emits the same phrase with a straight apostrophe, so the
+// admin-side Set never collapses them and both land in
+// published_trust_signals. Normalize apostrophes / dashes / whitespace /
+// case for the dedup key (keep the first-seen original text), then cap.
+function dedupeTrustSignals(
+  signals: string[] | null | undefined,
+  cap = 5
+): string[] {
+  if (!signals) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of signals) {
+    if (typeof raw !== 'string') continue;
+    const text = raw.trim();
+    if (!text) continue;
+    const key = text
+      .toLowerCase()
+      .replace(/[‘’′`']/g, "'") // curly/straight apostrophes
+      .replace(/[–—]/g, '-') // en/em dash → hyphen
+      .replace(/\s+/g, ' ');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(text);
+    if (out.length >= cap) break;
+  }
+  return out;
 }
 
 function ConditionBadge({ condition }: { condition: string | null }) {
@@ -141,6 +173,7 @@ export default function ItemDetailClient({
     item.admin_condition_grade ?? item.worker_condition_grade;
   const effectivePrice = getEffectivePrice(item);
   const hasPrice = !!effectivePrice && effectivePrice > 0;
+  const trustSignals = dedupeTrustSignals(f.trustSignals);
 
   // Gallery photo grid sources the four canonical worker_photo_* columns
   // (positionally aligned with published_image_alt_texts). Falls back to
@@ -199,16 +232,22 @@ export default function ItemDetailClient({
           Back to Shop
         </Link>
 
-        <div className="grid md:grid-cols-2 gap-8 lg:gap-12">
+        {/* Desktop (lg+): Noon-style buy-box grid — gallery top-left,
+            sticky buy box top-right, long content bottom-left. Mobile &
+            tablet: single-column stack in source order (gallery → buy
+            box → details), byte-identical to the prior layout. Vertical
+            gaps come from wrapper margins (grid gap is x-only) so the
+            single-column rhythm matches production exactly. */}
+        <div className="grid lg:grid-cols-2 gap-x-8 lg:gap-x-12">
           {/* Photo gallery */}
-          <div>
-            <div className="relative aspect-square bg-gray-100 rounded-xl overflow-hidden">
+          <div className="mb-8 lg:mb-6 lg:col-start-1 lg:row-start-1">
+            <div className="relative aspect-square lg:aspect-auto lg:h-[540px] bg-gray-100 lg:bg-white rounded-xl overflow-hidden">
               {images.length > 0 ? (
                 <Image
                   src={images[activeImage]}
                   alt={f.itemName ?? 'Product image'}
                   fill
-                  className="object-cover"
+                  className="object-cover lg:object-contain"
                   sizes="(max-width: 768px) 100vw, 50vw"
                   priority
                 />
@@ -273,8 +312,12 @@ export default function ItemDetailClient({
             )}
           </div>
 
-          {/* Details */}
-          <div>
+          {/* Buy box — sticky decision column on desktop. On mobile &
+              tablet this stacks in source order right after the gallery,
+              exactly as before. The inline Negotiate button + delivery
+              line are md+ only (hidden md:flex), so mobile is unchanged:
+              it still uses the sticky bottom bar. */}
+          <div className="mb-6 lg:mb-0 lg:col-start-2 lg:row-start-1 lg:sticky lg:top-24 lg:self-start">
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <span className="text-xs font-medium text-yellow bg-yellow/10 px-2 py-1 rounded">
                 {f.category}
@@ -305,17 +348,61 @@ export default function ItemDetailClient({
               )}
             </div>
 
-            {f.trustSignals && f.trustSignals.length > 0 && (
-              <ul className="mb-6 space-y-1.5 text-sm text-gray-700">
-                {f.trustSignals.map((sig, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    <span className="text-yellow font-bold leading-5">•</span>
-                    <span className="leading-5">{sig}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {/* Desktop/tablet Negotiate CTA — moved directly under the
+                price so it sits above the fold. Same handler + prefilled
+                WhatsApp body as before. Mobile keeps the sticky bottom
+                bar (this is hidden on mobile). */}
+            <button
+              onClick={handleWhatsAppClick}
+              disabled={item.is_sold}
+              className="hidden md:flex w-full items-center justify-center gap-2 bg-yellow hover:bg-yellow/90 disabled:bg-gray-300 disabled:cursor-not-allowed text-black font-bold py-4 rounded-xl text-lg transition-colors active:scale-[0.98] mb-3"
+            >
+              <MessageCircle size={22} />
+              {item.is_sold ? 'Item Sold' : 'NEGOTIATE'}
+            </button>
 
+            {/* Delivery promise — md+ only, directly under the button */}
+            <div className="hidden md:flex items-center gap-2 text-sm text-gray-700 mb-4">
+              <Truck size={18} className="text-black flex-shrink-0" />
+              <span>Delivery in all 7 emirates · 24-48hr</span>
+            </div>
+
+            {/* Trust signals — mobile keeps the exact bullet list (deduped);
+                md+ shows a compact icon block, max 5. */}
+            {trustSignals.length > 0 && (
+              <>
+                <ul className="md:hidden space-y-1.5 text-sm text-gray-700">
+                  {trustSignals.map((sig, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="text-yellow font-bold leading-5">•</span>
+                      <span className="leading-5">{sig}</span>
+                    </li>
+                  ))}
+                </ul>
+                <ul className="hidden md:flex md:flex-col gap-1.5">
+                  {trustSignals.map((sig, i) => (
+                    <li
+                      key={i}
+                      className="flex items-start gap-2 text-sm text-gray-700"
+                    >
+                      <Check
+                        size={16}
+                        className="text-green-600 mt-0.5 flex-shrink-0"
+                        aria-hidden="true"
+                      />
+                      <span className="leading-5">{sig}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+
+          {/* Long-form content — bottom-left on desktop, under the gallery,
+              so the sticky buy box has height to stick against. On mobile
+              & tablet this stacks below the buy box in the same order as
+              before. */}
+          <div className="lg:col-start-1 lg:row-start-2">
             {f.description && (
               <div className="mb-6">
                 <h3 className="font-semibold text-sm mb-2">Description</h3>
@@ -453,18 +540,6 @@ export default function ItemDetailClient({
                 )}
               </div>
             )}
-
-            {/* Desktop Negotiate CTA — text per Architecture doc 2.1
-                ("every product CTA is Negotiate"). Same href + prefilled
-                message body as before via buildWhatsAppUrl(). */}
-            <button
-              onClick={handleWhatsAppClick}
-              disabled={item.is_sold}
-              className="hidden md:flex w-full items-center justify-center gap-2 bg-yellow hover:bg-yellow/90 disabled:bg-gray-300 disabled:cursor-not-allowed text-black font-bold py-4 rounded-xl text-lg transition-colors active:scale-[0.98]"
-            >
-              <MessageCircle size={22} />
-              {item.is_sold ? 'Item Sold' : 'NEGOTIATE'}
-            </button>
           </div>
         </div>
 
