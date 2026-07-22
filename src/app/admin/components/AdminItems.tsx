@@ -678,6 +678,14 @@ function ItemRow({
   const displayName =
     item.published_item_name ?? item.ai_item_name ?? item.item_name;
   const thumbSrc = item.thumbnail_url || item.image_urls?.[0];
+  // Live-tab meta line: shop → uploader → barcode. Each part omitted if
+  // missing (barcode is null on ~58% of rows — no placeholder). Uses
+  // shop_label/shop_source, never worker_shop_id (legacy, null-heavy).
+  const liveMeta = [
+    item.shop_label ? `Shop ${item.shop_label}` : item.shop_source || null,
+    item.uploaded_by || null,
+    item.ai_barcode_extracted ? `🔖 ${item.ai_barcode_extracted}` : null,
+  ].filter(Boolean);
   return (
     <div>
       {tab === 'published' ? (
@@ -727,6 +735,11 @@ function ItemRow({
               <p className="text-xs text-muted mt-0.5">
                 Added {fmtCreated(item.created_at)}
               </p>
+              {liveMeta.length > 0 && (
+                <p className="text-xs text-muted mt-0.5 truncate">
+                  {liveMeta.join(' · ')}
+                </p>
+              )}
             </div>
           </div>
 
@@ -1000,6 +1013,11 @@ function PendingBody({ item }: { item: ShopItem }) {
         {item.shop_source || item.shop_label || '—'} ·{' '}
         {item.duty_manager || item.uploaded_by || '—'} · {fmtDate(item.created_at)}
       </p>
+      {item.ai_barcode_extracted && (
+        <p className="text-xs text-muted mt-0.5 truncate">
+          🔖 {item.ai_barcode_extracted}
+        </p>
+      )}
     </div>
   );
 }
