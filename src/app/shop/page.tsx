@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { Suspense } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { ShopItem } from '@/lib/supabase';
-import { CATEGORY_SLUG_MAP, SHOP_PAGE_SIZE, resolveCategorySlug } from '@/lib/constants';
+import { CATEGORY_SLUG_MAP, SHOP_PAGE_SIZE, resolveCategorySlug, getCategoryDisplayName } from '@/lib/constants';
 import ShopClient from './shop-client';
 import { LOCAL_BUSINESS_SCHEMAS } from '@/lib/local-business-schema';
 import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
@@ -51,14 +51,16 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   // canonical OG URL on the new slug.
   const slug = resolveCategorySlug(category);
   const catName = slug ? CATEGORY_SLUG_MAP[slug] : '';
+  // Human-facing label for meta text; `catName`/`slug` stay canonical for the URL.
+  const catDisplay = getCategoryDisplayName(catName);
 
   if (catName) {
     return {
-      title: `Used ${catName} in Dubai, Ajman, Sharjah | Bu Faisal`,
-      description: `Buy quality second-hand ${catName.toLowerCase()} at affordable prices. Visit our 5 shops in Ajman or WhatsApp us. Established 2009.`,
+      title: `Used ${catDisplay} in Dubai, Ajman, Sharjah | Bu Faisal`,
+      description: `Buy quality second-hand ${catDisplay.toLowerCase()} at affordable prices. Visit our 5 shops in Ajman or WhatsApp us. Established 2009.`,
       openGraph: {
-        title: `Used ${catName} for Sale | Bu Faisal`,
-        description: `Buy quality second-hand ${catName.toLowerCase()} at affordable prices. Visit our 5 shops in Ajman or WhatsApp us.`,
+        title: `Used ${catDisplay} for Sale | Bu Faisal`,
+        description: `Buy quality second-hand ${catDisplay.toLowerCase()} at affordable prices. Visit our 5 shops in Ajman or WhatsApp us.`,
         siteName: 'Bu Faisal',
         type: 'website',
         url: `https://bufaisal.ae/shop?category=${slug}`,

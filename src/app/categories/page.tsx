@@ -1,6 +1,6 @@
 import { Metadata } from 'next';
 import CategoryCard from '@/components/CategoryCard';
-import { CATEGORIES } from '@/lib/constants';
+import { CATEGORIES, getCategoryDisplayName } from '@/lib/constants';
 import { supabase } from '@/lib/supabase';
 
 export const revalidate = 60;
@@ -71,7 +71,7 @@ export default async function CategoriesPage() {
           {CATEGORIES.map((cat) => (
             <CategoryCard
               key={cat.slug}
-              name={cat.name}
+              name={getCategoryDisplayName(cat.name)}
               slug={cat.slug}
               description={cat.description}
               icon={cat.icon}

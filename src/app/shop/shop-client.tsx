@@ -7,7 +7,7 @@ import { Search, X, ChevronDown, ChevronRight } from 'lucide-react';
 import ItemCard from '@/components/ItemCard';
 import RelatedCategories from '@/components/RelatedCategories';
 import { supabase, ShopItem } from '@/lib/supabase';
-import { CATEGORIES, CATEGORY_SLUG_MAP, SHOP_PAGE_SIZE, resolveCategorySlug } from '@/lib/constants';
+import { CATEGORIES, CATEGORY_SLUG_MAP, SHOP_PAGE_SIZE, resolveCategorySlug, getCategoryDisplayName } from '@/lib/constants';
 import { detectCategorySlug } from '@/lib/category-search';
 import { canonicalizeSearchTerm } from '@/lib/search-synonyms';
 
@@ -164,6 +164,9 @@ export default function ShopClient({
   const pageNum = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
 
   const catName = activeCategory ? CATEGORY_SLUG_MAP[activeCategory] : '';
+  // Human-facing label for `catName` — used in every visible heading/breadcrumb
+  // below. `catName` itself stays canonical for DB filters and config-map keys.
+  const catDisplay = getCategoryDisplayName(catName);
 
   // Subcategory quick-filter tabs for this category (null when none defined).
   const subcategoryFilters = SUBCATEGORY_FILTERS[catName] ?? null;
@@ -417,7 +420,7 @@ export default function ShopClient({
             {catName && (
               <>
                 <ChevronRight size={14} />
-                <span className="text-black font-medium">{catName}</span>
+                <span className="text-black font-medium">{catDisplay}</span>
               </>
             )}
           </nav>
@@ -431,7 +434,7 @@ export default function ShopClient({
               Home
             </Link>
             <ChevronRight size={14} />
-            <span className="text-black font-medium">{catName}</span>
+            <span className="text-black font-medium">{catDisplay}</span>
           </nav>
         )}
 
@@ -441,7 +444,7 @@ export default function ShopClient({
             {catName ? (
               <>
                 USED{' '}
-                <span className="text-yellow">{catName.toUpperCase()}</span>{' '}
+                <span className="text-yellow">{catDisplay.toUpperCase()}</span>{' '}
                 FOR SALE
               </>
             ) : (
@@ -537,7 +540,7 @@ export default function ShopClient({
             {CATEGORIES.map((cat) => (
               <CategoryBubble
                 key={cat.slug}
-                label={cat.name}
+                label={getCategoryDisplayName(cat.name)}
                 selected={activeCategory === cat.slug}
                 onClick={() => handleCategoryClick(cat.slug)}
               />
@@ -594,14 +597,14 @@ export default function ShopClient({
               <>
                 <p className="font-heading text-2xl mb-2">NOTHING IN THIS FILTER</p>
                 <p className="text-muted mb-5">
-                  No {activeSubcategory.toLowerCase()} in {catName} right now.
+                  No {activeSubcategory.toLowerCase()} in {catDisplay} right now.
                 </p>
                 <button
                   type="button"
                   onClick={() => setActiveSubcategory('All')}
                   className="inline-flex items-center gap-2 bg-yellow text-black font-semibold px-5 py-2.5 rounded-xl hover:bg-yellow/90 transition-colors"
                 >
-                  Show all {catName}
+                  Show all {catDisplay}
                 </button>
               </>
             ) : activeCategory ? (

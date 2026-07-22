@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
-import { CATEGORIES, RELATED_CATEGORIES } from '@/lib/constants';
+import { CATEGORIES, RELATED_CATEGORIES, getCategoryDisplayName } from '@/lib/constants';
 
 // "You might also like" strip for category pages. Static config-driven (no DB):
 // looks up RELATED_CATEGORIES[currentCategory], resolves each related category
@@ -47,7 +47,7 @@ export default function RelatedCategories({
                 className="flex-shrink-0 text-gray-500 transition-colors group-hover:text-black"
               />
               <span className="font-semibold text-sm whitespace-nowrap">
-                {cat.name}
+                {getCategoryDisplayName(cat.name)}
               </span>
               <ChevronRight
                 size={16}

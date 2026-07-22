@@ -7,6 +7,11 @@ import { getEffectivePrice } from './effective-fields';
 export const CATEGORIES = [
   {
     name: 'Sofas & Seating',
+    // Human-facing label ONLY. `name` above stays the canonical published_category
+    // DB value + AI-prompt output value and must never change; displayName is what
+    // every user-visible surface renders via getCategoryDisplayName(). Keeping them
+    // separate lets us relabel the category without a DB migration or slug change.
+    displayName: 'Sofas & Living Room Furniture',
     slug: 'sofas-seating',
     description: 'Sofas, coffee tables, TV stands, shelves, mirrors, carpets, curtains, decor',
     icon: Sofa,
@@ -158,6 +163,20 @@ export function getWhatsAppGeneralUrl() {
 export const CATEGORY_SLUG_MAP = Object.fromEntries(
   CATEGORIES.map((c) => [c.slug, c.name])
 );
+
+// Canonical category name → human-facing display label. Built from the optional
+// `displayName` field on CATEGORIES entries, defaulting to `name`. Use this at
+// EVERY user-visible render site (pills, headings, breadcrumbs, cards, product
+// badge, meta titles) so a relabel needs no DB migration. NEVER use it for a DB
+// filter value, slug, JSON-LD URL operand, or the AI prompt — those stay canonical.
+const CATEGORY_DISPLAY_NAME_MAP: Record<string, string> = Object.fromEntries(
+  CATEGORIES.map((c) => [c.name, ('displayName' in c ? c.displayName : c.name) ?? c.name])
+);
+
+export function getCategoryDisplayName(name: string | undefined | null): string {
+  if (!name) return '';
+  return CATEGORY_DISPLAY_NAME_MAP[name] ?? name;
+}
 
 // Backward-compat slug aliases (2026-06-21 category rename). Old slugs were
 // indexed by Google and live in existing links/bookmarks; map each to its new

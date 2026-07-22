@@ -16,7 +16,7 @@ import {
 import Lightbox from 'yet-another-react-lightbox';
 import 'yet-another-react-lightbox/styles.css';
 import { ShopItem } from '@/lib/supabase';
-import { buildWhatsAppUrl } from '@/lib/constants';
+import { buildWhatsAppUrl, getCategoryDisplayName } from '@/lib/constants';
 import { trackWhatsAppClick, trackViewContent } from '@/lib/fbpixel';
 import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
 import { getShop } from '@/lib/shops';
@@ -320,7 +320,7 @@ export default function ItemDetailClient({
           <div className="mb-6 lg:mb-0 lg:col-start-2 lg:row-start-1 lg:sticky lg:top-24 lg:self-start">
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <span className="text-xs font-medium text-yellow bg-yellow/10 px-2 py-1 rounded">
-                {f.category}
+                {getCategoryDisplayName(f.category)}
               </span>
               <ConditionBadge condition={conditionGrade} />
             </div>
