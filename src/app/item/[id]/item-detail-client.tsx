@@ -12,8 +12,10 @@ import {
   ExternalLink,
   Truck,
   Check,
+  Expand,
 } from 'lucide-react';
 import Lightbox from 'yet-another-react-lightbox';
+import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import 'yet-another-react-lightbox/styles.css';
 import { ShopItem } from '@/lib/supabase';
 import { buildWhatsAppUrl, getCategoryDisplayName } from '@/lib/constants';
@@ -22,6 +24,15 @@ import { resolvePublicItemFields } from '@/lib/resolve-public-item-fields';
 import { getShop } from '@/lib/shops';
 import { getItemImageUrl } from '@/lib/item-image';
 import { getEffectivePrice } from '@/lib/effective-fields';
+import cloudinaryLoader from '@/lib/cloudinary-loader';
+
+// Higher-res, still-optimized variant for the fullscreen lightbox. The
+// lightbox renders its own <img> outside next/image, so it would
+// otherwise load the raw original. Reuse the Cloudinary loader to inject
+// f_auto,q_90,w_1600,c_limit (non-Cloudinary URLs pass through unchanged).
+function hiResUrl(url: string): string {
+  return cloudinaryLoader({ src: url, width: 1600, quality: 90 });
+}
 
 // Spec table canonical order. Keys not in this list fall to the end in
 // insertion order. Matches Phase 6.4 PR A scope.
@@ -166,7 +177,14 @@ export default function ItemDetailClient({
   similarItems,
 }: ItemDetailClientProps) {
   const [activeImage, setActiveImage] = useState(0);
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  // Fullscreen lightbox. `source` picks which array to page through:
+  // 'main' = the hero gallery (`images`), 'grid' = the Photos grid
+  // (`galleryPhotos`). Kept as one nullable object so a single <Lightbox>
+  // serves both entry points without duplicating the overlay.
+  const [lightbox, setLightbox] = useState<{
+    source: 'main' | 'grid';
+    index: number;
+  } | null>(null);
   const f = resolvePublicItemFields(item);
   const shop = getShop(item.worker_shop_id);
   const conditionGrade =
@@ -220,6 +238,22 @@ export default function ItemDetailClient({
           ? [item.worker_photo_brand_url]
           : [];
 
+  // Lightbox slides. 'main' pages through the hero gallery (`images`),
+  // 'grid' through the Photos grid (`galleryPhotos`). A higher-res
+  // Cloudinary variant is loaded here (the lightbox renders its own <img>
+  // outside next/image). When there's a single photo we hide the arrows
+  // and make the carousel finite so there's no functional-looking (but
+  // no-op) navigation.
+  const lightboxPhotos = lightbox?.source === 'grid' ? galleryPhotos : images;
+  const lightboxSlides = lightboxPhotos.map((url, i) => ({
+    src: hiResUrl(url),
+    alt:
+      lightbox?.source === 'grid'
+        ? altTextFor(i)
+        : f.itemName ?? `Product photo ${i + 1}`,
+  }));
+  const lightboxSingle = lightboxSlides.length <= 1;
+
   return (
     <div className="pt-24 pb-28 md:pb-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -241,19 +275,40 @@ export default function ItemDetailClient({
         <div className="grid lg:grid-cols-2 gap-x-8 lg:gap-x-12">
           {/* Photo gallery */}
           <div className="mb-8 lg:mb-6 lg:col-start-1 lg:row-start-1">
-            <div className="relative aspect-square lg:aspect-auto lg:h-[540px] bg-gray-100 lg:bg-white rounded-xl overflow-hidden">
+            <div className="relative aspect-square lg:aspect-auto lg:h-[540px] bg-gray-50 rounded-xl overflow-hidden">
               {images.length > 0 ? (
                 <Image
                   src={images[activeImage]}
                   alt={f.itemName ?? 'Product image'}
                   fill
-                  className="object-cover lg:object-contain"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() =>
+                    setLightbox({ source: 'main', index: activeImage })
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setLightbox({ source: 'main', index: activeImage });
+                    }
+                  }}
+                  aria-label="Open full-screen photo viewer"
+                  className="object-contain cursor-zoom-in focus:outline-none focus:ring-2 focus:ring-yellow"
                   sizes="(max-width: 768px) 100vw, 50vw"
                   priority
                 />
               ) : (
                 <div className="flex items-center justify-center h-full text-muted">
                   No Image
+                </div>
+              )}
+              {/* Tap/zoom affordance — signals the image enlarges. Non-
+                  interactive (pointer-events-none) so the tap falls through
+                  to the image's own click handler. Hidden when there's no
+                  image. */}
+              {images.length > 0 && !item.is_sold && (
+                <div className="absolute bottom-3 right-3 pointer-events-none bg-black/45 text-white rounded-full p-2">
+                  <Expand size={18} aria-hidden="true" />
                 </div>
               )}
               {item.is_sold && (
@@ -468,7 +523,7 @@ export default function ItemDetailClient({
                     <button
                       key={i}
                       type="button"
-                      onClick={() => setLightboxIndex(i)}
+                      onClick={() => setLightbox({ source: 'grid', index: i })}
                       className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-yellow"
                       aria-label={`Open photo ${i + 1}`}
                     >
@@ -589,13 +644,19 @@ export default function ItemDetailClient({
       )}
 
       <Lightbox
-        open={lightboxIndex !== null}
-        index={lightboxIndex ?? 0}
-        close={() => setLightboxIndex(null)}
-        slides={galleryPhotos.map((url, i) => ({
-          src: url,
-          alt: altTextFor(i),
-        }))}
+        open={lightbox !== null}
+        index={lightbox?.index ?? 0}
+        close={() => setLightbox(null)}
+        plugins={[Zoom]}
+        zoom={{ maxZoomPixelRatio: 3, doubleTapDelay: 300 }}
+        controller={{ closeOnBackdropClick: true }}
+        carousel={{ finite: lightboxSingle }}
+        render={
+          lightboxSingle
+            ? { buttonPrev: () => null, buttonNext: () => null }
+            : undefined
+        }
+        slides={lightboxSlides}
       />
     </div>
   );
