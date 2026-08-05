@@ -6,6 +6,7 @@ import './globals.css';
 import { LangProvider } from '@/lib/lang';
 import PageViewTracker from '@/components/PageViewTracker';
 import GoogleAnalytics from '@/components/GoogleAnalytics';
+import MicrosoftClarity from '@/components/MicrosoftClarity';
 
 const bebasNeue = Bebas_Neue({
   weight: '400',
@@ -63,6 +64,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         {/* Google Analytics 4 — public routes only (see GoogleAnalytics.tsx) */}
         <GoogleAnalytics />
+        {/* Microsoft Clarity — public routes only (see MicrosoftClarity.tsx) */}
+        <MicrosoftClarity />
         {/* Facebook Pixel */}
         {FB_PIXEL_ID && (
           <>
