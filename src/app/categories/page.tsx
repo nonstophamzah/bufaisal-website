@@ -13,7 +13,13 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Browse All Categories | Bu Faisal',
     description: 'Browse used furniture, appliances, electronics, clothing and more at Bu Faisal.',
-    images: [{ url: '/og-image.png', width: 1200, height: 630 }],
+    images: [{ url: '/og-default.png', width: 1200, height: 630, alt: "Bu Faisal - UAE's Largest Used Goods Market" }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Browse All Categories | Bu Faisal',
+    description: 'Browse used furniture, appliances, electronics and more at Bu Faisal.',
+    images: ['/og-default.png'],
   },
 };
 

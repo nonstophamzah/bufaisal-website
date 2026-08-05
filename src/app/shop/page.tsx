@@ -64,6 +64,13 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
         siteName: 'Bu Faisal',
         type: 'website',
         url: `https://bufaisal.ae/shop?category=${slug}`,
+        images: [{ url: '/og-default.png', width: 1200, height: 630, alt: "Bu Faisal - UAE's Largest Used Goods Market" }],
+      },
+      twitter: {
+        card: 'summary_large_image',
+        title: `Used ${catDisplay} for Sale | Bu Faisal`,
+        description: `Buy quality second-hand ${catDisplay.toLowerCase()} at affordable prices. Visit our 5 shops in Ajman or WhatsApp us.`,
+        images: ['/og-default.png'],
       },
       alternates: {
         canonical: '/shop',
@@ -81,6 +88,13 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
       siteName: 'Bu Faisal',
       type: 'website',
       url: 'https://bufaisal.ae/shop',
+      images: [{ url: '/og-default.png', width: 1200, height: 630, alt: "Bu Faisal - UAE's Largest Used Goods Market" }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: "Shop All Items | Bu Faisal General Trading",
+      description: 'Browse thousands of quality second-hand items in Ajman, UAE. Furniture, appliances, electronics & more across 5 shops.',
+      images: ['/og-default.png'],
     },
     alternates: {
       canonical: '/shop',

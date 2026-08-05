@@ -43,13 +43,13 @@ export const metadata: Metadata = {
     title: "Bu Faisal | UAE's Largest Second-Hand Market",
     description: "UAE's largest used goods market since 2009. Browse thousands of used furniture, appliances, and household items. 5 showrooms, 24-48hr delivery.",
     siteName: 'Bu Faisal', type: 'website', url: 'https://bufaisal.ae',
-    images: [{ url: 'https://bufaisal.ae/og-image.png', width: 1200, height: 630, alt: "Bu Faisal - UAE's Largest Second-Hand Market" }],
+    images: [{ url: '/og-default.png', width: 1200, height: 630, alt: "Bu Faisal - UAE's Largest Used Goods Market" }],
   },
   twitter: {
     card: 'summary_large_image',
     title: "Bu Faisal | UAE's Largest Second-Hand Market",
     description: "UAE's largest used goods market since 2009. Browse thousands of used furniture, appliances, and household items. 5 showrooms, 24-48hr delivery.",
-    images: ['https://bufaisal.ae/og-image.png'],
+    images: ['/og-default.png'],
   },
   alternates: {
     canonical: '/',
@@ -103,7 +103,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             '@type': 'Organization',
             name: 'Bu Faisal General Trading',
             url: 'https://bufaisal.ae',
-            logo: 'https://bufaisal.ae/og-image.png',
+            logo: 'https://bufaisal.ae/icon-512.png',
             foundingDate: '2009',
             description: "UAE's largest second-hand market since 2009. 5 showrooms in Ajman.",
             address: {

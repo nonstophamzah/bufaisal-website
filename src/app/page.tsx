@@ -40,23 +40,82 @@ const FEED_PRIORITY = [
   'Everyday Essentials',
 ];
 
-// Category-balanced interleave for the bare homepage. Featured items pin to the
-// very top (in incoming order); the rest are grouped by published_category and
-// emitted round-robin in FEED_PRIORITY order — newest-first within each category
-// (the input is expected pre-sorted created_at DESC, which grouping preserves).
-// Empty categories are skipped silently. Pure: does not mutate the input.
-function interleaveByCategory(items: ShopItem[]): ShopItem[] {
+// Deterministic 32-bit string hash → float in [0,1). FNV-1a with an avalanche
+// finalizer so adjacent ids don't produce adjacent keys. Same input → same
+// output on every server, so the shuffle is reproducible across requests.
+function hash01(str: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  h ^= h >>> 16; h = Math.imul(h, 2246822507);
+  h ^= h >>> 13; h = Math.imul(h, 3266489909);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
+// Daily feed context, anchored to Asia/Dubai (fixed UTC+4, no DST). Both the
+// shuffle seed and the "fresh" window flip ONLY at Dubai midnight, so the whole
+// feed order is stable for the entire day — required for the slice-based
+// pagination below (page N returns rows 0..N*size of one stable ordering, so a
+// same-day visitor never sees a duplicate or skipped item across pages).
+function dailyFeedContext(nowMs = Date.now()): { seed: string; freshThresholdMs: number } {
+  const OFFSET = 4 * 3600 * 1000; // Dubai is UTC+4 year-round
+  const dubai = new Date(nowMs + OFFSET); // UTC fields now read as Dubai wall time
+  const y = dubai.getUTCFullYear();
+  const m = dubai.getUTCMonth();
+  const d = dubai.getUTCDate();
+  const seed = `${y}${String(m + 1).padStart(2, '0')}${String(d).padStart(2, '0')}`;
+  const startOfTodayMs = Date.UTC(y, m, d) - OFFSET;
+  // "fresh" = created since the start of yesterday (Dubai) — a 24–48h rolling
+  // window that only advances at midnight, matching the seed's stability.
+  const freshThresholdMs = startOfTodayMs - 24 * 3600 * 1000;
+  return { seed, freshThresholdMs };
+}
+
+// How hard fresh items are pulled up: a fresh item's shuffle key is multiplied
+// by this (keys sort ascending), compressing fresh rows into the front ~35% of
+// each category bucket. They still interleave with older rows whose random key
+// also lands low, so recency is a boost, not a solid newest-first block.
+const FRESH_COMPRESSION = 0.35;
+
+// Category-balanced, daily-shuffled feed for the bare homepage. Featured items
+// pin to the very top (in incoming order). The rest are grouped by
+// published_category; within each bucket the order is a deterministic daily
+// shuffle (so old inventory surfaces instead of staying buried under recent
+// intake), with a mild recency boost for items published in the last ~48h.
+// Buckets are then emitted round-robin in FEED_PRIORITY order so no single
+// category can flood the feed. Empty categories are skipped silently. Pure:
+// does not mutate the input.
+function interleaveByCategory(
+  items: ShopItem[],
+  ctx: { seed: string; freshThresholdMs: number } = dailyFeedContext(),
+): ShopItem[] {
+  const { seed, freshThresholdMs } = ctx;
   const featured = items.filter((it) => it.is_featured);
   const rest = items.filter((it) => !it.is_featured);
 
-  // Group the non-featured rows, preserving the incoming created_at DESC order
-  // within each bucket. A null/unknown category falls into its own bucket.
+  // Precompute a stable per-item sort key: daily-seeded random, compressed
+  // toward the front for fresh rows. Cached by id to avoid re-hashing in sort.
+  const keyById = new Map<string, number>();
+  for (const it of rest) {
+    const rand = hash01(`${seed}:${it.id}`);
+    const created = it.created_at ? Date.parse(it.created_at) : 0;
+    const fresh = Number.isFinite(created) && created >= freshThresholdMs;
+    keyById.set(it.id, fresh ? rand * FRESH_COMPRESSION : rand);
+  }
+
+  // Group the non-featured rows by category, then shuffle within each bucket.
   const buckets = new Map<string, ShopItem[]>();
   for (const it of rest) {
     const cat = it.published_category ?? '__uncategorized__';
     const bucket = buckets.get(cat);
     if (bucket) bucket.push(it);
     else buckets.set(cat, [it]);
+  }
+  for (const bucket of Array.from(buckets.values())) {
+    bucket.sort((a, b) => keyById.get(a.id)! - keyById.get(b.id)!);
   }
 
   // Known categories first in demand order, then any leftover buckets (unknown
@@ -111,6 +170,17 @@ export const metadata: Metadata = {
     siteName: 'Bu Faisal',
     type: 'website',
     url: 'https://bufaisal.ae',
+    // Explicit branded card. A page-level openGraph REPLACES the layout's
+    // (Next merges openGraph shallowly), so without this key the homepage
+    // emitted no og:image and WhatsApp scraped the first product photo instead.
+    images: [{ url: '/og-default.png', width: 1200, height: 630, alt: "Bu Faisal - UAE's Largest Used Goods Market" }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: "Bu Faisal | UAE's Largest Second-Hand Market",
+    description:
+      "UAE's largest used goods market since 2009. Browse thousands of used furniture, appliances, and household items. 5 showrooms, 24-48hr delivery.",
+    images: ['/og-default.png'],
   },
   alternates: {
     canonical: '/',
