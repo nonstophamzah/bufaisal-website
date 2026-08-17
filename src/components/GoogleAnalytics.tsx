@@ -56,7 +56,12 @@ export default function GoogleAnalytics() {
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
-            gtag('config', '${gaId}', { send_page_view: true });
+            // send_page_view is OFF on purpose: PageViewTracker is the single
+            // source of pageviews. With it on, gtag fired one page_view here
+            // AND PageViewTracker's mount effect fired another, double-counting
+            // every real load site-wide. Do not flip this back to true without
+            // deleting the gtag call in PageViewTracker.
+            gtag('config', '${gaId}', { send_page_view: false });
           `,
         }}
       />

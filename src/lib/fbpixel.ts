@@ -8,12 +8,15 @@ declare global {
 
 // ── Facebook Pixel Events ──
 
-/** Fire PageView — call on route changes for SPA navigation */
+/**
+ * Fire Meta PageView. Called ONLY by PageViewTracker, which is the single
+ * source of pageviews for both platforms — the fbq bootstrap in layout.tsx
+ * deliberately does not fire one, and GA4 runs with send_page_view: false.
+ */
 export function trackPageView() {
   if (typeof window !== 'undefined' && window.fbq) {
     window.fbq('track', 'PageView');
   }
-  // GA4 page_view is automatic via gtag config
 }
 
 /** ViewContent — fire on product detail page view */

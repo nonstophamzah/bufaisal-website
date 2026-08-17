@@ -74,8 +74,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <noscript> — so the browser actually FETCHES that tracking pixel on every
           JS-enabled page load. That produced a second, parameter-less ev=PageView per
           load (Meta Events Manager: 11.8K PageView on 2026-08-16 vs 1,214 GA4 users,
-          plus "No event parameters were detected" for PageView). The inline #fb-pixel
-          script below is the single source of PageView. Do not re-add the noscript img.
+          plus "No event parameters were detected" for PageView). Do not re-add the
+          noscript img.
+
+          The inline #fb-pixel script below now only calls fbq('init') — it does NOT
+          fire PageView. PageViewTracker is the single source of PageView for both
+          Meta and GA4; having the bootstrap fire one too double-counted every real
+          page load. Do not re-add fbq('track', 'PageView') here.
         */}
         {FB_PIXEL_ID && (
           <>
@@ -93,7 +98,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   s.parentNode.insertBefore(t,s)}(window, document,'script',
                   'https://connect.facebook.net/en_US/fbevents.js');
                   fbq('init', '${FB_PIXEL_ID}');
-                  fbq('track', 'PageView');
                 `,
               }}
             />
