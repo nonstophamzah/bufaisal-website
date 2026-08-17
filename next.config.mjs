@@ -74,7 +74,7 @@ const nextConfig = {
               "worker-src 'self' blob:",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
-              "img-src 'self' data: blob: https://res.cloudinary.com https://*.supabase.co https://*.supabase.in https://images.unsplash.com https://www.facebook.com https://www.google-analytics.com https://maps.googleapis.com https://maps.gstatic.com https://c.bing.com https://*.clarity.ms",
+              "img-src 'self' data: blob: https://res.cloudinary.com https://*.supabase.co https://*.supabase.in https://images.unsplash.com https://www.facebook.com https://www.google-analytics.com https://maps.googleapis.com https://maps.gstatic.com https://*.clarity.ms",
               "connect-src 'self' https://*.supabase.co https://*.supabase.in https://api.cloudinary.com https://www.google-analytics.com https://www.facebook.com https://sheets.googleapis.com https://*.clarity.ms",
               "frame-src 'self' https://www.google.com https://maps.google.com",
               "media-src 'self' blob:",
