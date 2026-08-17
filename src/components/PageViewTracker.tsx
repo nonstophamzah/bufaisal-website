@@ -32,6 +32,36 @@ import { trackPageView } from '@/lib/fbpixel';
  * the effect fires either way. Verified 2026-08-17: a bare replaceState with
  * no router involvement produced 1 gtag page_view + 1 fbq PageView.
  */
+/**
+ * Run `send` once the analytics global it needs actually exists.
+ *
+ * Both bootstraps load with next/script `afterInteractive`, so neither is
+ * guaranteed to have run by the time this component's effect does — and when
+ * the global is missing, the send is silently dropped. Measured on a live
+ * /item/[id]: domInteractive 168ms but fbevents.js didn't start until 266ms,
+ * so the Meta PageView was lost on every item-page load while GA4's happened
+ * to win the race. Firing on readiness instead of hoping removes the ordering
+ * dependency for both platforms.
+ *
+ * Returns a cancel fn so a navigation that supersedes this view doesn't later
+ * report it. Gives up after ~10s (blocked by an ad blocker, offline, etc.).
+ */
+function whenReady(isReady: () => boolean, send: () => void): () => void {
+  if (isReady()) {
+    send();
+    return () => {};
+  }
+  let attempts = 0;
+  let timer: ReturnType<typeof setTimeout>;
+  const tick = () => {
+    if (isReady()) return send();
+    if (++attempts > 100) return;
+    timer = setTimeout(tick, 100);
+  };
+  timer = setTimeout(tick, 100);
+  return () => clearTimeout(timer);
+}
+
 export default function PageViewTracker() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -40,20 +70,33 @@ export default function PageViewTracker() {
   const q = searchParams.get('q') ?? '';
 
   useEffect(() => {
-    trackPageView();
+    if (typeof window === 'undefined') return;
 
-    if (typeof window !== 'undefined' && window.gtag) {
-      // Report only the semantic params, so GA4 doesn't split one logical view
-      // into a separate page entry per scroll step.
-      const semantic = new URLSearchParams();
-      if (category) semantic.set('category', category);
-      if (q) semantic.set('q', q);
+    const cancelMeta = whenReady(
+      () => !!window.fbq,
+      () => trackPageView()
+    );
 
-      window.gtag('event', 'page_view', {
-        page_path: pathname,
-        page_search: semantic.toString(),
-      });
-    }
+    const cancelGa = whenReady(
+      () => !!window.gtag,
+      () => {
+        // Report only the semantic params, so GA4 doesn't split one logical
+        // view into a separate page entry per scroll step.
+        const semantic = new URLSearchParams();
+        if (category) semantic.set('category', category);
+        if (q) semantic.set('q', q);
+
+        window.gtag!('event', 'page_view', {
+          page_path: pathname,
+          page_search: semantic.toString(),
+        });
+      }
+    );
+
+    return () => {
+      cancelMeta();
+      cancelGa();
+    };
   }, [pathname, category, q]);
 
   return null;
