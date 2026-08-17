@@ -10,6 +10,7 @@ import { supabase, ShopItem } from '@/lib/supabase';
 import { CATEGORIES, CATEGORY_SLUG_MAP, SHOP_PAGE_SIZE, resolveCategorySlug, getCategoryDisplayName } from '@/lib/constants';
 import { detectCategorySlug } from '@/lib/category-search';
 import { canonicalizeSearchTerm } from '@/lib/search-synonyms';
+import { FEED_COLUMNS, asShopItems } from '@/lib/feed-query';
 
 // Subcategory quick-filter tabs, keyed by canonical category name (catName, i.e.
 // the published_category value). Only categories listed here render a tab bar.
@@ -189,7 +190,7 @@ export default function ShopClient({
     (async () => {
       const { data } = await supabase
         .from('shop_items')
-        .select('*')
+        .select(FEED_COLUMNS)
         .eq('is_published', true)
         .eq('is_sold', false)
         .eq('is_hidden', false)
@@ -198,7 +199,7 @@ export default function ShopClient({
         .order('created_at', { ascending: false })
         .order('id', { ascending: false });
       if (cancelled) return;
-      setSubcatPool((data || []) as ShopItem[]);
+      setSubcatPool(asShopItems(data));
       setSubcatLoading(false);
     })();
     return () => {
@@ -249,7 +250,7 @@ export default function ShopClient({
   const buildQuery = useCallback(() => {
     let query = supabase
       .from('shop_items')
-      .select('*', { count: 'exact' })
+      .select(FEED_COLUMNS, { count: 'exact' })
       .eq('is_published', true)
       .eq('is_sold', false)
       .eq('is_hidden', false);
@@ -282,7 +283,7 @@ export default function ShopClient({
     // stale rows must not overwrite the current list (e.g. a partial-term
     // keyword fetch resolving after a category redirect).
     if (reqId !== reqIdRef.current) return;
-    const rows = (data || []) as ShopItem[];
+    const rows = asShopItems(data);
     setItems(rows);
     setHasMore(count != null ? rows.length < count : rows.length === SHOP_PAGE_SIZE);
     setLoading(false);

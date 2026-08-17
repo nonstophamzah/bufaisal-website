@@ -10,6 +10,7 @@ import WhatsAppFloat from '@/components/WhatsAppFloat';
 import { LOCAL_BUSINESS_SCHEMAS } from '@/lib/local-business-schema';
 import { canonicalizeSearchTerm } from '@/lib/search-synonyms';
 import { sortByCategoryPriority, hasCategoryPriority } from '@/lib/category-sort';
+import { FEED_COLUMNS, checkFeedRowCap, asShopItems } from '@/lib/feed-query';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -198,7 +199,7 @@ async function getItems(
 ): Promise<{ items: ShopItem[]; hasMore: boolean }> {
   let query = getSupabase()
     .from('shop_items')
-    .select('*', { count: 'exact' })
+    .select(FEED_COLUMNS, { count: 'exact' })
     .eq('is_published', true)
     .eq('is_sold', false)
     .eq('is_hidden', false);
@@ -237,7 +238,10 @@ async function getItems(
     const { data } = await query
       .order('created_at', { ascending: false })
       .order('id', { ascending: false });
-    const ordered = interleaveByCategory((data || []) as ShopItem[]);
+    // Unbounded fetch — this is the one that will hit PostgREST's 1000-row cap
+    // first, and it truncates silently.
+    checkFeedRowCap(data?.length ?? 0, 'GET / (homepage interleave)');
+    const ordered = interleaveByCategory(asShopItems(data));
     return { items: ordered.slice(0, limit), hasMore: ordered.length > limit };
   }
 
@@ -259,9 +263,11 @@ async function getItems(
   }
 
   const { data, count } = await query;
-  const items = (data || []) as ShopItem[];
+  const items = asShopItems(data);
 
   if (prioritized && catName) {
+    // Also unbounded (whole category, no .range()).
+    checkFeedRowCap(items.length, `GET /?category=${catName}`);
     // Stable priority re-sort across the full category; within a tier the
     // is_featured → created_at DESC → id DESC order above is preserved.
     const ordered = sortByCategoryPriority(items, catName);
