@@ -67,6 +67,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Microsoft Clarity — public routes only (see MicrosoftClarity.tsx) */}
         <MicrosoftClarity />
         {/* Facebook Pixel */}
+        {/*
+          NOTE: the standard <noscript><img src=".../tr?ev=PageView&noscript=1"> fallback
+          is deliberately NOT rendered here. React Float hoists an
+          <link rel="preload" as="image"> for any <img> it sees — including one inside
+          <noscript> — so the browser actually FETCHES that tracking pixel on every
+          JS-enabled page load. That produced a second, parameter-less ev=PageView per
+          load (Meta Events Manager: 11.8K PageView on 2026-08-16 vs 1,214 GA4 users,
+          plus "No event parameters were detected" for PageView). The inline #fb-pixel
+          script below is the single source of PageView. Do not re-add the noscript img.
+        */}
         {FB_PIXEL_ID && (
           <>
             <Script
@@ -87,11 +97,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 `,
               }}
             />
-            <noscript>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img height="1" width="1" style={{ display: 'none' }}
-                src={`https://www.facebook.com/tr?id=${FB_PIXEL_ID}&ev=PageView&noscript=1`} alt="" />
-            </noscript>
           </>
         )}
       </head>
