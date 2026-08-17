@@ -45,14 +45,97 @@ type Props = {
   searchParams: Promise<{ category?: string; q?: string; page?: string }>;
 };
 
+const SITE_ORIGIN = 'https://bufaisal.ae';
+
+/**
+ * The canonical URL for any /shop variant.
+ *
+ * Built by WHITELISTING params, never by stripping known-bad ones — a param we
+ * haven't thought of (or add later) can't leak into the index by default.
+ * Only two survive:
+ *   - `category`, and only when it resolves to a real slug. Legacy aliases
+ *     resolve to their current slug (bedroom-sleep → bedroom-furniture) so the
+ *     old and new URLs consolidate instead of competing; an unknown slug drops
+ *     out entirely, because it renders the unfiltered feed and must canonical
+ *     to bare /shop rather than opening an unbounded duplicate space off a
+ *     single typo'd inbound link.
+ *   - `q`, so search pages are SELF-canonical. They are noindex, and Google
+ *     warns that `noindex` combined with a cross-URL canonical can propagate
+ *     the noindex to the canonical target — pointing these at /shop could
+ *     deindex /shop itself.
+ * `page` is dropped: page N is a cumulative superset of page 1, not distinct
+ * content, and it mutates the emitted ItemList (numberOfItems 50 at page=1 vs
+ * 83 at page=2 for the same category). Consolidating to page 1 also stops a
+ * 250-item page being indexed in place of the 50-item one. Safe here only
+ * because every item URL is already in sitemap.ts, so crawl depth doesn't
+ * carry item discovery. `redirectedFrom` is a display-only label.
+ *
+ * Per Architecture decision 2.4, filter URLs are meant to be indexable
+ * long-tail landing pages — so a real category canonicals to ITSELF. Before
+ * 2026-08-17 every variant hardcoded `/shop`, telling Google all 11 category
+ * pages were duplicates of the unfiltered feed.
+ */
+function buildShopCanonical(
+  validSlug: string,
+  term: string,
+): { path: string; absolute: string } {
+  const params = new URLSearchParams();
+  if (validSlug) params.set('category', validSlug);
+  if (term) params.set('q', term);
+  const qs = params.toString();
+  const path = qs ? `/shop?${qs}` : '/shop';
+  return { path, absolute: `${SITE_ORIGIN}${path}` };
+}
+
+/**
+ * Visible-item count for a category, used only to noindex a category that has
+ * nothing in it (Outdoor & Garden was at 0 on 2026-08-17).
+ *
+ * Threshold is EXACTLY 0, deliberately — inventory turns over daily, and a
+ * "thin" threshold like <=2 would flap categories in and out of the index as
+ * stock moves. A thin-but-real page simply doesn't rank, which costs nothing.
+ *
+ * Fails OPEN: on any error we report 1 and stay indexable. Wrongly noindexing
+ * a stocked category is far more damaging than briefly indexing an empty one.
+ */
+async function countVisibleInCategory(catName: string): Promise<number> {
+  const { count, error } = await getSupabase()
+    .from('shop_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('is_published', true)
+    .eq('is_sold', false)
+    .eq('is_hidden', false)
+    .eq('published_category', catName);
+  if (error || count === null) return 1;
+  return count;
+}
+
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
-  const { category } = await searchParams;
+  const { category, q } = await searchParams;
   // Canonical slug so legacy ?category= links produce the right title + a
   // canonical OG URL on the new slug.
   const slug = resolveCategorySlug(category);
   const catName = slug ? CATEGORY_SLUG_MAP[slug] : '';
   // Human-facing label for meta text; `catName`/`slug` stay canonical for the URL.
   const catDisplay = getCategoryDisplayName(catName);
+
+  // An unrecognised slug renders the unfiltered feed, so it must not appear in
+  // the canonical — collapse it to bare /shop.
+  const validSlug = catName ? slug : '';
+  const term = q?.trim() ?? '';
+  const { path: canonicalPath, absolute: canonicalUrl } = buildShopCanonical(
+    validSlug,
+    term,
+  );
+
+  // Internal search results are an unbounded, user-generated URL space — keep
+  // them out of the index but let Google follow through to the products.
+  const isSearch = !!term;
+  const isEmptyCategory =
+    !!catName && !isSearch && (await countVisibleInCategory(catName)) === 0;
+  // `undefined` leaves the default (indexable) — don't emit a robots tag at all.
+  const robots =
+    isSearch || isEmptyCategory ? { index: false, follow: true } : undefined;
 
   if (catName) {
     return {
@@ -63,7 +146,9 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
         description: `Buy quality second-hand ${catDisplay.toLowerCase()} at affordable prices. Visit our 5 shops in Ajman or WhatsApp us.`,
         siteName: 'Bu Faisal',
         type: 'website',
-        url: `https://bufaisal.ae/shop?category=${slug}`,
+        // Same value as the canonical below. These previously disagreed —
+        // og:url carried ?category= while the canonical claimed /shop.
+        url: canonicalUrl,
         images: [{ url: '/og-default.png', width: 1200, height: 630, alt: "Bu Faisal - UAE's Largest Used Goods Market" }],
       },
       twitter: {
@@ -73,8 +158,9 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
         images: ['/og-default.png'],
       },
       alternates: {
-        canonical: '/shop',
+        canonical: canonicalPath,
       },
+      ...(robots ? { robots } : {}),
     };
   }
 
@@ -87,7 +173,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
       description: 'Browse thousands of quality second-hand items in Ajman, UAE. Furniture, appliances, electronics & more across 5 shops.',
       siteName: 'Bu Faisal',
       type: 'website',
-      url: 'https://bufaisal.ae/shop',
+      url: canonicalUrl,
       images: [{ url: '/og-default.png', width: 1200, height: 630, alt: "Bu Faisal - UAE's Largest Used Goods Market" }],
     },
     twitter: {
@@ -97,8 +183,9 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
       images: ['/og-default.png'],
     },
     alternates: {
-      canonical: '/shop',
+      canonical: canonicalPath,
     },
+    ...(robots ? { robots } : {}),
   };
 }
 
