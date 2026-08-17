@@ -48,16 +48,20 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              // Microsoft Clarity needs three directives, not one: the tag
-              // itself from www.clarity.ms (script-src), the session-data
-              // ingest to the region-sharded collect endpoint (connect-src
-              // https://*.clarity.ms), and the Bing ID-sync pixel (img-src
-              // c.bing.com). Clarity shipped in 6977ba7 mirroring
+              // Microsoft Clarity spans three directives. Hosts below were read
+              // out of the live tag source, not documentation:
+              //   script-src   www.clarity.ms/tag/<id>  (the bootstrap we load)
+              //                scripts.clarity.ms/<ver>/clarity.js (real library)
+              //   connect-src  <shard>.clarity.ms/collect (session upload)
+              //   img-src      c.clarity.ms/c.gif (ID-sync pixel)
+              // The collect shard ROTATES — observed as both n.clarity.ms and
+              // t.clarity.ms minutes apart — so these are wildcarded rather
+              // than pinned. Clarity shipped in 6977ba7 mirroring
               // GoogleAnalytics.tsx, but GA's domains were already allowlisted
-              // here and Clarity's never were — so the tag was injected into
-              // the DOM on every public page and then silently refused by CSP,
+              // here and Clarity's never were, so the tag was injected into the
+              // DOM on every public page and then silently refused by CSP —
               // which is why the dashboard recorded zero sessions.
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https://www.facebook.com https://www.googletagmanager.com https://www.google-analytics.com https://www.clarity.ms",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https://www.facebook.com https://www.googletagmanager.com https://www.google-analytics.com https://*.clarity.ms",
               // Phase 2 fix: browser-image-compression spawns an inline blob:
               // worker on /team. Without an explicit worker-src, browsers
               // fall back through child-src to script-src, which doesn't
@@ -70,7 +74,7 @@ const nextConfig = {
               "worker-src 'self' blob:",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
-              "img-src 'self' data: blob: https://res.cloudinary.com https://*.supabase.co https://*.supabase.in https://images.unsplash.com https://www.facebook.com https://www.google-analytics.com https://maps.googleapis.com https://maps.gstatic.com https://c.bing.com",
+              "img-src 'self' data: blob: https://res.cloudinary.com https://*.supabase.co https://*.supabase.in https://images.unsplash.com https://www.facebook.com https://www.google-analytics.com https://maps.googleapis.com https://maps.gstatic.com https://c.bing.com https://*.clarity.ms",
               "connect-src 'self' https://*.supabase.co https://*.supabase.in https://api.cloudinary.com https://www.google-analytics.com https://www.facebook.com https://sheets.googleapis.com https://*.clarity.ms",
               "frame-src 'self' https://www.google.com https://maps.google.com",
               "media-src 'self' blob:",
