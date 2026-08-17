@@ -55,7 +55,49 @@ real loads doubled.
    renders exactly 150). Not an edge case: `loadMore` uses `replace`, so Back
    from an item page returns to the last `?page=N`.
 
-## Recommendation for Defect B: still **B**, not C
+## Defect B — B1 SHIPPED (`a0dbbc0`), B2 on the shelf
+
+**Superseded the cursor-first recommendation below after measuring live.** Every
+category page is at most 2 pages (largest, Appliances, is 83 items); only the
+homepage is deep at 7 pages / 324 items. Cursors solve a problem category feeds
+don't have, and the homepage's cost was never pagination — it was `select('*')`
+shipping 67 columns when `ItemCard` needs fifteen.
+
+**B1 (shipped):** `FEED_COLUMNS` in `src/lib/feed-query.ts`, 27 columns, one
+constant across all four fetch sites. Live: `/` 849 → 307 KB, `/?page=7`
+5270 → 1652 KB, category 906 → 339 KB (63–69%). Page-1 output byte-identical
+(JSON-LD, item order, head) on 4 URLs; ItemList re-diffed alone at 8983 bytes.
+Plus a `console.error` row-cap guard at ≥900 rows.
+
+**B2 (designed, not built) — cursor over a frozen rank window.** Trigger on any
+of: visible catalog nears ~800 rows, lean page-7 payload exceeds ~1 MB, or a
+category exceeds ~4 pages. Design:
+- **RPC required** (PostgREST can't express window functions). Rank with
+  `row_number() OVER (PARTITION BY published_category ORDER BY sort_key, id DESC)`
+  over the fixed window `created_at <= $t0`, applying visibility as an **output
+  filter, not a window predicate**. That is what makes it drift-immune: a
+  mid-session publish is outside the window and can't shift ranks; a
+  mid-session sale is filtered from output without reclaiming its rank slot.
+- **Cursor** `(seed, t0, round, cat_order, id)` — no pinned-seed plumbing, no
+  pool cutoff, no client manifest; the cursor carries all of it.
+- **Do NOT port `hash01`** (FNV-1a + `Math.imul`) to SQL. The locked decision is
+  a deterministic daily-seeded shuffle, not FNV; `md5(seed||':'||id)::bit(32)`
+  is equivalent for every property the product relies on, and an exact V8 port
+  needs bit-for-bit `& 4294967295` masking that silently reorders the feed if
+  wrong.
+- **`?page=N` stays** as the SSR + back-nav contract; cursors serve only
+  in-session appends.
+- **Cutover gate:** a differential test asserting the SQL ordering matches
+  `interleaveByCategory` row-for-row over the live catalog.
+
+**Why a naive keyset does NOT work here** (this is the trap): `round` is a
+`row_number()`, i.e. a rank, not a row property. An insert with a low sort_key
+increments `round` for every later item in that bucket, so a cursor on
+`(round, cat_order, id)` re-serves rows; a sale decrements them and skips rows.
+Round-robin is irreducibly rank-based — you cannot know an item's round without
+counting its bucket. Freezing the *window the rank is computed over* is the fix.
+
+## Original recommendation for Defect B (superseded by B1 above)
 
 The stop condition fired (restoration *was* broken) but **not for the reason
 assumed**. My stated premise for flipping B→C was "if restoration is broken, the
