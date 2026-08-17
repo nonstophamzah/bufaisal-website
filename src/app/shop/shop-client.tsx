@@ -631,8 +631,14 @@ export default function ShopClient({
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {displayItems.map((item) => (
-                <ItemCard key={item.id} item={item} />
+              {/* The first row is the LCP element on both / and /shop. next/image
+                  lazy-loads by default, so it was discovered only after hydration.
+                  The grid is 2/3/4 across breakpoints, so priority on the first 4
+                  covers the whole first row at every width (on mobile that
+                  preloads the two just below the fold — a deliberate, small
+                  trade for never lazy-loading the LCP image). */}
+              {displayItems.map((item, i) => (
+                <ItemCard key={item.id} item={item} priority={i < 4} />
               ))}
             </div>
 
