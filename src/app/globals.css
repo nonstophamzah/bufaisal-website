@@ -76,10 +76,20 @@ html, body {
   80% { transform: translateX(8px); }
 }
 
-/* Smooth scrollbar */
-html {
-  scroll-behavior: smooth;
-}
+/*
+  NOTE: `html { scroll-behavior: smooth }` was REMOVED (2026-08-17). It silently
+  defeated back-navigation scroll restoration on every feed: the browser's
+  restore scroll is animated rather than applied, and the shop feed's own
+  post-nav scroll handling wins the race, landing the user at the top.
+  Verified A/B on /?page=3 (scroll to 9000 → open an item → Back):
+  with `smooth` → scrollY 0; with `auto` → scrollY 9000. Document height and
+  card count were identical in both runs (18339px / 150 items), so the
+  cumulative `?page=N` refetch was never the problem.
+  Do not re-add this globally. Smooth scrolling for a specific interaction
+  belongs on that element, or as an explicit `behavior: 'smooth'` option to
+  scrollIntoView()/scrollTo() (which ignores this CSS property anyway — see
+  the manager dashboard's cleaning-activity jump).
+*/
 
 /* Hide scrollbar for category filter */
 .hide-scrollbar::-webkit-scrollbar {
